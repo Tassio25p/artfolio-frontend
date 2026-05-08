@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import PortfolioCard from "../components/PortfolioCard";
 import Sidebar from "../components/Sidebar";
 
@@ -60,49 +61,67 @@ export default function ArtistProfile() {
 
               <div className="lg:col-span-4">
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5">
+                  <Link
+                    to="/seguidores"
+                    className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all"
+                  >
                     <span className="text-artDark text-xl font-black block">
                       1.2k
                     </span>
                     <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
                       Seguidores
                     </span>
-                  </div>
+                  </Link>
 
-                  <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5">
+                  <Link
+                    to="/meu-portfolio"
+                    className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all"
+                  >
                     <span className="text-artDark text-xl font-black block">
                       48
                     </span>
                     <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
                       Obras
                     </span>
-                  </div>
+                  </Link>
 
-                  <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5">
+                  <Link
+                    to="/planos"
+                    className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all"
+                  >
                     <span className="text-artDark text-xl font-black block">
                       Pro
                     </span>
                     <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
                       Plano
                     </span>
-                  </div>
+                  </Link>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <button className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all">
+                  <Link
+                    to="/editar-perfil"
+                    className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
+                  >
                     <i className="fa-solid fa-pen mr-2"></i>
                     Editar Perfil
-                  </button>
+                  </Link>
 
-                  <button className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all">
+                  <Link
+                    to="/meu-portfolio"
+                    className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all"
+                  >
                     <i className="fa-solid fa-layer-group mr-2"></i>
                     Gerenciar
-                  </button>
+                  </Link>
 
-                  <button className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all">
+                  <Link
+                    to="/criar-obra"
+                    className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all"
+                  >
                     <i className="fa-solid fa-plus mr-2"></i>
                     Nova Obra
-                  </button>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -154,9 +173,12 @@ export default function ArtistProfile() {
                   colecionadores.
                 </p>
 
-                <button className="mt-4 bg-white text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple hover:text-white transition-all">
+                <Link
+                  to="/planos"
+                  className="inline-block mt-4 bg-white text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple hover:text-white transition-all"
+                >
                   Ver Plano
-                </button>
+                </Link>
 
                 <i className="fa-solid fa-crown absolute -right-4 -bottom-5 text-[5rem] text-white/5 rotate-12"></i>
               </div>
@@ -181,6 +203,36 @@ export default function ArtistProfile() {
                     <span className="text-gray-500">Encomendas</span>
                     <strong>12</strong>
                   </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
+                <h3 className="font-editorial text-2xl italic mb-4">
+                  Conexões
+                </h3>
+
+                <div className="space-y-3">
+                  <Link
+                    to="/seguidores"
+                    className="flex items-center justify-between bg-[#F9F8F6] rounded-[1.2rem] px-4 py-3 hover:bg-artDark hover:text-white transition-all"
+                  >
+                    <span className="text-sm font-bold">
+                      <i className="fa-solid fa-users mr-2"></i>
+                      Seguidores
+                    </span>
+                    <span className="text-xs font-black">1.2k</span>
+                  </Link>
+
+                  <Link
+                    to="/seguindo"
+                    className="flex items-center justify-between bg-[#F9F8F6] rounded-[1.2rem] px-4 py-3 hover:bg-artDark hover:text-white transition-all"
+                  >
+                    <span className="text-sm font-bold">
+                      <i className="fa-solid fa-user-check mr-2"></i>
+                      Seguindo
+                    </span>
+                    <span className="text-xs font-black">320</span>
+                  </Link>
                 </div>
               </div>
             </aside>
