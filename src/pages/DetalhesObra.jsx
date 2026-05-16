@@ -1,7 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import MenuOpcoes from "../components/MenuOpcoes";
+import ModalDenuncia from "../components/ModalDenuncia";
 
 function DetalhesObra() {
+  const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
+
   return (
     <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]" />
@@ -11,22 +16,40 @@ function DetalhesObra() {
       <main className="ml-16 min-h-screen p-5 lg:p-10">
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
           <section className="lg:col-span-7">
-            <div className="bg-white rounded-[2rem] overflow-hidden border border-black/5 shadow-xl shadow-black/5">
+            <div className="bg-white rounded-[2rem] overflow-hidden border border-black/5 shadow-xl shadow-black/5 relative">
               <img
                 src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200&auto=format&fit=crop"
                 alt="Obra Abstração em Tons de Púrpura"
                 className="w-full h-[320px] lg:h-[500px] object-cover"
               />
+
+              <div className="absolute top-5 right-5">
+                <MenuOpcoes
+                  tipo="obra"
+                  detalhesLink="/obra/1"
+                  onDenunciar={() => setModalDenunciaAberto(true)}
+                />
+              </div>
             </div>
           </section>
 
           <section className="lg:col-span-5">
             <div className="flex items-center justify-between mb-5">
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px]">
-                Pintura Digital
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px]">
+                  Pintura Digital
+                </span>
 
-              <button className="w-10 h-10 rounded-full bg-white border border-black/5 flex items-center justify-center hover:bg-artDark hover:text-white transition-all">
+                <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                  Aprovada
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="w-10 h-10 rounded-full bg-white border border-black/5 flex items-center justify-center hover:bg-artDark hover:text-white transition-all"
+                title="Salvar obra"
+              >
                 <i className="fa-regular fa-bookmark"></i>
               </button>
             </div>
@@ -59,9 +82,12 @@ function DetalhesObra() {
                   <h3 className="font-bold text-base">Marina Silva</h3>
                 </div>
 
-                <button className="px-4 py-2.5 rounded-full border border-black/10 text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all">
+                <Link
+                  to="/perfil"
+                  className="px-4 py-2.5 rounded-full border border-black/10 text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all"
+                >
                   Ver Perfil
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -108,6 +134,31 @@ function DetalhesObra() {
                   <span>Status</span>
                   <strong className="text-artPurple">Disponível</strong>
                 </div>
+
+                <div className="flex justify-between">
+                  <span>Moderação</span>
+                  <strong className="text-artBlue">Aprovada</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-artOrange/5 rounded-[1.7rem] p-4 border border-artOrange/10 mb-5">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center shrink-0">
+                  <i className="fa-solid fa-shield-halved"></i>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest mb-1">
+                    Segurança da comunidade
+                  </h4>
+
+                  <p className="text-sm text-gray-500 leading-relaxed">
+                    Caso identifique plágio, uso indevido de personagem/marca ou
+                    conteúdo impróprio, use os três pontinhos para denunciar a
+                    obra.
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -117,10 +168,13 @@ function DetalhesObra() {
                 Curtir
               </button>
 
-              <button className="flex-1 bg-white border border-black/5 py-4 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all">
+              <Link
+                to="/mensagens"
+                className="flex-1 bg-white border border-black/5 py-4 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all text-center"
+              >
                 <i className="fa-solid fa-paper-plane mr-2"></i>
                 Mensagem
-              </button>
+              </Link>
             </div>
           </section>
         </div>
@@ -141,9 +195,20 @@ function DetalhesObra() {
               <div className="flex-1 bg-[#F9F8F6] rounded-[1.3rem] p-4">
                 <div className="flex justify-between mb-1">
                   <strong className="text-sm">Gabriel Duarte</strong>
-                  <span className="text-[9px] text-gray-400 uppercase font-bold">
-                    Hoje
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] text-gray-400 uppercase font-bold">
+                      Hoje
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setModalDenunciaAberto(true)}
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                      title="Denunciar comentário"
+                    >
+                      <i className="fa-solid fa-ellipsis text-xs"></i>
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-sm text-gray-500">
@@ -159,9 +224,20 @@ function DetalhesObra() {
               <div className="flex-1 bg-[#F9F8F6] rounded-[1.3rem] p-4">
                 <div className="flex justify-between mb-1">
                   <strong className="text-sm">Helena Matos</strong>
-                  <span className="text-[9px] text-gray-400 uppercase font-bold">
-                    Ontem
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] text-gray-400 uppercase font-bold">
+                      Ontem
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setModalDenunciaAberto(true)}
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                      title="Denunciar comentário"
+                    >
+                      <i className="fa-solid fa-ellipsis text-xs"></i>
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-sm text-gray-500">
@@ -184,6 +260,13 @@ function DetalhesObra() {
           </div>
         </section>
       </main>
+
+      <ModalDenuncia
+        aberto={modalDenunciaAberto}
+        onFechar={() => setModalDenunciaAberto(false)}
+        tipo="obra"
+        alvo="Abstração em Tons de Púrpura"
+      />
     </div>
   );
 }

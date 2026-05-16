@@ -21,6 +21,8 @@ import Salvos from "./pages/Salvos";
 import Encomendas from "./pages/Encomendas";
 import Estatisticas from "./pages/Estatisticas";
 import Buscar from "./pages/Buscar";
+import Admin from "./pages/Admin";
+
 function App() {
   return (
     <Routes>
@@ -47,6 +49,7 @@ function App() {
       <Route path="/encomendas" element={<Encomendas />} />
       <Route path="/estatisticas" element={<Estatisticas />} />
       <Route path="/buscar" element={<Buscar />} />
+      <Route path="/Admin" element={<Admin />} />
     </Routes>
   );
 }
