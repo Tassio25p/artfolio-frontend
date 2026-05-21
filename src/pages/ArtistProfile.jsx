@@ -1,8 +1,17 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import PortfolioCard from "../components/PortfolioCard";
 import Sidebar from "../components/Sidebar";
+import MenuOpcoes from "../components/MenuOpcoes";
+import ModalDenuncia from "../components/ModalDenuncia";
 
 export default function ArtistProfile() {
+  const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
+
+  // Futuramente isso virá da sessão:
+  // usuarioLogado.id === perfilVisitado.id
+  const isOwner = true;
+
   return (
     <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
@@ -30,9 +39,15 @@ export default function ArtistProfile() {
               </div>
 
               <div className="lg:col-span-6">
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                  Artista Verificado
-                </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block">
+                    Artista Verificado
+                  </span>
+
+                  <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                    Perfil Aprovado
+                  </span>
+                </div>
 
                 <h1 className="font-editorial text-4xl lg:text-5xl leading-none mb-3">
                   Marina <span className="italic">Silva.</span>
@@ -98,31 +113,54 @@ export default function ArtistProfile() {
                   </Link>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/editar-perfil"
-                    className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
-                  >
-                    <i className="fa-solid fa-pen mr-2"></i>
-                    Editar Perfil
-                  </Link>
+                {isOwner ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to="/editar-perfil"
+                      className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
+                    >
+                      <i className="fa-solid fa-pen mr-2"></i>
+                      Editar Perfil
+                    </Link>
 
-                  <Link
-                    to="/meu-portfolio"
-                    className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all"
-                  >
-                    <i className="fa-solid fa-layer-group mr-2"></i>
-                    Gerenciar
-                  </Link>
+                    <Link
+                      to="/meu-portfolio"
+                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all"
+                    >
+                      <i className="fa-solid fa-layer-group mr-2"></i>
+                      Gerenciar
+                    </Link>
 
-                  <Link
-                    to="/criar-obra"
-                    className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all"
-                  >
-                    <i className="fa-solid fa-plus mr-2"></i>
-                    Nova Obra
-                  </Link>
-                </div>
+                    <Link
+                      to="/criar-obra"
+                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all"
+                    >
+                      <i className="fa-solid fa-plus mr-2"></i>
+                      Nova Obra
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <button className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all">
+                      <i className="fa-solid fa-user-plus mr-2"></i>
+                      Seguir
+                    </button>
+
+                    <Link
+                      to="/mensagens"
+                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all"
+                    >
+                      <i className="fa-solid fa-paper-plane mr-2"></i>
+                      Mensagem
+                    </Link>
+
+                    <MenuOpcoes
+                      tipo="perfil"
+                      detalhesLink="/perfil"
+                      onDenunciar={() => setModalDenunciaAberto(true)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -132,9 +170,7 @@ export default function ArtistProfile() {
           <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
             <aside className="lg:col-span-3 space-y-5">
               <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                <h3 className="font-editorial text-2xl italic mb-4">
-                  Sobre
-                </h3>
+                <h3 className="font-editorial text-2xl italic mb-4">Sobre</h3>
 
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-3 text-gray-500">
@@ -251,10 +287,7 @@ export default function ArtistProfile() {
                   </div>
 
                   <div className="flex space-x-4 text-[10px] font-bold uppercase tracking-widest">
-                    <a
-                      href="#"
-                      className="text-artDark border-b-2 border-artDark"
-                    >
+                    <a href="#" className="text-artDark border-b-2 border-artDark">
                       Todas
                     </a>
 
@@ -279,6 +312,18 @@ export default function ArtistProfile() {
                       3D
                     </a>
                   </div>
+                </div>
+
+                <div className="bg-artOrange/5 border border-artOrange/10 rounded-[1.5rem] p-4 mb-5">
+                  <h4 className="text-xs font-bold uppercase tracking-widest mb-1">
+                    Moderação de obras
+                  </h4>
+
+                  <p className="text-sm text-gray-500 leading-relaxed">
+                    Apenas obras aprovadas pela moderação aparecem no perfil
+                    público e no Feed. Obras pendentes ou recusadas ficam
+                    visíveis apenas no gerenciamento do portfólio.
+                  </p>
                 </div>
 
                 <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5">
@@ -315,6 +360,13 @@ export default function ArtistProfile() {
           </div>
         </section>
       </main>
+
+      <ModalDenuncia
+        aberto={modalDenunciaAberto}
+        onFechar={() => setModalDenunciaAberto(false)}
+        tipo="perfil"
+        alvo="Marina Silva"
+      />
     </div>
   );
 }

@@ -1,66 +1,123 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 
 const notificacoes = [
   {
     id: 1,
-    tipo: "curtida",
-    titulo: "Nova curtida recebida",
-    descricao: "Marina Silva curtiu sua obra Fragmentos de Vidro.",
+    tipo: "moderacao",
+    titulo: "Obra aprovada",
+    descricao:
+      "Sua obra Abstração em Tons de Púrpura foi aprovada pela moderação e já aparece no Feed.",
     tempo: "Agora",
-    icone: "fa-solid fa-heart",
-    cor: "text-artOrange",
-    fundo: "bg-artOrange/10",
-    lida: false,
-  },
-  {
-    id: 2,
-    tipo: "comentario",
-    titulo: "Novo comentário",
-    descricao: "Gabriel comentou em Abstração em Tons de Púrpura.",
-    tempo: "12 min",
-    icone: "fa-solid fa-comment",
+    icone: "fa-solid fa-circle-check",
     cor: "text-artBlue",
     fundo: "bg-artBlue/10",
     lida: false,
+    link: "/obra/1",
+    acao: "Ver obra",
+  },
+  {
+    id: 2,
+    tipo: "moderacao",
+    titulo: "Obra recusada",
+    descricao:
+      "Sua obra Fragmentos de Vidro foi recusada por possível uso indevido de imagem ou direito autoral.",
+    tempo: "15 min",
+    icone: "fa-solid fa-triangle-exclamation",
+    cor: "text-artOrange",
+    fundo: "bg-artOrange/10",
+    lida: false,
+    link: "/meu-portfolio",
+    acao: "Corrigir",
   },
   {
     id: 3,
-    tipo: "seguidor",
-    titulo: "Novo seguidor",
-    descricao: "Helena Matos começou a seguir seu perfil artístico.",
-    tempo: "1 h",
-    icone: "fa-solid fa-user-plus",
-    cor: "text-artPurple",
-    fundo: "bg-artPurple/10",
-    lida: true,
+    tipo: "denuncia",
+    titulo: "Denúncia enviada",
+    descricao:
+      "Sua denúncia foi recebida e será analisada por um moderador ou administrador.",
+    tempo: "40 min",
+    icone: "fa-solid fa-flag",
+    cor: "text-red-500",
+    fundo: "bg-red-50",
+    lida: false,
+    link: "/notificacoes",
+    acao: "Acompanhar",
   },
   {
     id: 4,
+    tipo: "encomenda",
+    titulo: "Nova solicitação de encomenda",
+    descricao:
+      "Ricardo Aris enviou uma solicitação de arte personalizada baseada em uma obra salva.",
+    tempo: "1 h",
+    icone: "fa-solid fa-handshake",
+    cor: "text-artPurple",
+    fundo: "bg-artPurple/10",
+    lida: true,
+    link: "/encomendas",
+    acao: "Ver pedido",
+  },
+  {
+    id: 5,
     tipo: "mensagem",
     titulo: "Mensagem recebida",
-    descricao: "Ricardo Aris enviou uma nova mensagem sobre encomendas.",
+    descricao: "Helena Matos enviou uma nova mensagem sobre uma possível compra.",
     tempo: "Ontem",
     icone: "fa-solid fa-paper-plane",
     cor: "text-artDark",
     fundo: "bg-black/5",
     lida: true,
+    link: "/mensagens",
+    acao: "Responder",
   },
   {
-    id: 5,
-    tipo: "plano",
-    titulo: "Obra em destaque",
-    descricao: "Sua obra Ecos da Metrópole recebeu prioridade no feed global.",
+    id: 6,
+    tipo: "interacao",
+    titulo: "Nova curtida recebida",
+    descricao: "Marina Silva curtiu sua obra Ecos da Metrópole.",
     tempo: "2 dias",
+    icone: "fa-solid fa-heart",
+    cor: "text-artOrange",
+    fundo: "bg-artOrange/10",
+    lida: true,
+    link: "/obra/3",
+    acao: "Ver obra",
+  },
+  {
+    id: 7,
+    tipo: "seguidor",
+    titulo: "Novo seguidor",
+    descricao: "Gabriel Duarte começou a seguir seu perfil artístico.",
+    tempo: "3 dias",
+    icone: "fa-solid fa-user-plus",
+    cor: "text-artPurple",
+    fundo: "bg-artPurple/10",
+    lida: true,
+    link: "/seguidores",
+    acao: "Ver seguidores",
+  },
+  {
+    id: 8,
+    tipo: "plano",
+    titulo: "Recurso Pro ativo",
+    descricao:
+      "Sua conta possui acesso a recursos comerciais, estatísticas e destaque no Feed.",
+    tempo: "1 semana",
     icone: "fa-solid fa-crown",
     cor: "text-artPurple",
     fundo: "bg-artPurple/10",
     lida: true,
+    link: "/planos",
+    acao: "Ver plano",
   },
 ];
 
 export default function Notificacoes() {
   const naoLidas = notificacoes.filter((item) => !item.lida).length;
+  const moderacao = notificacoes.filter((item) => item.tipo === "moderacao").length;
+  const denuncias = notificacoes.filter((item) => item.tipo === "denuncia").length;
 
   return (
     <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
@@ -80,9 +137,9 @@ export default function Notificacoes() {
                 Notificações<span className="italic text-artOrange">.</span>
               </h1>
 
-              <p className="text-sm text-gray-500 mt-3 max-w-xl">
-                Acompanhe curtidas, comentários, mensagens e novidades
-                importantes sobre seu portfólio artístico.
+              <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
+                Acompanhe interações, mensagens, encomendas, análise de obras,
+                denúncias e avisos importantes sobre sua conta no Artfolio.
               </p>
             </div>
 
@@ -92,7 +149,7 @@ export default function Notificacoes() {
             </button>
           </header>
 
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
               <p className="text-2xl font-black">{notificacoes.length}</p>
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
@@ -108,11 +165,45 @@ export default function Notificacoes() {
             </div>
 
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">5</p>
+              <p className="text-2xl font-black">{moderacao}</p>
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Hoje
+                Moderação
               </span>
             </div>
+
+            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
+              <p className="text-2xl font-black">{denuncias}</p>
+              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                Denúncias
+              </span>
+            </div>
+          </section>
+
+          <section className="bg-artOrange/5 border border-artOrange/10 rounded-[1.7rem] p-5 mb-8 flex flex-col md:flex-row gap-4 md:items-center justify-between">
+            <div className="flex gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center shrink-0">
+                <i className="fa-solid fa-shield-halved"></i>
+              </div>
+
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-widest">
+                  Avisos de moderação
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
+                  Quando uma obra for aprovada, recusada ou uma denúncia for
+                  analisada, o usuário será avisado por esta central de
+                  notificações.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/meu-portfolio"
+              className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+            >
+              Ver portfólio
+            </Link>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -128,11 +219,11 @@ export default function Notificacoes() {
                   </button>
 
                   <button className="w-full bg-[#F9F8F6] text-gray-400 hover:text-artDark px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-colors">
-                    Curtidas
+                    Moderação
                   </button>
 
                   <button className="w-full bg-[#F9F8F6] text-gray-400 hover:text-artDark px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-colors">
-                    Comentários
+                    Denúncias
                   </button>
 
                   <button className="w-full bg-[#F9F8F6] text-gray-400 hover:text-artDark px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-colors">
@@ -140,7 +231,11 @@ export default function Notificacoes() {
                   </button>
 
                   <button className="w-full bg-[#F9F8F6] text-gray-400 hover:text-artDark px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-colors">
-                    Sistema
+                    Encomendas
+                  </button>
+
+                  <button className="w-full bg-[#F9F8F6] text-gray-400 hover:text-artDark px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-colors">
+                    Interações
                   </button>
                 </div>
               </div>
@@ -151,12 +246,12 @@ export default function Notificacoes() {
                 </span>
 
                 <h3 className="font-editorial text-2xl italic leading-tight">
-                  Responda rápido às mensagens.
+                  Fique atento às análises.
                 </h3>
 
                 <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Interações rápidas aumentam as chances de fechar encomendas e
-                  novas conexões.
+                  Obras pendentes ou recusadas exigem atenção. Corrigir a
+                  publicação ajuda a manter seu portfólio ativo.
                 </p>
 
                 <i className="fa-solid fa-bell absolute -right-4 -bottom-5 text-[5rem] text-white/5 rotate-12"></i>
@@ -185,7 +280,7 @@ export default function Notificacoes() {
                   {notificacoes.map((item) => (
                     <article
                       key={item.id}
-                      className={`group rounded-[1.5rem] p-4 border transition-all flex gap-4 items-start ${
+                      className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 ${
                         item.lida
                           ? "bg-[#F9F8F6] border-black/5"
                           : "bg-white border-artPurple/20 shadow-lg shadow-black/5"
@@ -209,11 +304,32 @@ export default function Notificacoes() {
                         <p className="text-sm text-gray-500 mt-1 leading-relaxed">
                           {item.descricao}
                         </p>
+
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <span className="bg-white border border-black/5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400">
+                            {item.tipo}
+                          </span>
+
+                          {!item.lida && (
+                            <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                              Nova
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      {!item.lida && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-artPurple mt-2 shrink-0"></span>
-                      )}
+                      <div className="flex items-center gap-3">
+                        <Link
+                          to={item.link}
+                          className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+                        >
+                          {item.acao}
+                        </Link>
+
+                        {!item.lida && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-artPurple shrink-0"></span>
+                        )}
+                      </div>
                     </article>
                   ))}
                 </div>

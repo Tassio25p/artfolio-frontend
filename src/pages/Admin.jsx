@@ -10,6 +10,7 @@ const obrasPendentes = [
     status: "Pendente",
     enviadoEm: "Hoje",
     alerta: "Possível personagem/marca protegida",
+    risco: "Alto",
     imagem:
       "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800",
   },
@@ -21,6 +22,7 @@ const obrasPendentes = [
     status: "Em análise",
     enviadoEm: "Ontem",
     alerta: "Verificar originalidade da imagem",
+    risco: "Médio",
     imagem:
       "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800&auto=format&fit=crop",
   },
@@ -32,6 +34,7 @@ const obrasPendentes = [
     status: "Pendente",
     enviadoEm: "2 dias",
     alerta: "Possível personagem famoso",
+    risco: "Alto",
     imagem:
       "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=800",
   },
@@ -43,6 +46,7 @@ const denuncias = [
     tipo: "Obra",
     alvo: "Fragmentos de Vidro",
     denunciado: "Marina Silva",
+    denunciante: "Gabriel Duarte",
     motivo: "Plágio ou obra copiada",
     status: "Aberta",
     tempo: "12 min",
@@ -52,6 +56,7 @@ const denuncias = [
     tipo: "Perfil",
     alvo: "Perfil de Ricardo Aris",
     denunciado: "Ricardo Aris",
+    denunciante: "Helena Matos",
     motivo: "Spam ou comportamento suspeito",
     status: "Em análise",
     tempo: "1 h",
@@ -61,6 +66,7 @@ const denuncias = [
     tipo: "Obra",
     alvo: "Mascote Estilizado",
     denunciado: "Rafael Lima",
+    denunciante: "Lucas Ferreira",
     motivo: "Uso de personagem/marca protegida",
     status: "Aberta",
     tempo: "Ontem",
@@ -73,14 +79,50 @@ const usuariosSinalizados = [
     nome: "Rafael Lima",
     motivo: "3 obras recusadas",
     status: "Monitoramento",
+    denuncias: 4,
   },
   {
     id: 2,
     nome: "Ricardo Aris",
     motivo: "2 denúncias recebidas",
     status: "Em análise",
+    denuncias: 2,
   },
 ];
+
+const logs = [
+  {
+    id: 1,
+    acao: "Obra aprovada",
+    responsavel: "Moderador Ana",
+    tempo: "Hoje",
+  },
+  {
+    id: 2,
+    acao: "Denúncia marcada como em análise",
+    responsavel: "Admin Artfolio",
+    tempo: "Ontem",
+  },
+  {
+    id: 3,
+    acao: "Obra recusada por possível violação",
+    responsavel: "Moderador João",
+    tempo: "2 dias",
+  },
+];
+
+const riscoClasses = {
+  Alto: "bg-red-50 text-red-500",
+  Médio: "bg-artOrange/10 text-artOrange",
+  Baixo: "bg-artBlue/10 text-artBlue",
+};
+
+const statusClasses = {
+  Pendente: "bg-artOrange/10 text-artOrange",
+  "Em análise": "bg-artBlue/10 text-artBlue",
+  Aberta: "bg-artOrange/10 text-artOrange",
+  Resolvida: "bg-artPurple/10 text-artPurple",
+};
 
 export default function Admin() {
   return (
@@ -102,9 +144,9 @@ export default function Admin() {
               </h1>
 
               <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
-                Área para analisar obras pendentes, denúncias de usuários e
-                conteúdos que podem violar direitos autorais ou regras da
-                comunidade.
+                Área para analisar obras em quarentena, denúncias de usuários,
+                perfis sinalizados e possíveis violações de direitos autorais ou
+                regras da comunidade.
               </p>
             </div>
 
@@ -156,6 +198,33 @@ export default function Admin() {
             </div>
           </section>
 
+          <section className="bg-artOrange/5 border border-artOrange/10 rounded-[1.7rem] p-5 mb-8 flex flex-col md:flex-row gap-4 md:items-center justify-between">
+            <div className="flex gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center shrink-0">
+                <i className="fa-solid fa-shield-halved"></i>
+              </div>
+
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-widest">
+                  Área restrita a moderadores e administradores
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
+                  Futuramente, o acesso a esta tela será controlado pela sessão
+                  do usuário. Moderadores poderão analisar conteúdos e denúncias,
+                  enquanto administradores terão acesso total.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/planos"
+              className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+            >
+              Plano ≠ Papel
+            </Link>
+          </section>
+
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <aside className="lg:col-span-3 space-y-4">
               <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
@@ -188,11 +257,11 @@ export default function Admin() {
 
               <div className="bg-artDark text-white rounded-[1.7rem] p-5 relative overflow-hidden">
                 <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Atenção
+                  Permissões
                 </span>
 
                 <h3 className="font-editorial text-2xl italic leading-tight">
-                  Plano e papel são diferentes.
+                  Admin vê tudo. Moderador vê moderação.
                 </h3>
 
                 <p className="text-xs text-gray-400 mt-3 leading-relaxed">
@@ -200,7 +269,7 @@ export default function Admin() {
                   usuário, moderador ou admin.
                 </p>
 
-                <i className="fa-solid fa-shield-halved absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
+                <i className="fa-solid fa-user-shield absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
               </div>
 
               <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
@@ -259,12 +328,26 @@ export default function Admin() {
 
                         <div className="flex-1">
                           <div className="flex flex-wrap gap-2 mb-2">
-                            <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                            <span
+                              className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                                statusClasses[obra.status] ||
+                                "bg-gray-100 text-gray-400"
+                              }`}
+                            >
                               {obra.status}
                             </span>
 
                             <span className="bg-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400 border border-black/5">
                               {obra.categoria}
+                            </span>
+
+                            <span
+                              className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                                riscoClasses[obra.risco] ||
+                                "bg-gray-100 text-gray-400"
+                              }`}
+                            >
+                              Risco {obra.risco}
                             </span>
                           </div>
 
@@ -290,6 +373,10 @@ export default function Admin() {
 
                           <button className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all">
                             Recusar
+                          </button>
+
+                          <button className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artBlue hover:text-white transition-all">
+                            Detalhes
                           </button>
                         </div>
                       </div>
@@ -331,7 +418,12 @@ export default function Admin() {
                             {denuncia.tipo}
                           </span>
 
-                          <span className="bg-artOrange/10 text-artOrange px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                          <span
+                            className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                              statusClasses[denuncia.status] ||
+                              "bg-gray-100 text-gray-400"
+                            }`}
+                          >
                             {denuncia.status}
                           </span>
                         </div>
@@ -339,60 +431,102 @@ export default function Admin() {
                         <h3 className="font-bold text-sm">{denuncia.alvo}</h3>
 
                         <p className="text-sm text-gray-500 mt-1">
-                          {denuncia.motivo} • {denuncia.denunciado} •{" "}
+                          {denuncia.motivo} • Denunciado:{" "}
+                          <strong>{denuncia.denunciado}</strong> • Denunciante:{" "}
+                          <strong>{denuncia.denunciante}</strong> •{" "}
                           {denuncia.tempo}
                         </p>
                       </div>
 
-                      <button className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all">
-                        Analisar
-                      </button>
+                      <div className="flex gap-2">
+                        <button className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all">
+                          Analisar
+                        </button>
+
+                        <button className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all">
+                          Resolver
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
-                <div className="mb-6">
-                  <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
-                    Monitoramento
-                  </span>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
+                  <div className="mb-6">
+                    <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Monitoramento
+                    </span>
 
-                  <h2 className="font-editorial text-3xl italic">
-                    Usuários sinalizados
-                  </h2>
-                </div>
+                    <h2 className="font-editorial text-3xl italic">
+                      Usuários sinalizados
+                    </h2>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {usuariosSinalizados.map((usuario) => (
-                    <article
-                      key={usuario.id}
-                      className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h3 className="font-bold">{usuario.nome}</h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {usuario.motivo}
-                          </p>
+                  <div className="space-y-4">
+                    {usuariosSinalizados.map((usuario) => (
+                      <article
+                        key={usuario.id}
+                        className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold">{usuario.nome}</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {usuario.motivo}
+                            </p>
+                          </div>
+
+                          <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                            {usuario.status}
+                          </span>
                         </div>
 
-                        <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                          {usuario.status}
-                        </span>
-                      </div>
+                        <div className="flex justify-between mt-4 text-xs text-gray-400 font-bold">
+                          <span>{usuario.denuncias} denúncias</span>
+                          <span>Revisar perfil</span>
+                        </div>
 
-                      <div className="flex gap-2 mt-4">
-                        <button className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all">
-                          Ver perfil
-                        </button>
+                        <div className="flex gap-2 mt-4">
+                          <button className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all">
+                            Ver perfil
+                          </button>
 
-                        <button className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all">
-                          Bloquear
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                          <button className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all">
+                            Bloquear
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
+                  <div className="mb-6">
+                    <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Histórico administrativo
+                    </span>
+
+                    <h2 className="font-editorial text-3xl italic">
+                      Logs recentes
+                    </h2>
+                  </div>
+
+                  <div className="space-y-3">
+                    {logs.map((log) => (
+                      <article
+                        key={log.id}
+                        className="bg-[#F9F8F6] rounded-[1.3rem] p-4 border border-black/5"
+                      >
+                        <h3 className="font-bold text-sm">{log.acao}</h3>
+
+                        <p className="text-sm text-gray-500 mt-1">
+                          {log.responsavel} • {log.tempo}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>
