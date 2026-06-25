@@ -1,41 +1,66 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+
+const categorias = [
+  { value: "pintura-digital", label: "Pintura Digital" },
+  { value: "modelagem-3d", label: "Modelagem 3D" },
+  { value: "artesanato-croche", label: "Artesanato / Crochê" },
+  { value: "desenho-manual", label: "Desenho Manual" },
+  { value: "ilustracao", label: "Ilustração" },
+  { value: "arte-conceitual", label: "Arte Conceitual" },
+];
 
 function CriarObra() {
   const [titulo, setTitulo] = useState("");
   const [legenda, setLegenda] = useState("");
   const [categoria, setCategoria] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [nomeArquivo, setNomeArquivo] = useState("");
+  const [noticeMessage, setNoticeMessage] = useState("");
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
+  const categoriaSelecionada = categorias.find(
+    (item) => item.value === categoria
+  );
+
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!imagePreview) {
-      alert("Por favor, anexe uma imagem para sua obra.");
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setImagePreview(null);
+      setNomeArquivo("");
+      mostrarAviso("Selecione apenas arquivos de imagem.");
       return;
     }
-    
-    // Simulate upload success
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      setTitulo("");
-      setLegenda("");
-      setCategoria("");
-      setImagePreview(null);
-      alert("Obra enviada para análise! Ela ficará pendente até ser aprovada pela moderação.");
-    }, 1000);
+
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+      setNomeArquivo(file.name);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    if (!imagePreview) {
+      mostrarAviso("Anexe uma imagem antes de preparar o envio da obra.");
+      return;
+    }
+
+    mostrarAviso(
+      "Com o backend integrado, esta obra será enviada para a quarentena com status Pendente."
+    );
   };
 
   return (
@@ -44,40 +69,55 @@ function CriarObra() {
 
       <Sidebar />
 
-      <main className="ml-16 min-h-screen p-5 lg:p-10">
+      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
         <div className="max-w-6xl mx-auto">
-          <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <header className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
             <div>
               <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                Nova Obra
+                Área do Artista
               </span>
 
-              <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
+              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
                 Enviar Obra <br />
                 <span className="italic text-artPurple">para Análise.</span>
               </h1>
 
               <p className="text-sm text-gray-500 mt-4 max-w-2xl leading-relaxed">
-                Antes de aparecer no Feed e no seu perfil, a obra passará por uma
-                análise de moderação para evitar conteúdo impróprio, plágio ou uso
-                indevido de personagens, marcas e obras de terceiros.
+                Antes de aparecer no Feed e no perfil público, a obra ficará com
+                status pendente e seguirá para a área de quarentena, onde será
+                analisada pela moderação.
               </p>
             </div>
 
-            {success && (
-              <span className="text-xs bg-artGreen/10 text-artGreen px-4 py-3 rounded-full font-bold animate-pulse">
-                <i className="fa-solid fa-spinner fa-spin mr-1.5"></i>
-                Enviando obra...
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link
+                to="/meu-portfolio"
+                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+              >
+                <i className="fa-solid fa-layer-group mr-2"></i>
+                Meu Portfólio
+              </Link>
+
+              <span className="bg-artOrange/10 text-artOrange px-5 py-3 rounded-full text-xs font-bold text-center">
+                <i className="fa-solid fa-clock mr-2"></i>
+                Status inicial: Pendente
               </span>
-            )}
+            </div>
           </header>
+
+          {noticeMessage && (
+            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
+              <i className="fa-solid fa-circle-info mr-2"></i>
+              {noticeMessage}
+            </div>
+          )}
 
           <form
             onSubmit={handleSubmit}
             className="flex flex-col lg:flex-row gap-8 lg:gap-10"
           >
             <div className="lg:w-7/12">
-              <label className="group relative flex flex-col items-center justify-center w-full h-[390px] border-2 border-dashed border-gray-200 rounded-[2.3rem] bg-white hover:bg-gray-50 hover:border-artBlue transition-all cursor-pointer overflow-hidden">
+              <label className="group relative flex flex-col items-center justify-center w-full h-[300px] sm:h-[390px] lg:h-[470px] border-2 border-dashed border-gray-200 rounded-[2rem] sm:rounded-[2.3rem] bg-white hover:bg-gray-50 hover:border-artBlue transition-all cursor-pointer overflow-hidden">
                 {imagePreview ? (
                   <div className="relative w-full h-full">
                     <img
@@ -85,9 +125,19 @@ function CriarObra() {
                       alt="Preview da obra"
                       className="w-full h-full object-cover"
                     />
+
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-4 text-center">
                       <i className="fa-solid fa-rotate text-3xl mb-2"></i>
-                      <p className="text-sm font-bold">Clique para alterar a imagem</p>
+
+                      <p className="text-sm font-bold">
+                        Clique para alterar a imagem
+                      </p>
+
+                      {nomeArquivo && (
+                        <span className="text-[10px] mt-2 opacity-80">
+                          {nomeArquivo}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -95,14 +145,14 @@ function CriarObra() {
                     <i className="fa-solid fa-cloud-arrow-up text-5xl text-gray-200 group-hover:text-artBlue transition-colors mb-4"></i>
 
                     <p className="text-sm text-gray-400 font-medium">
-                      Arraste sua obra ou{" "}
+                      Selecione a imagem da sua obra ou{" "}
                       <span className="text-artBlue underline">
                         busque no computador
                       </span>
                     </p>
 
                     <p className="text-[10px] text-gray-300 uppercase mt-2">
-                      JPG, PNG, GIF ou MP4 Máx 50MB
+                      JPG, PNG, WEBP ou GIF
                     </p>
                   </div>
                 )}
@@ -144,7 +194,7 @@ function CriarObra() {
                 <input
                   type="text"
                   value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
+                  onChange={(event) => setTitulo(event.target.value)}
                   placeholder="Ex: Fragmentos de Vidro"
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                   required
@@ -153,14 +203,14 @@ function CriarObra() {
 
               <div className="bg-white rounded-[1.7rem] border border-black/5 p-5">
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
-                  Legenda da Obra
+                  Descrição da Obra
                 </label>
 
                 <textarea
                   rows="4"
                   value={legenda}
-                  onChange={(e) => setLegenda(e.target.value)}
-                  placeholder="O que inspirou esta criação?"
+                  onChange={(event) => setLegenda(event.target.value)}
+                  placeholder="Explique o conceito, inspiração ou detalhes da criação."
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm resize-none leading-relaxed"
                 ></textarea>
               </div>
@@ -172,21 +222,19 @@ function CriarObra() {
 
                 <select
                   value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
+                  onChange={(event) => setCategoria(event.target.value)}
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm cursor-pointer"
                   required
                 >
                   <option value="" disabled>
                     Selecione o tipo de arte
                   </option>
-                  <option value="pintura-digital">Pintura Digital</option>
-                  <option value="modelagem-3d">Modelagem 3D</option>
-                  <option value="artesanato-croche">
-                    Artesanato / Crochê
-                  </option>
-                  <option value="desenho-manual">Desenho Manual</option>
-                  <option value="ilustracao">Ilustração</option>
-                  <option value="arte-conceitual">Arte Conceitual</option>
+
+                  {categorias.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -198,10 +246,49 @@ function CriarObra() {
 
                 <p className="text-xs text-gray-500 leading-relaxed font-light">
                   Após o envio, sua obra ficará com status{" "}
-                  <strong className="text-artDark font-bold">Pendente</strong>. Um
-                  moderador ou administrador poderá aprovar ou recusar a
-                  publicação. Apenas obras aprovadas aparecem no Feed.
+                  <strong className="text-artDark font-bold">Pendente</strong> e
+                  entrará na{" "}
+                  <strong className="text-artDark font-bold">
+                    área de quarentena
+                  </strong>
+                  . Apenas obras aprovadas pela moderação aparecem no Feed.
                 </p>
+              </div>
+
+              <div className="bg-white rounded-[1.7rem] border border-black/5 p-5">
+                <h4 className="text-xs font-bold uppercase tracking-widest mb-3">
+                  Resumo do envio
+                </h4>
+
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-500">Título</span>
+                    <strong className="text-artDark text-right">
+                      {titulo || "Não informado"}
+                    </strong>
+                  </div>
+
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-500">Categoria</span>
+                    <strong className="text-artDark text-right">
+                      {categoriaSelecionada?.label || "Não selecionada"}
+                    </strong>
+                  </div>
+
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-500">Imagem</span>
+                    <strong className="text-artDark text-right">
+                      {imagePreview ? "Anexada" : "Pendente"}
+                    </strong>
+                  </div>
+
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-500">Status</span>
+                    <strong className="text-artOrange text-right">
+                      Pendente
+                    </strong>
+                  </div>
+                </div>
               </div>
 
               <div className="bg-white rounded-[1.7rem] border border-black/5 p-5">
@@ -212,7 +299,7 @@ function CriarObra() {
                     required
                   />
 
-                  <span className="text-xs">
+                  <span className="text-xs leading-relaxed">
                     Declaro que esta obra é de minha autoria ou que possuo
                     autorização para publicá-la no Artfolio.
                   </span>
@@ -226,6 +313,11 @@ function CriarObra() {
                 <span>Enviar para Análise</span>
                 <i className="fa-solid fa-paper-plane"></i>
               </button>
+
+              <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                O envio real da obra, upload da imagem e registro no PostgreSQL
+                serão integrados futuramente com o backend FastAPI.
+              </p>
             </div>
           </form>
         </div>

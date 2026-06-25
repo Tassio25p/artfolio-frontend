@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 
-const initialNotificacoes = [
+const notificacoesBase = [
   {
     id: 1,
+    usuarios: ["artista"],
     tipo: "moderacao",
     titulo: "Obra aprovada",
     descricao:
-      "Sua obra Abstração em Tons de Púrpura foi aprovada pela moderação e já aparece no Feed.",
+      "Sua obra Abstração em Tons de Púrpura foi aprovada pela moderação e já pode aparecer no Feed.",
     tempo: "Agora",
     icone: "fa-solid fa-circle-check",
     cor: "text-artBlue",
@@ -19,6 +20,7 @@ const initialNotificacoes = [
   },
   {
     id: 2,
+    usuarios: ["artista"],
     tipo: "moderacao",
     titulo: "Obra recusada",
     descricao:
@@ -33,6 +35,7 @@ const initialNotificacoes = [
   },
   {
     id: 3,
+    usuarios: ["cliente", "artista"],
     tipo: "denuncia",
     titulo: "Denúncia enviada",
     descricao:
@@ -47,6 +50,7 @@ const initialNotificacoes = [
   },
   {
     id: 4,
+    usuarios: ["artista"],
     tipo: "encomenda",
     titulo: "Nova solicitação de encomenda",
     descricao:
@@ -61,9 +65,11 @@ const initialNotificacoes = [
   },
   {
     id: 5,
+    usuarios: ["cliente", "artista"],
     tipo: "mensagem",
     titulo: "Mensagem recebida",
-    descricao: "Helena Matos enviou uma nova mensagem sobre uma possível compra.",
+    descricao:
+      "Helena Matos enviou uma nova mensagem sobre uma possível encomenda.",
     tempo: "Ontem",
     icone: "fa-solid fa-paper-plane",
     cor: "text-artDark",
@@ -74,20 +80,22 @@ const initialNotificacoes = [
   },
   {
     id: 6,
+    usuarios: ["artista"],
     tipo: "interacao",
     titulo: "Nova curtida recebida",
-    descricao: "Marina Silva curtiu sua obra Ecos da Metrópole.",
+    descricao: "Um usuário curtiu sua obra Ecos da Metrópole.",
     tempo: "2 dias",
     icone: "fa-solid fa-heart",
     cor: "text-artOrange",
     fundo: "bg-artOrange/10",
     lida: true,
-    link: "/feed",
+    link: "/obra/3",
     acao: "Ver obra",
   },
   {
     id: 7,
-    tipo: "seguidor",
+    usuarios: ["artista"],
+    tipo: "interacao",
     titulo: "Novo seguidor",
     descricao: "Gabriel Duarte começou a seguir seu perfil artístico.",
     tempo: "3 dias",
@@ -100,10 +108,86 @@ const initialNotificacoes = [
   },
   {
     id: 8,
-    tipo: "plano",
-    titulo: "Recurso Pro ativo",
+    usuarios: ["cliente"],
+    tipo: "encomenda",
+    titulo: "Encomenda em andamento",
     descricao:
-      "Sua conta possui acesso a recursos comerciais, estatísticas e destaque no Feed.",
+      "A artista Marina Silva aceitou sua solicitação de arte personalizada.",
+    tempo: "Agora",
+    icone: "fa-solid fa-clock",
+    cor: "text-artBlue",
+    fundo: "bg-artBlue/10",
+    lida: false,
+    link: "/encomendas",
+    acao: "Acompanhar",
+  },
+  {
+    id: 9,
+    usuarios: ["cliente"],
+    tipo: "interacao",
+    titulo: "Artista respondeu",
+    descricao:
+      "Você recebeu uma resposta sobre uma obra salva no seu perfil.",
+    tempo: "2 h",
+    icone: "fa-solid fa-reply",
+    cor: "text-artPurple",
+    fundo: "bg-artPurple/10",
+    lida: true,
+    link: "/mensagens",
+    acao: "Ver conversa",
+  },
+  {
+    id: 10,
+    usuarios: ["moderador", "admin"],
+    tipo: "moderacao",
+    titulo: "Nova obra na quarentena",
+    descricao:
+      "Uma nova obra foi enviada para análise e aguarda decisão da moderação.",
+    tempo: "Agora",
+    icone: "fa-solid fa-shield-halved",
+    cor: "text-artOrange",
+    fundo: "bg-artOrange/10",
+    lida: false,
+    link: "/admin",
+    acao: "Analisar",
+  },
+  {
+    id: 11,
+    usuarios: ["moderador", "admin"],
+    tipo: "denuncia",
+    titulo: "Nova denúncia aberta",
+    descricao:
+      "Uma denúncia de possível plágio foi enviada para análise.",
+    tempo: "25 min",
+    icone: "fa-solid fa-flag",
+    cor: "text-red-500",
+    fundo: "bg-red-50",
+    lida: false,
+    link: "/admin",
+    acao: "Ver denúncia",
+  },
+  {
+    id: 12,
+    usuarios: ["admin"],
+    tipo: "sistema",
+    titulo: "Usuário sinalizado",
+    descricao:
+      "Um perfil recebeu múltiplas denúncias e entrou em monitoramento administrativo.",
+    tempo: "1 h",
+    icone: "fa-solid fa-user-shield",
+    cor: "text-artPurple",
+    fundo: "bg-artPurple/10",
+    lida: true,
+    link: "/admin",
+    acao: "Revisar",
+  },
+  {
+    id: 13,
+    usuarios: ["artista"],
+    tipo: "plano",
+    titulo: "Recurso Pro disponível",
+    descricao:
+      "Recursos comerciais, estatísticas e destaque no Feed estarão ligados ao sistema de planos.",
     tempo: "1 semana",
     icone: "fa-solid fa-crown",
     cor: "text-artPurple",
@@ -114,39 +198,67 @@ const initialNotificacoes = [
   },
 ];
 
+const filtros = [
+  { id: "Todas", label: "Todas" },
+  { id: "Moderação", label: "Moderação" },
+  { id: "Denúncias", label: "Denúncias" },
+  { id: "Mensagens", label: "Mensagens" },
+  { id: "Encomendas", label: "Encomendas" },
+  { id: "Interações", label: "Interações" },
+  { id: "Sistema", label: "Sistema" },
+];
+
+function getPapelLabel(tipoUsuario) {
+  if (tipoUsuario === "artista") return "Artista";
+  if (tipoUsuario === "cliente") return "Cliente";
+  if (tipoUsuario === "moderador") return "Moderador";
+  if (tipoUsuario === "admin") return "Administrador";
+  return "Usuário";
+}
+
 export default function Notificacoes() {
-  const [list, setList] = useState(initialNotificacoes);
   const [filter, setFilter] = useState("Todas");
+  const [noticeMessage, setNoticeMessage] = useState("");
 
-  // Read action handlers
-  const handleMarkAllRead = () => {
-    setList(prev => prev.map(item => ({ ...item, lida: true })));
-  };
+  const tipoUsuario = "cliente"; // Simulação de tipo de usuário logado - pode ser "artista", "cliente", "moderador" ou "admin"
 
-  const handleMarkRead = (id) => {
-    setList(prev => prev.map(item => item.id === id ? { ...item, lida: true } : item));
-  };
+  const notificacoesDoUsuario = notificacoesBase.filter((item) =>
+    item.usuarios.includes(tipoUsuario)
+  );
 
-  const handleClearHistory = () => {
-    setList([]);
-  };
-
-  // Filter application
-  const filteredList = list.filter(item => {
+  const filteredList = notificacoesDoUsuario.filter((item) => {
     if (filter === "Todas") return true;
     if (filter === "Moderação") return item.tipo === "moderacao";
     if (filter === "Denúncias") return item.tipo === "denuncia";
     if (filter === "Mensagens") return item.tipo === "mensagem";
     if (filter === "Encomendas") return item.tipo === "encomenda";
-    if (filter === "Interações") return item.tipo === "interacao" || item.tipo === "seguidor";
+    if (filter === "Interações") {
+      return item.tipo === "interacao" || item.tipo === "seguidor";
+    }
+    if (filter === "Sistema") {
+      return item.tipo === "sistema" || item.tipo === "plano";
+    }
+
     return true;
   });
 
-  // Dinamic metrics calculation
-  const total = list.length;
-  const naoLidas = list.filter((item) => !item.lida).length;
-  const moderacaoCount = list.filter((item) => item.tipo === "moderacao").length;
-  const denunciasCount = list.filter((item) => item.tipo === "denuncia").length;
+  const total = notificacoesDoUsuario.length;
+  const naoLidas = notificacoesDoUsuario.filter((item) => !item.lida).length;
+  const moderacaoCount = notificacoesDoUsuario.filter(
+    (item) => item.tipo === "moderacao"
+  ).length;
+  const denunciasCount = notificacoesDoUsuario.filter(
+    (item) => item.tipo === "denuncia"
+  ).length;
+
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
+
+  const handleAcaoFutura = (mensagem) => {
+    mostrarAviso(mensagem);
+  };
 
   return (
     <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
@@ -154,7 +266,7 @@ export default function Notificacoes() {
 
       <Sidebar />
 
-      <main className="ml-16 min-h-screen p-5 lg:p-10">
+      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
         <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
@@ -162,7 +274,7 @@ export default function Notificacoes() {
                 Central de atividades
               </span>
 
-              <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
+              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
                 Notificações<span className="italic text-artOrange">.</span>
               </h1>
 
@@ -172,19 +284,38 @@ export default function Notificacoes() {
               </p>
             </div>
 
-            <button
-              onClick={handleMarkAllRead}
-              className="bg-artDark text-white px-6 py-4 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95 flex items-center gap-2"
-            >
-              <i className="fa-solid fa-check-double"></i>
-              Marcar como lidas
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <span className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold text-center">
+                <i className="fa-solid fa-user mr-2 text-artPurple"></i>
+                Papel: {getPapelLabel(tipoUsuario)}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleAcaoFutura(
+                    "A ação real de marcar notificações como lidas será integrada ao backend."
+                  )
+                }
+                className="bg-artDark text-white px-6 py-4 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <i className="fa-solid fa-check-double"></i>
+                Marcar como lidas
+              </button>
+            </div>
           </header>
 
-          {/* Dinamic Count Cards */}
-          <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          {noticeMessage && (
+            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
+              <i className="fa-solid fa-circle-info mr-2"></i>
+              {noticeMessage}
+            </div>
+          )}
+
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm">
               <p className="text-2xl font-black">{total}</p>
+
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
                 Notificações
               </span>
@@ -192,6 +323,7 @@ export default function Notificacoes() {
 
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm">
               <p className="text-2xl font-black">{naoLidas}</p>
+
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
                 Não lidas
               </span>
@@ -199,6 +331,7 @@ export default function Notificacoes() {
 
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm">
               <p className="text-2xl font-black">{moderacaoCount}</p>
+
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
                 Moderação
               </span>
@@ -206,6 +339,7 @@ export default function Notificacoes() {
 
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm">
               <p className="text-2xl font-black">{denunciasCount}</p>
+
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
                 Denúncias
               </span>
@@ -220,44 +354,43 @@ export default function Notificacoes() {
 
               <div>
                 <h2 className="text-sm font-bold uppercase tracking-widest">
-                  Avisos de moderação
+                  Notificações ligadas ao fluxo real do Artfolio
                 </h2>
 
                 <p className="text-xs text-gray-500 mt-1 max-w-3xl leading-relaxed font-light">
-                  Quando uma obra for aprovada, recusada ou uma denúncia for
-                  analisada, o usuário será avisado por esta central de
-                  notificações.
+                  A central receberá avisos de obras aprovadas, recusadas,
+                  encomendas, mensagens, denúncias, seguidores e ações
+                  administrativas quando o backend estiver integrado.
                 </p>
               </div>
             </div>
 
             <Link
-              to="/meu-portfolio"
+              to={
+                tipoUsuario === "moderador" || tipoUsuario === "admin"
+                  ? "/admin"
+                  : "/meu-portfolio"
+              }
               className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center whitespace-nowrap"
             >
-              Ver portfólio
+              {tipoUsuario === "moderador" || tipoUsuario === "admin"
+                ? "Ver moderação"
+                : "Ver portfólio"}
             </Link>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <aside className="lg:col-span-3 space-y-4">
-              {/* Categories filters */}
               <div className="bg-white rounded-[1.7rem] border border-black/5 p-5 shadow-sm">
                 <h2 className="font-editorial text-2xl italic mb-4">
                   Filtros
                 </h2>
 
                 <div className="space-y-2">
-                  {[
-                    { id: "Todas", label: "Todas" },
-                    { id: "Moderação", label: "Moderação" },
-                    { id: "Denúncias", label: "Denúncias" },
-                    { id: "Mensagens", label: "Mensagens" },
-                    { id: "Encomendas", label: "Encomendas" },
-                    { id: "Interações", label: "Interações" },
-                  ].map((btn) => (
+                  {filtros.map((btn) => (
                     <button
                       key={btn.id}
+                      type="button"
                       onClick={() => setFilter(btn.id)}
                       className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all ${
                         filter === btn.id
@@ -287,11 +420,21 @@ export default function Notificacoes() {
 
                 <i className="fa-solid fa-bell absolute -right-4 -bottom-5 text-[5rem] text-white/5 rotate-12"></i>
               </div>
+
+              <div className="bg-artBlue/5 border border-artBlue/10 rounded-[1.7rem] p-5">
+                <h3 className="text-xs font-bold uppercase tracking-widest mb-2">
+                  Integração futura
+                </h3>
+
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  As notificações reais serão carregadas pelo backend conforme o
+                  usuário logado, seu papel no sistema e suas permissões.
+                </p>
+              </div>
             </aside>
 
-            {/* List Display */}
             <section className="lg:col-span-9">
-              <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6 shadow-sm">
+              <div className="bg-white rounded-[2rem] border border-black/5 p-4 sm:p-5 lg:p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                   <div>
                     <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
@@ -304,7 +447,12 @@ export default function Notificacoes() {
                   </div>
 
                   <button
-                    onClick={handleClearHistory}
+                    type="button"
+                    onClick={() =>
+                      handleAcaoFutura(
+                        "A limpeza real do histórico será integrada ao backend."
+                      )
+                    }
                     className="bg-[#F9F8F6] px-5 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all"
                   >
                     Limpar histórico
@@ -312,66 +460,30 @@ export default function Notificacoes() {
                 </div>
 
                 {filteredList.length === 0 ? (
-                  <div className="bg-[#F9F8F6] rounded-[1.7rem] p-12 text-center text-gray-400 italic text-sm">
-                    Nenhuma notificação encontrada nesta categoria.
+                  <div className="bg-[#F9F8F6] rounded-[1.7rem] p-8 sm:p-12 text-center">
+                    <i className="fa-solid fa-bell-slash text-4xl text-gray-200 mb-4"></i>
+
+                    <h3 className="font-editorial text-3xl italic">
+                      Nenhuma notificação.
+                    </h3>
+
+                    <p className="text-sm text-gray-500 mt-2">
+                      Não existem notificações nessa categoria para este tipo de
+                      usuário.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {filteredList.map((item) => (
-                      <article
+                      <NotificacaoCard
                         key={item.id}
-                        onClick={() => handleMarkRead(item.id)}
-                        className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 cursor-pointer ${
-                          item.lida
-                            ? "bg-[#F9F8F6] border-black/5"
-                            : "bg-white border-artPurple/20 shadow-md shadow-black/5 hover:border-artPurple"
-                        } hover:shadow-lg hover:shadow-black/5`}
-                      >
-                        <div
-                          className={`w-11 h-11 rounded-2xl ${item.fundo} ${item.cor} flex items-center justify-center shrink-0`}
-                        >
-                          <i className={item.icone}></i>
-                        </div>
-
-                        <div className="flex-1">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                            <h3 className="font-bold text-sm">{item.titulo}</h3>
-
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                              {item.tempo}
-                            </span>
-                          </div>
-
-                          <p className="text-sm text-gray-500 mt-1 leading-relaxed font-light">
-                            {item.descricao}
-                          </p>
-
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            <span className="bg-white border border-black/5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400">
-                              {item.tipo}
-                            </span>
-
-                            {!item.lida && (
-                              <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                                Nova
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 shrink-0">
-                          <Link
-                            to={item.link}
-                            className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-                          >
-                            {item.acao}
-                          </Link>
-
-                          {!item.lida && (
-                            <span className="w-2.5 h-2.5 rounded-full bg-artPurple shrink-0 animate-pulse"></span>
-                          )}
-                        </div>
-                      </article>
+                        item={item}
+                        onMarcarLida={() =>
+                          handleAcaoFutura(
+                            "A leitura real da notificação será atualizada no backend."
+                          )
+                        }
+                      />
                     ))}
                   </div>
                 )}
@@ -381,5 +493,68 @@ export default function Notificacoes() {
         </div>
       </main>
     </div>
+  );
+}
+
+function NotificacaoCard({ item, onMarcarLida }) {
+  return (
+    <article
+      className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 ${
+        item.lida
+          ? "bg-[#F9F8F6] border-black/5"
+          : "bg-white border-artPurple/20 shadow-md shadow-black/5 hover:border-artPurple"
+      } hover:shadow-lg hover:shadow-black/5`}
+    >
+      <div
+        className={`w-11 h-11 rounded-2xl ${item.fundo} ${item.cor} flex items-center justify-center shrink-0`}
+      >
+        <i className={item.icone}></i>
+      </div>
+
+      <div className="flex-1">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <h3 className="font-bold text-sm">{item.titulo}</h3>
+
+          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+            {item.tempo}
+          </span>
+        </div>
+
+        <p className="text-sm text-gray-500 mt-1 leading-relaxed font-light">
+          {item.descricao}
+        </p>
+
+        <div className="flex flex-wrap gap-2 mt-3">
+          <span className="bg-white border border-black/5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400">
+            {item.tipo}
+          </span>
+
+          {!item.lida && (
+            <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+              Nova
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
+        <Link
+          to={item.link}
+          className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+        >
+          {item.acao}
+        </Link>
+
+        {!item.lida && (
+          <button
+            type="button"
+            onClick={onMarcarLida}
+            className="bg-artPurple/10 text-artPurple px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple hover:text-white transition-all"
+          >
+            Marcar lida
+          </button>
+        )}
+      </div>
+    </article>
   );
 }

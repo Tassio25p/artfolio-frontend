@@ -1,26 +1,47 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export default function Cadastro() {
-  const navigate = useNavigate();
-
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [tipoConta, setTipoConta] = useState("artista");
+  const [categoria, setCategoria] = useState("");
   const [biografia, setBiografia] = useState("");
+  const [senha, setSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [aceitouTermos, setAceitouTermos] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const isArtista = tipoConta === "artista";
 
-    // Salvar informações no localStorage para simulação reativa
-    localStorage.setItem("artfolio_nome", nome);
-    localStorage.setItem("artfolio_email", email);
-    localStorage.setItem("artfolio_telefone", telefone);
-    localStorage.setItem("artfolio_tipo_conta", tipoConta);
-    localStorage.setItem("artfolio_biografia", biografia);
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 5000);
+  };
 
-    navigate("/login");
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    if (senha !== confirmarSenha) {
+      mostrarAviso("As senhas não coincidem. Confira os campos antes de continuar.");
+      return;
+    }
+
+    if (!aceitouTermos) {
+      mostrarAviso("Você precisa aceitar os termos para continuar o cadastro.");
+      return;
+    }
+
+    mostrarAviso(
+      "O cadastro real será integrado futuramente ao backend. Depois, os dados serão enviados para a API, a senha será protegida e o usuário será criado no PostgreSQL."
+    );
+  };
+
+  const handleLinkFuturo = () => {
+    mostrarAviso(
+      "Os Termos de Uso e a Política de Privacidade poderão ter páginas próprias futuramente."
+    );
   };
 
   return (
@@ -47,8 +68,9 @@ export default function Cadastro() {
             </h1>
 
             <p className="text-sm text-gray-400 mt-5 leading-relaxed max-w-sm">
-              Preencha seus dados para criar seu perfil no Artfolio. Depois do
-              cadastro, você será direcionado para o login.
+              Escolha como deseja usar o Artfolio. Clientes podem explorar,
+              salvar e solicitar encomendas. Artistas podem publicar obras,
+              montar portfólio e receber contatos.
             </p>
           </div>
 
@@ -69,7 +91,7 @@ export default function Cadastro() {
               </div>
 
               <p className="text-xs uppercase font-bold tracking-widest">
-                Fazer login
+                Validar no backend
               </p>
             </div>
 
@@ -79,9 +101,20 @@ export default function Cadastro() {
               </div>
 
               <p className="text-xs uppercase font-bold tracking-widest">
-                Acessar o feed
+                Fazer login
               </p>
             </div>
+          </div>
+
+          <div className="mt-10 bg-white/10 border border-white/10 rounded-[1.7rem] p-5 relative z-10">
+            <h2 className="text-sm font-bold mb-2">
+              Integração futura
+            </h2>
+
+            <p className="text-xs text-gray-400 leading-relaxed">
+              O backend criará o usuário, protegerá a senha, validará e-mail
+              único e definirá o papel inicial da conta.
+            </p>
           </div>
 
           <i className="fa-solid fa-user-plus absolute -right-10 -bottom-10 text-[13rem] text-white/5 rotate-12"></i>
@@ -91,17 +124,69 @@ export default function Cadastro() {
           <div className="w-full max-w-3xl mx-auto">
             <div className="mb-8">
               <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                Cadastro de artista
+                Cadastro no Artfolio
               </span>
 
               <h2 className="font-editorial text-4xl lg:text-5xl leading-none">
-                Comece seu portfólio.
+                {isArtista ? "Comece seu portfólio." : "Comece a explorar obras."}
               </h2>
 
               <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
-                Essas informações serão usadas para criar sua conta e iniciar
-                seu perfil artístico dentro da plataforma.
+                {isArtista
+                  ? "Essas informações preparam a criação do seu perfil artístico dentro da plataforma."
+                  : "Essas informações preparam sua conta para explorar obras, seguir artistas e solicitar encomendas."}
               </p>
+            </div>
+
+            {noticeMessage && (
+              <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold leading-relaxed">
+                <i className="fa-solid fa-circle-info mr-2"></i>
+                {noticeMessage}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => setTipoConta("cliente")}
+                className={`text-left rounded-[1.5rem] p-5 border transition-all ${
+                  tipoConta === "cliente"
+                    ? "bg-artPurple/10 border-artPurple/20"
+                    : "bg-[#F9F8F6] border-black/5 hover:bg-white"
+                }`}
+              >
+                <div className="w-10 h-10 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center mb-4">
+                  <i className="fa-solid fa-user"></i>
+                </div>
+
+                <h3 className="font-bold text-base">Cliente</h3>
+
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  Para explorar obras, salvar favoritos, conversar com artistas
+                  e solicitar encomendas.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTipoConta("artista")}
+                className={`text-left rounded-[1.5rem] p-5 border transition-all ${
+                  tipoConta === "artista"
+                    ? "bg-artOrange/10 border-artOrange/20"
+                    : "bg-[#F9F8F6] border-black/5 hover:bg-white"
+                }`}
+              >
+                <div className="w-10 h-10 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center mb-4">
+                  <i className="fa-solid fa-palette"></i>
+                </div>
+
+                <h3 className="font-bold text-base">Artista</h3>
+
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  Para criar portfólio, publicar obras, receber contatos e
+                  gerenciar encomendas.
+                </p>
+              </button>
             </div>
 
             <form
@@ -110,14 +195,18 @@ export default function Cadastro() {
             >
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Nome do artista / completo
+                  {isArtista ? "Nome artístico / completo" : "Nome completo"}
                 </label>
 
                 <input
                   type="text"
                   value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Como você quer ser chamado?"
+                  onChange={(event) => setNome(event.target.value)}
+                  placeholder={
+                    isArtista
+                      ? "Como você quer ser chamado no Artfolio?"
+                      : "Digite seu nome completo"
+                  }
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
                   required
                 />
@@ -131,7 +220,7 @@ export default function Cadastro() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                   placeholder="seu@email.com"
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
                   required
@@ -146,29 +235,35 @@ export default function Cadastro() {
                 <input
                   type="text"
                   value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
+                  onChange={(event) => setTelefone(event.target.value)}
                   placeholder="(00) 00000-0000"
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
                 />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Tipo de usuário
-                </label>
+              {isArtista && (
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                    Categoria principal
+                  </label>
 
-                <select
-                  value={tipoConta}
-                  onChange={(e) => setTipoConta(e.target.value)}
-                  className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
-                >
-                  <option value="artista">Artista</option>
-                  <option value="galeria">Galeria</option>
-                  <option value="colecionador">Colecionador</option>
-                </select>
-              </div>
-              
-              {/* Espaço em branco para grid ou campo de senha (mantendo alinhamento) */}
+                  <select
+                    value={categoria}
+                    onChange={(event) => setCategoria(event.target.value)}
+                    className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    <option value="pintura-digital">Pintura Digital</option>
+                    <option value="ilustracao">Ilustração</option>
+                    <option value="modelagem-3d">Modelagem 3D</option>
+                    <option value="textil">Arte Têxtil</option>
+                    <option value="artesanato">Artesanato</option>
+                    <option value="design">Design</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
                   Senha
@@ -176,42 +271,84 @@ export default function Cadastro() {
 
                 <input
                   type="password"
+                  value={senha}
+                  onChange={(event) => setSenha(event.target.value)}
                   placeholder="Crie uma senha"
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
                   required
                 />
               </div>
 
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Biografia inicial
+                  Confirmar senha
                 </label>
 
-                <textarea
-                  rows="3"
-                  value={biografia}
-                  onChange={(e) => setBiografia(e.target.value)}
-                  placeholder="Ex: Artista digital focado em surrealismo, ilustração e arte conceitual..."
-                  className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm resize-none"
-                ></textarea>
+                <input
+                  type="password"
+                  value={confirmarSenha}
+                  onChange={(event) => setConfirmarSenha(event.target.value)}
+                  placeholder="Repita a senha"
+                  className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
+                  required
+                />
               </div>
+
+              {isArtista && (
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                    Biografia inicial
+                  </label>
+
+                  <textarea
+                    rows="3"
+                    value={biografia}
+                    onChange={(event) => setBiografia(event.target.value)}
+                    placeholder="Ex: Artista digital focado em surrealismo, ilustração e arte conceitual..."
+                    className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm resize-none"
+                  ></textarea>
+                </div>
+              )}
+
+              {!isArtista && (
+                <div className="md:col-span-2 bg-artPurple/5 border border-artPurple/10 rounded-[1.5rem] p-4">
+                  <h3 className="text-sm font-bold mb-1">
+                    Conta de cliente
+                  </h3>
+
+                  <p className="text-sm text-gray-500 leading-relaxed">
+                    Como cliente, você poderá explorar obras aprovadas, salvar
+                    favoritos, seguir artistas, enviar mensagens e solicitar
+                    encomendas.
+                  </p>
+                </div>
+              )}
 
               <div className="md:col-span-2 flex items-start gap-3 text-sm text-gray-500">
                 <input
                   type="checkbox"
+                  checked={aceitouTermos}
+                  onChange={(event) => setAceitouTermos(event.target.checked)}
                   className="mt-1 accent-artOrange"
-                  required
                 />
 
                 <p>
                   Li e concordo com os{" "}
-                  <a href="#" className="text-artDark font-bold underline">
+                  <button
+                    type="button"
+                    onClick={handleLinkFuturo}
+                    className="text-artDark font-bold underline"
+                  >
                     Termos de Uso
-                  </a>{" "}
+                  </button>{" "}
                   e a{" "}
-                  <a href="#" className="text-artDark font-bold underline">
+                  <button
+                    type="button"
+                    onClick={handleLinkFuturo}
+                    className="text-artDark font-bold underline"
+                  >
                     Política de Privacidade
-                  </a>
+                  </button>
                   .
                 </p>
               </div>
@@ -222,15 +359,16 @@ export default function Cadastro() {
                 </h3>
 
                 <p className="text-sm text-gray-500 leading-relaxed">
-                  Depois de criar sua conta, você será enviado para a tela de
-                  login. Após entrar, o sistema abre o feed principal.
+                  Quando o backend estiver pronto, o cadastro criará o usuário no
+                  PostgreSQL. Depois, o login usará JWT para liberar as telas
+                  conforme o tipo de conta.
                 </p>
               </div>
 
               <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 pt-2">
                 <button
                   type="submit"
-                  className="bg-artDark text-white px-8 py-4 rounded-full text-sm font-bold hover:bg-artOrange transition-all shadow-xl shadow-black/10 active:scale-95"
+                  className="bg-artDark text-white px-8 py-4 rounded-full text-sm font-bold hover:bg-artOrange transition-all shadow-xl shadow-black/10 active:scale-95 text-center"
                 >
                   Criar Conta
                   <i className="fa-solid fa-arrow-right ml-2"></i>

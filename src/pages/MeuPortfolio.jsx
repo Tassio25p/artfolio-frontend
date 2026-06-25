@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 
@@ -61,10 +61,24 @@ const statusClasses = {
   Rascunho: "bg-gray-100 text-gray-400",
 };
 
+const filtros = ["Todas", "Aprovadas", "Pendentes", "Recusadas", "Rascunhos"];
+
 function MeuPortfolio() {
+  const [filtroAtual, setFiltroAtual] = useState("Todas");
+
   const totalAprovadas = obras.filter((obra) => obra.status === "Aprovada").length;
   const totalPendentes = obras.filter((obra) => obra.status === "Pendente").length;
   const totalRecusadas = obras.filter((obra) => obra.status === "Recusada").length;
+
+  const obrasFiltradas = obras.filter((obra) => {
+    if (filtroAtual === "Todas") return true;
+    if (filtroAtual === "Aprovadas") return obra.status === "Aprovada";
+    if (filtroAtual === "Pendentes") return obra.status === "Pendente";
+    if (filtroAtual === "Recusadas") return obra.status === "Recusada";
+    if (filtroAtual === "Rascunhos") return obra.status === "Rascunho";
+
+    return true;
+  });
 
   return (
     <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen">
@@ -72,7 +86,7 @@ function MeuPortfolio() {
 
       <Sidebar />
 
-      <main className="ml-16 min-h-screen p-5 lg:p-10">
+      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
         <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
@@ -80,11 +94,11 @@ function MeuPortfolio() {
                 Gerenciamento de Obras
               </span>
 
-              <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
+              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
                 Meu <span className="italic text-artOrange">Portfólio.</span>
               </h1>
 
-              <p className="text-sm text-gray-500 mt-3 max-w-xl">
+              <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
                 Acompanhe suas obras, veja o status de moderação e gerencie o
                 que aparece no Feed e no seu perfil público.
               </p>
@@ -92,14 +106,14 @@ function MeuPortfolio() {
 
             <Link
               to="/criar-obra"
-              className="bg-artDark text-white px-6 py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10"
+              className="w-full sm:w-fit bg-artDark text-white px-6 py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 text-center"
             >
               <i className="fa-solid fa-plus mr-2"></i>
               Nova Obra
             </Link>
           </header>
 
-          <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
               <p className="text-2xl font-black">{obras.length}</p>
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
@@ -147,160 +161,173 @@ function MeuPortfolio() {
               </div>
             </div>
 
-            <Link
-              to="/admin"
-              className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-            >
-              Ver processo
-            </Link>
+            <span className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold text-center text-artOrange">
+              <i className="fa-solid fa-circle-check mr-2"></i>
+              Fluxo ativo
+            </span>
           </section>
 
-          <section className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
+          <section className="bg-white rounded-[2rem] border border-black/5 p-4 sm:p-5 lg:p-6">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <h2 className="font-editorial text-3xl italic">Minhas Obras</h2>
 
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                <button className="bg-artDark text-white px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                  Todas
-                </button>
-
-                <button className="bg-[#F9F8F6] px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors">
-                  Aprovadas
-                </button>
-
-                <button className="bg-[#F9F8F6] px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors">
-                  Pendentes
-                </button>
-
-                <button className="bg-[#F9F8F6] px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors">
-                  Recusadas
-                </button>
-
-                <button className="bg-[#F9F8F6] px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors">
-                  Rascunhos
-                </button>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {filtros.map((filtro) => (
+                  <button
+                    key={filtro}
+                    type="button"
+                    onClick={() => setFiltroAtual(filtro)}
+                    className={`px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors whitespace-nowrap ${
+                      filtroAtual === filtro
+                        ? "bg-artDark text-white"
+                        : "bg-[#F9F8F6] text-gray-400 hover:text-artDark"
+                    }`}
+                  >
+                    {filtro}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="space-y-4">
-              {obras.map((obra) => (
-                <article
-                  key={obra.id}
-                  className="group bg-[#F9F8F6] rounded-[1.7rem] p-4 border border-black/5 flex flex-col lg:flex-row gap-4 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
-                >
-                  <div className="relative w-full lg:w-44 h-44 lg:h-32 rounded-[1.4rem] overflow-hidden bg-gray-100 shrink-0">
-                    <img
-                      src={obra.imagem}
-                      alt={obra.titulo}
-                      className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
-                        obra.status === "Recusada" ? "grayscale opacity-70" : ""
-                      }`}
-                    />
+            {obrasFiltradas.length === 0 ? (
+              <div className="bg-[#F9F8F6] rounded-[1.7rem] p-8 border border-black/5 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white mx-auto flex items-center justify-center text-gray-300 mb-4">
+                  <i className="fa-regular fa-folder-open text-xl"></i>
+                </div>
 
-                    {obra.status !== "Aprovada" && (
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                        <span className="bg-white/90 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                          {obra.status}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                <h3 className="font-bold text-lg">Nenhuma obra encontrada</h3>
 
-                  <div className="flex-1 flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-artPurple">
-                          {obra.categoria}
-                        </span>
+                <p className="text-sm text-gray-500 mt-2">
+                  Não existem obras cadastradas neste filtro no momento.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {obrasFiltradas.map((obra) => (
+                  <article
+                    key={obra.id}
+                    className="group bg-[#F9F8F6] rounded-[1.7rem] p-4 border border-black/5 flex flex-col lg:flex-row gap-4 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
+                  >
+                    <div className="relative w-full lg:w-44 h-44 sm:h-52 lg:h-32 rounded-[1.4rem] overflow-hidden bg-gray-100 shrink-0">
+                      <img
+                        src={obra.imagem}
+                        alt={obra.titulo}
+                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                          obra.status === "Recusada" ? "grayscale opacity-70" : ""
+                        }`}
+                      />
 
-                        <span
-                          className={`text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full ${
-                            statusClasses[obra.status] || "bg-gray-100 text-gray-400"
-                          }`}
-                        >
-                          {obra.status}
-                        </span>
-
-                        {obra.destaque && obra.status === "Aprovada" && (
-                          <span className="text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-artPurple/10 text-artPurple">
-                            Destaque
+                      {obra.status !== "Aprovada" && (
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                          <span className="bg-white/90 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                            {obra.status}
                           </span>
-                        )}
-                      </div>
-
-                      <h3 className="font-bold text-xl leading-tight">
-                        {obra.titulo}
-                      </h3>
-
-                      {obra.status === "Pendente" && (
-                        <p className="text-sm text-artOrange mt-2 font-medium">
-                          <i className="fa-solid fa-clock mr-1"></i>
-                          Aguardando análise da moderação.
-                        </p>
-                      )}
-
-                      {obra.status === "Recusada" && (
-                        <div className="mt-3 bg-red-50 border border-red-100 rounded-[1.2rem] p-3">
-                          <p className="text-xs font-bold uppercase tracking-widest text-red-500 mb-1">
-                            Motivo da recusa
-                          </p>
-
-                          <p className="text-sm text-gray-500 leading-relaxed">
-                            {obra.motivoRecusa}
-                          </p>
                         </div>
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-5 text-xs text-gray-400 font-bold">
-                      <span>
-                        <i className="fa-regular fa-heart mr-1"></i>
-                        {obra.curtidas} curtidas
-                      </span>
+                    <div className="flex-1 flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-artPurple">
+                            {obra.categoria}
+                          </span>
 
-                      <span>
-                        <i className="fa-regular fa-eye mr-1"></i>
-                        {obra.views} views
-                      </span>
+                          <span
+                            className={`text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full ${
+                              statusClasses[obra.status] ||
+                              "bg-gray-100 text-gray-400"
+                            }`}
+                          >
+                            {obra.status}
+                          </span>
+
+                          {obra.destaque && obra.status === "Aprovada" && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-artPurple/10 text-artPurple">
+                              Destaque
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="font-bold text-lg sm:text-xl leading-tight">
+                          {obra.titulo}
+                        </h3>
+
+                        {obra.status === "Pendente" && (
+                          <p className="text-sm text-artOrange mt-2 font-medium">
+                            <i className="fa-solid fa-clock mr-1"></i>
+                            Aguardando análise da moderação.
+                          </p>
+                        )}
+
+                        {obra.status === "Recusada" && (
+                          <div className="mt-3 bg-red-50 border border-red-100 rounded-[1.2rem] p-3">
+                            <p className="text-xs font-bold uppercase tracking-widest text-red-500 mb-1">
+                              Motivo da recusa
+                            </p>
+
+                            <p className="text-sm text-gray-500 leading-relaxed">
+                              {obra.motivoRecusa}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-5 text-xs text-gray-400 font-bold">
+                        <span>
+                          <i className="fa-regular fa-heart mr-1"></i>
+                          {obra.curtidas} curtidas
+                        </span>
+
+                        <span>
+                          <i className="fa-regular fa-eye mr-1"></i>
+                          {obra.views} views
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex lg:flex-col gap-3 lg:justify-center">
-                    <Link
-                      to={`/editar-obra/${obra.id}`}
-                      className="flex-1 lg:flex-none px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-                    >
-                      <i className="fa-solid fa-pen mr-2"></i>
-                      Editar
-                    </Link>
-
-                    {obra.status === "Aprovada" && (
-                      <Link
-                        to={`/obra/${obra.id}`}
-                        className="flex-1 lg:flex-none px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
-                      >
-                        <i className="fa-solid fa-eye mr-2"></i>
-                        Ver
-                      </Link>
-                    )}
-
-                    {obra.status === "Recusada" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-col gap-3 lg:justify-center">
                       <Link
                         to={`/editar-obra/${obra.id}`}
-                        className="flex-1 lg:flex-none px-5 py-3 rounded-full bg-artOrange text-white text-xs font-bold hover:bg-artDark transition-all text-center"
+                        className="px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
                       >
-                        Corrigir
+                        <i className="fa-solid fa-pen mr-2"></i>
+                        Editar
                       </Link>
-                    )}
 
-                    <button className="flex-1 lg:flex-none px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all">
-                      <i className="fa-solid fa-trash mr-2"></i>
-                      Excluir
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
+                      {obra.status === "Aprovada" && (
+                        <Link
+                          to={`/obra/${obra.id}`}
+                          className="px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                        >
+                          <i className="fa-solid fa-eye mr-2"></i>
+                          Ver
+                        </Link>
+                      )}
+
+                      {obra.status === "Recusada" && (
+                        <Link
+                          to={`/editar-obra/${obra.id}`}
+                          className="px-5 py-3 rounded-full bg-artOrange text-white text-xs font-bold hover:bg-artDark transition-all text-center"
+                        >
+                          Corrigir
+                        </Link>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled
+                        title="A exclusão será integrada futuramente ao backend."
+                        className="px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold text-gray-300 cursor-not-allowed text-center"
+                      >
+                        <i className="fa-solid fa-trash mr-2"></i>
+                        Excluir em breve
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </main>

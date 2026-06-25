@@ -1,21 +1,28 @@
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function RecuperarSenha() {
-  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [noticeMessage, setNoticeMessage] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 5000);
+  };
 
-    // Futuramente aqui vamos enviar o e-mail para o backend
-    navigate("/login");
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    mostrarAviso(
+      "A recuperação real de senha será integrada futuramente ao backend. Depois, a API validará o e-mail e enviará um link ou código de redefinição."
+    );
   };
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased overflow-hidden">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
-      <main className="min-h-screen flex items-center justify-center p-5 lg:p-10">
+      <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-10">
         <section className="w-full max-w-5xl bg-white rounded-[2.5rem] border border-black/5 shadow-2xl shadow-black/10 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
           <div className="lg:col-span-5 bg-artDark text-white p-8 lg:p-10 relative overflow-hidden">
             <Link
@@ -35,8 +42,9 @@ export default function RecuperarSenha() {
             </h1>
 
             <p className="text-sm text-gray-400 mt-5 leading-relaxed">
-              Informe o e-mail usado no cadastro. Depois disso, você será
-              direcionado para o login para tentar acessar novamente.
+              Informe o e-mail usado no cadastro. Quando o backend estiver
+              integrado, o sistema enviará instruções seguras para redefinir sua
+              senha.
             </p>
 
             <div className="mt-8 space-y-5 relative z-10">
@@ -56,7 +64,7 @@ export default function RecuperarSenha() {
                 </div>
 
                 <p className="text-xs uppercase font-bold tracking-widest">
-                  Receber instruções
+                  Backend valida a conta
                 </p>
               </div>
 
@@ -66,7 +74,7 @@ export default function RecuperarSenha() {
                 </div>
 
                 <p className="text-xs uppercase font-bold tracking-widest">
-                  Voltar ao login
+                  Redefinir senha
                 </p>
               </div>
             </div>
@@ -78,8 +86,21 @@ export default function RecuperarSenha() {
               </h3>
 
               <p className="text-xs text-gray-400 leading-relaxed">
-                Nunca compartilhe sua senha. O Artfolio não solicita códigos por
-                telefone, redes sociais ou mensagens externas.
+                Nunca compartilhe sua senha. O Artfolio não solicita senhas,
+                códigos ou dados sensíveis por telefone, redes sociais ou
+                mensagens externas.
+              </p>
+            </div>
+
+            <div className="mt-5 bg-white/5 border border-white/10 rounded-[1.7rem] p-5">
+              <h3 className="text-sm font-bold mb-2">
+                Integração futura
+              </h3>
+
+              <p className="text-xs text-gray-400 leading-relaxed">
+                A API poderá gerar um token temporário de recuperação, validar o
+                prazo de expiração e permitir a criação de uma nova senha com
+                segurança.
               </p>
             </div>
 
@@ -96,11 +117,18 @@ export default function RecuperarSenha() {
                 Vamos recuperar sua conta.
               </h2>
 
-              <p className="text-sm text-gray-500 leading-relaxed mb-8">
-                Digite o e-mail cadastrado na plataforma. Em uma versão com
+              <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                Digite o e-mail cadastrado na plataforma. Na versão integrada ao
                 backend, enviaremos um link ou código de recuperação para esse
                 endereço.
               </p>
+
+              {noticeMessage && (
+                <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold leading-relaxed">
+                  <i className="fa-solid fa-circle-info mr-2"></i>
+                  {noticeMessage}
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
@@ -110,6 +138,8 @@ export default function RecuperarSenha() {
 
                   <input
                     type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
                     placeholder="Digite seu e-mail"
                     className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
                     required
@@ -117,11 +147,14 @@ export default function RecuperarSenha() {
                 </div>
 
                 <div className="bg-artOrange/5 border border-artOrange/10 rounded-[1.5rem] p-4">
-                  <h3 className="text-sm font-bold mb-1">Próximo passo</h3>
+                  <h3 className="text-sm font-bold mb-1">
+                    Próximo passo
+                  </h3>
 
                   <p className="text-sm text-gray-500 leading-relaxed">
-                    Após enviar, você será levado novamente para a tela de
-                    login. Futuramente, essa etapa será ligada ao backend.
+                    Por enquanto, esta tela mostra apenas o fluxo visual. Depois,
+                    o backend verificará se o e-mail existe e enviará as
+                    instruções de recuperação.
                   </p>
                 </div>
 

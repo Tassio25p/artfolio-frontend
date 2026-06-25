@@ -1,14 +1,23 @@
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function Login() {
-  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [lembrarAcesso, setLembrarAcesso] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 4500);
+  };
 
-    // Futuramente aqui vamos validar o e-mail e senha com o backend
-    navigate("/feed");
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    mostrarAviso(
+      "O login real será integrado futuramente ao backend. Depois, o sistema validará e-mail e senha, receberá o token JWT e redirecionará conforme o perfil do usuário."
+    );
   };
 
   return (
@@ -33,10 +42,18 @@ export default function Login() {
               Fazer <span className="italic text-artOrange">Login.</span>
             </h1>
 
-            <p className="text-sm text-gray-500 leading-relaxed mb-8">
+            <p className="text-sm text-gray-500 leading-relaxed mb-6">
               Entre com seu e-mail e senha para acessar o feed, publicar obras,
-              conversar com clientes e gerenciar seu portfólio.
+              conversar, acompanhar encomendas e gerenciar sua conta dentro do
+              Artfolio.
             </p>
+
+            {noticeMessage && (
+              <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold leading-relaxed">
+                <i className="fa-solid fa-circle-info mr-2"></i>
+                {noticeMessage}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
@@ -46,6 +63,8 @@ export default function Login() {
 
                 <input
                   type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   placeholder="Digite seu e-mail"
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                   required
@@ -59,15 +78,24 @@ export default function Login() {
 
                 <input
                   type="password"
+                  value={senha}
+                  onChange={(event) => setSenha(event.target.value)}
                   placeholder="Digite sua senha"
                   className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                   required
                 />
               </div>
 
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
                 <label className="flex items-center gap-2 text-gray-500 cursor-pointer">
-                  <input type="checkbox" className="accent-artPurple" />
+                  <input
+                    type="checkbox"
+                    checked={lembrarAcesso}
+                    onChange={(event) =>
+                      setLembrarAcesso(event.target.checked)
+                    }
+                    className="accent-artPurple"
+                  />
                   Lembrar acesso
                 </label>
 
@@ -89,7 +117,7 @@ export default function Login() {
             </form>
 
             <div className="mt-8 bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 leading-relaxed">
                 Ainda não possui uma conta?{" "}
                 <Link
                   to="/cadastro"
@@ -97,6 +125,18 @@ export default function Login() {
                 >
                   Criar cadastro
                 </Link>
+              </p>
+            </div>
+
+            <div className="mt-5 bg-artPurple/5 border border-artPurple/10 rounded-[1.5rem] p-4">
+              <h2 className="text-xs font-bold uppercase tracking-widest mb-2">
+                Integração futura
+              </h2>
+
+              <p className="text-xs text-gray-500 leading-relaxed">
+                No backend, o login validará as credenciais, retornará um token
+                JWT e enviará dados como nome, e-mail, papel do usuário e plano
+                ativo.
               </p>
             </div>
 
@@ -120,7 +160,7 @@ export default function Login() {
           <div className="absolute inset-0 flex items-center p-16 text-white">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/70 block mb-4">
-                Área do artista
+                Entrada no sistema
               </span>
 
               <h2 className="font-editorial text-7xl italic leading-none max-w-xl">
@@ -128,29 +168,35 @@ export default function Login() {
               </h2>
 
               <p className="text-sm text-white/70 max-w-md mt-6 leading-relaxed">
-                Depois do login, você será direcionado ao feed para explorar
-                obras, publicar criações e acompanhar sua presença artística.
+                Depois da autenticação real, cada usuário será direcionado para
+                a área correta conforme seu papel: cliente, artista, moderador ou
+                administrador.
               </p>
 
               <div className="mt-8 bg-white/10 border border-white/10 rounded-[1.7rem] p-5 max-w-md">
                 <h3 className="text-sm font-bold mb-3">
-                  Caminho após o login
+                  Caminho futuro após o login
                 </h3>
 
                 <div className="space-y-3 text-xs text-white/70">
                   <p>
-                    <strong className="text-white">1.</strong> Entrar com e-mail
-                    e senha
+                    <strong className="text-white">1.</strong> Backend valida
+                    e-mail e senha
                   </p>
 
                   <p>
-                    <strong className="text-white">2.</strong> Ir para o feed
-                    principal
+                    <strong className="text-white">2.</strong> Sistema recebe o
+                    token JWT
                   </p>
 
                   <p>
-                    <strong className="text-white">3.</strong> Publicar,
-                    conversar e gerenciar seu portfólio
+                    <strong className="text-white">3.</strong> Frontend libera
+                    telas conforme papel e permissões
+                  </p>
+
+                  <p>
+                    <strong className="text-white">4.</strong> Usuário acessa
+                    feed, portfólio, admin ou recursos permitidos
                   </p>
                 </div>
               </div>

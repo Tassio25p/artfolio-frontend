@@ -2,6 +2,53 @@ import React, { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import { Link } from "react-router-dom";
 
+const planoAtual = "PRO"; // Simulação de plano atual do usuário - pode ser "FREE", "PREMIUM" ou "PRO"
+
+const planos = {
+  FREE: {
+    nome: "Free",
+    descricao: "Acesso básico ao portfólio e recursos iniciais.",
+    liberaAvancado: false,
+  },
+  PREMIUM: {
+    nome: "Premium",
+    descricao: "Libera estatísticas intermediárias e mais recursos comerciais.",
+    liberaAvancado: true,
+  },
+  PRO: {
+    nome: "Pro",
+    descricao: "Libera estatísticas completas, destaque e análise avançada.",
+    liberaAvancado: true,
+  },
+};
+
+const estatisticasResumo = [
+  {
+    titulo: "Visualizações",
+    valor: "2.7k",
+    detalhe: "+18% este mês",
+    icone: "fa-regular fa-eye",
+  },
+  {
+    titulo: "Curtidas",
+    valor: "156",
+    detalhe: "+32 novas",
+    icone: "fa-regular fa-heart",
+  },
+  {
+    titulo: "Seguidores",
+    valor: "1.2k",
+    detalhe: "+84 novos",
+    icone: "fa-solid fa-users",
+  },
+  {
+    titulo: "Encomendas",
+    valor: "12",
+    detalhe: "R$ 3.8k estimado",
+    icone: "fa-solid fa-handshake",
+  },
+];
+
 const obrasMaisVistas = [
   {
     id: 1,
@@ -36,20 +83,37 @@ const obrasMaisVistas = [
 ];
 
 const meses = [
-  { mes: "Jan", altura: "h-24" },
-  { mes: "Fev", altura: "h-32" },
-  { mes: "Mar", altura: "h-20" },
-  { mes: "Abr", altura: "h-40" },
-  { mes: "Mai", altura: "h-28" },
-  { mes: "Jun", altura: "h-48" },
+  { mes: "Jan", valor: "h-24" },
+  { mes: "Fev", valor: "h-32" },
+  { mes: "Mar", valor: "h-20" },
+  { mes: "Abr", valor: "h-40" },
+  { mes: "Mai", valor: "h-28" },
+  { mes: "Jun", valor: "h-48" },
 ];
 
 export default function Estatisticas() {
-  const [plano, setPlano] = useState(() => localStorage.getItem("artfolio_plano") || "FREE");
+  const [periodo, setPeriodo] = useState("30 dias");
+  const [noticeMessage, setNoticeMessage] = useState("");
+
+  const plano = planos[planoAtual];
+  const estatisticasLiberadas = plano.liberaAvancado;
+
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
 
   const handleUpgrade = () => {
-    localStorage.setItem("artfolio_plano", "PRO");
-    setPlano("PRO");
+    mostrarAviso(
+      "A alteração real de plano será integrada futuramente ao backend e ao sistema de assinaturas."
+    );
+  };
+
+  const handlePeriodo = (novoPeriodo) => {
+    setPeriodo(novoPeriodo);
+    mostrarAviso(
+      "O filtro real por período será aplicado futuramente com dados vindos do backend."
+    );
   };
 
   return (
@@ -58,7 +122,7 @@ export default function Estatisticas() {
 
       <Sidebar />
 
-      <main className="ml-16 min-h-screen p-5 lg:p-10">
+      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
         <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
@@ -66,30 +130,32 @@ export default function Estatisticas() {
                 Desempenho do artista
               </span>
 
-              <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
+              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
                 Estatísticas<span className="italic text-artOrange">.</span>
               </h1>
 
               <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
-                Acompanhe o crescimento do seu perfil, visualizações das obras,
-                curtidas, seguidores e interações do seu portfólio.
+                Acompanhe o crescimento do perfil, visualizações das obras,
+                curtidas, seguidores e interações do portfólio quando o backend
+                estiver integrado.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              {plano === "FREE" && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              {!estatisticasLiberadas && (
                 <button
+                  type="button"
                   onClick={handleUpgrade}
-                  className="bg-artPurple text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:shadow-lg transition-all"
+                  className="bg-artPurple text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:shadow-lg transition-all text-center"
                 >
                   <i className="fa-solid fa-crown mr-2"></i>
-                  Upgrade para PRO
+                  Upgrade futuro
                 </button>
               )}
 
               <Link
                 to="/perfil"
-                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all"
+                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
               >
                 <i className="fa-solid fa-user mr-2"></i>
                 Ver Perfil
@@ -97,78 +163,150 @@ export default function Estatisticas() {
 
               <Link
                 to="/meu-portfolio"
-                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10"
+                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 text-center"
               >
                 Gerenciar Obras
               </Link>
             </div>
           </header>
 
-          {/* Wrapper da Simulação de Bloqueio */}
+          {noticeMessage && (
+            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
+              <i className="fa-solid fa-circle-info mr-2"></i>
+              {noticeMessage}
+            </div>
+          )}
+
+          <section className="bg-white border border-black/5 rounded-[2rem] p-5 mb-8 flex flex-col lg:flex-row gap-5 lg:items-center justify-between">
+            <div className="flex gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
+                <i className="fa-solid fa-crown"></i>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                  Plano atual
+                </span>
+
+                <h2 className="font-editorial text-3xl italic">
+                  Artfolio {plano.nome}
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                  {plano.descricao}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {["7 dias", "30 dias", "6 meses"].map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => handlePeriodo(item)}
+                  className={`px-4 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    periodo === item
+                      ? "bg-artDark text-white"
+                      : "bg-[#F9F8F6] text-gray-400 hover:bg-artDark hover:text-white"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {estatisticasResumo.map((item) => (
+              <div
+                key={item.titulo}
+                className="bg-white rounded-[1.7rem] p-5 border border-black/5 relative overflow-hidden"
+              >
+                <div className="w-10 h-10 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center mb-4">
+                  <i className={item.icone}></i>
+                </div>
+
+                <p className="text-2xl font-black">{item.valor}</p>
+
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                  {item.titulo}
+                </span>
+
+                <p className="text-xs text-artPurple font-bold mt-2">
+                  {item.detalhe}
+                </p>
+
+                <span className="absolute top-4 right-4 bg-artOrange/10 text-artOrange px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+                  Prévia
+                </span>
+              </div>
+            ))}
+          </section>
+
+          {!estatisticasLiberadas && (
+            <section className="bg-artPurple/5 border border-artPurple/10 rounded-[2rem] p-6 mb-8 flex flex-col md:flex-row gap-5 md:items-center justify-between">
+              <div className="flex gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
+                  <i className="fa-solid fa-lock"></i>
+                </div>
+
+                <div>
+                  <h2 className="font-editorial text-3xl italic">
+                    Estatísticas avançadas bloqueadas
+                  </h2>
+
+                  <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
+                    No plano Free, o artista terá acesso limitado. Estatísticas
+                    avançadas, crescimento mensal, obras com melhor desempenho e
+                    análise comercial serão liberadas conforme o plano.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                to="/planos"
+                className="bg-artDark text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all text-center"
+              >
+                Ver planos
+              </Link>
+            </section>
+          )}
+
           <div className="relative">
-            {plano !== "PRO" && (
-              <div className="absolute inset-0 z-20 bg-[#F9F8F6]/40 backdrop-blur-md rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center border border-black/5 min-h-[500px]">
-                <div className="w-16 h-16 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center text-2xl mb-4 animate-bounce">
+            {!estatisticasLiberadas && (
+              <div className="absolute inset-0 z-20 bg-[#F9F8F6]/60 backdrop-blur-md rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center border border-black/5 min-h-[520px]">
+                <div className="w-16 h-16 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center text-2xl mb-4">
                   <i className="fa-solid fa-crown"></i>
                 </div>
+
                 <h2 className="font-editorial text-3xl lg:text-4xl italic mb-3 leading-none">
-                  Desbloqueie Estatísticas Avançadas
+                  Desbloqueie análises completas
                 </h2>
+
                 <p className="text-gray-500 text-sm max-w-lg mb-6 leading-relaxed font-light">
-                  Tenha controle total do seu engajamento, crescimento mensal de seguidores, visualizações das suas obras e histórico financeiro de encomendas com o plano **Artfolio PRO**.
+                  Esta área representa os recursos avançados de estatísticas do
+                  Artfolio. Os dados reais serão calculados futuramente pelo
+                  backend com base nas visualizações, curtidas, seguidores e
+                  encomendas registradas no PostgreSQL.
                 </p>
+
                 <button
+                  type="button"
                   onClick={handleUpgrade}
                   className="bg-artDark text-white px-8 py-4 rounded-full text-xs font-bold hover:bg-artPurple hover:shadow-xl hover:shadow-artPurple/20 transition-all active:scale-95"
                 >
-                  Fazer Upgrade para PRO
+                  Solicitar upgrade futuramente
                 </button>
               </div>
             )}
 
-            <div className={`transition-all duration-500 ${plano !== "PRO" ? "pointer-events-none select-none opacity-20 filter blur-[2px]" : ""}`}>
-              <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                  <p className="text-2xl font-black">2.7k</p>
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                    Visualizações
-                  </span>
-                  <p className="text-xs text-artPurple font-bold mt-2">
-                    +18% este mês
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                  <p className="text-2xl font-black">156</p>
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                    Curtidas
-                  </span>
-                  <p className="text-xs text-artPurple font-bold mt-2">
-                    +32 novas
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                  <p className="text-2xl font-black">1.2k</p>
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                    Seguidores
-                  </span>
-                  <p className="text-xs text-artPurple font-bold mt-2">
-                    +84 novos
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                  <p className="text-2xl font-black">12</p>
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                    Encomendas
-                  </span>
-                  <p className="text-xs text-artPurple font-bold mt-2">
-                    R$ 3.8k estimado
-                  </p>
-                </div>
-              </section>
-
+            <div
+              className={`transition-all duration-500 ${
+                !estatisticasLiberadas
+                  ? "pointer-events-none select-none opacity-20 blur-[2px]"
+                  : ""
+              }`}
+            >
               <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 <aside className="lg:col-span-4 space-y-5">
                   <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
@@ -180,6 +318,11 @@ export default function Estatisticas() {
                       <h2 className="font-editorial text-3xl italic">
                         Visualizações mensais
                       </h2>
+
+                      <p className="text-xs text-gray-400 mt-2">
+                        Dados demonstrativos da interface. No backend, os
+                        valores serão calculados por período.
+                      </p>
                     </div>
 
                     <div className="h-56 flex items-end justify-between gap-3">
@@ -189,7 +332,7 @@ export default function Estatisticas() {
                           className="flex flex-col items-center justify-end gap-2 flex-1"
                         >
                           <div
-                            className={`${item.altura} w-full rounded-t-2xl bg-artPurple/80 hover:bg-artOrange transition-colors`}
+                            className={`${item.valor} w-full rounded-t-2xl bg-artPurple/80 hover:bg-artOrange transition-colors`}
                           ></div>
 
                           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
@@ -202,16 +345,17 @@ export default function Estatisticas() {
 
                   <div className="bg-artDark text-white rounded-[2rem] p-5 relative overflow-hidden">
                     <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                      Insight
+                      Insight futuro
                     </span>
 
                     <h3 className="font-editorial text-2xl italic leading-tight">
-                      Obras com legenda completa performam melhor.
+                      Análises automáticas serão geradas pelo backend.
                     </h3>
 
                     <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                      Suas publicações com descrição detalhada tiveram mais
-                      visualizações e mais tempo de permanência.
+                      Futuramente, o sistema poderá indicar quais obras possuem
+                      mais visualizações, melhor taxa de interação e maior
+                      potencial de encomendas.
                     </p>
 
                     <Link
@@ -238,8 +382,16 @@ export default function Estatisticas() {
                         </h2>
                       </div>
 
-                      <button className="bg-[#F9F8F6] px-5 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all">
-                        Últimos 30 dias
+                      <button
+                        type="button"
+                        onClick={() =>
+                          mostrarAviso(
+                            "O filtro real de desempenho será integrado futuramente ao backend."
+                          )
+                        }
+                        className="bg-[#F9F8F6] px-5 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all"
+                      >
+                        Período: {periodo}
                       </button>
                     </div>
 
@@ -286,7 +438,7 @@ export default function Estatisticas() {
                             </div>
                           </div>
 
-                          <div className="bg-artPurple/10 text-artPurple px-4 py-2 rounded-full text-xs font-black">
+                          <div className="bg-artPurple/10 text-artPurple px-4 py-2 rounded-full text-xs font-black text-center">
                             {obra.crescimento}
                           </div>
                         </article>
