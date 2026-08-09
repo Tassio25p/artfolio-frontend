@@ -1,97 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { Link } from "react-router-dom";
-
-const posts = [
-  {
-    id: 1,
-    image:
-      "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100",
-    user: "Marina Silva",
-    title: "Abstração em Tons de Púrpura",
-    category: "Digital",
-    status: "Aprovada",
-    tag: "Original",
-    likes: "42",
-    comments: "8",
-    description:
-      "Estudo visual com cores intensas, formas abstratas e composição voltada para expressão emocional.",
-  },
-  {
-    id: 2,
-    image:
-      "https://images.unsplash.com/photo-1549490349-8643362247b5?q=80&w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100",
-    user: "Gabriel Duarte",
-    title: "Escultura Têxtil #02",
-    category: "Têxtil",
-    status: "Aprovada",
-    tag: "Têxtil",
-    likes: "31",
-    comments: "5",
-    description:
-      "Uma exploração física sobre o movimento das fibras naturais no espaço urbano.",
-  },
-  {
-    id: 3,
-    image:
-      "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=100",
-    user: "Helena Matos",
-    title: "Fragmentos de Vidro",
-    category: "Ilustração",
-    status: "Aprovada",
-    tag: "Digital",
-    likes: "64",
-    comments: "12",
-    description:
-      "Ilustração experimental com texturas, transparências e formas fragmentadas.",
-  },
-  {
-    id: 4,
-    image:
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=100",
-    user: "Luan Rocha",
-    title: "Ecos da Metrópole",
-    category: "3D Assets",
-    status: "Aprovada",
-    tag: "3D Art",
-    likes: "87",
-    comments: "19",
-    description:
-      "Estudo visual sobre arquitetura, luz e movimento em grandes centros urbanos.",
-  },
-];
-
-const artistas = [
-  {
-    nome: "Marina Silva",
-    area: "Pintura Digital",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100",
-    obras: 48,
-  },
-  {
-    nome: "Gabriel Duarte",
-    area: "Arte Têxtil",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100",
-    obras: 32,
-  },
-  {
-    nome: "Helena Matos",
-    area: "Ilustração",
-    avatar:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=100",
-    obras: 64,
-  },
-];
+import { feedService, obrasService, usuarioService, getUser, getToken } from "../services/api";
 
 const filtros = [
   { id: "Tudo", label: "Tudo" },
@@ -104,29 +14,101 @@ const filtros = [
 export default function Home() {
   const [filtroAtual, setFiltroAtual] = useState("Tudo");
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [noticeType, setNoticeType] = useState("info");
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const tipoUsuario = "artista";
+  const currentUser = getUser();
+  const tipoUsuario = currentUser?.tipo_conta || "cliente";
   const isArtista = tipoUsuario === "artista";
 
-  const postsAprovados = posts.filter((post) => post.status === "Aprovada");
+  const carregarFeed = async () => {
+    try {
+      if (!getToken()) {
+        setLoading(false);
+        return;
+      }
+      const feedData = await feedService.obterFeed();
+      if (Array.isArray(feedData)) {
+        setPosts(feedData);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar o feed:", err);
+      mostrarAviso(err.message || "Erro ao carregar o feed de postagens.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const postsFiltrados = postsAprovados.filter((post) => {
-    if (filtroAtual === "Tudo") return true;
-    return post.category === filtroAtual;
-  });
+  useEffect(() => {
+    carregarFeed();
+  }, []);
 
-  const totalCategorias = new Set(postsAprovados.map((post) => post.category))
-    .size;
-
-  const mostrarAviso = (mensagem) => {
+  const mostrarAviso = (mensagem, tipo = "info") => {
     setNoticeMessage(mensagem);
+    setNoticeType(tipo);
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const handleAcaoFutura = () => {
-    mostrarAviso(
-      "Essa interação será integrada futuramente ao backend com o usuário logado."
-    );
+  const handleToggleLike = async (postId, estaCurtido) => {
+    try {
+      if (estaCurtido) {
+        await obrasService.descurtir(postId);
+      } else {
+        await obrasService.curtir(postId);
+      }
+      // Atualizar localmente
+      setPosts((prevPosts) =>
+        prevPosts.map((post) => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              curtido_por_mim: !estaCurtido,
+              likes: estaCurtido ? Math.max(0, post.likes - 1) : post.likes + 1,
+            };
+          }
+          return post;
+        })
+      );
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao alterar curtida.", "error");
+    }
+  };
+
+  const handleToggleFollow = async (usuarioId, estaSeguindo) => {
+    try {
+      if (estaSeguindo) {
+        await usuarioService.deixarDeSeguir(usuarioId);
+      } else {
+        await usuarioService.seguir(usuarioId);
+      }
+      // Atualizar localmente todas as postagens daquele autor no feed
+      setPosts((prevPosts) =>
+        prevPosts.map((post) => {
+          if (post.usuario?.id === usuarioId) {
+            return {
+              ...post,
+              seguindo_usuario: !estaSeguindo,
+              seguidores: estaSeguindo ? Math.max(0, post.seguidores - 1) : post.seguidores + 1,
+            };
+          }
+          return post;
+        })
+      );
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao alterar relacionamento de seguir.", "error");
+    }
+  };
+
+  const postsFiltrados = posts.filter((post) => {
+    if (filtroAtual === "Tudo") return true;
+    const nomeCat = post.categoria?.nomeCategoria || "";
+    return nomeCat.toLowerCase().includes(filtroAtual.toLowerCase());
+  });
+
+  const noticeStyles = {
+    info: "bg-artOrange/10 text-artOrange border-artOrange/10",
+    error: "bg-red-50 text-red-500 border-red-200",
   };
 
   return (
@@ -141,7 +123,7 @@ export default function Home() {
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-6">
               <div>
                 <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                  Curadoria diária
+                  Feed Social
                 </span>
 
                 <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl italic leading-none">
@@ -150,9 +132,8 @@ export default function Home() {
                 </h1>
 
                 <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
-                  Explore obras aprovadas pela moderação, descubra artistas
-                  independentes e acompanhe criações em destaque dentro da
-                  comunidade Artfolio.
+                  Explore obras da comunidade, descubra novos artistas, interaja
+                  com curtidas e comentários em tempo real.
                 </p>
               </div>
 
@@ -185,64 +166,11 @@ export default function Home() {
             </div>
 
             {noticeMessage && (
-              <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
+              <div className={`${noticeStyles[noticeType]} border rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold`}>
                 <i className="fa-solid fa-circle-info mr-2"></i>
                 {noticeMessage}
               </div>
             )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <ResumoCard
-                valor={postsAprovados.length}
-                label="Obras aprovadas"
-                detalhe="Prévia visual"
-              />
-
-              <ResumoCard
-                valor={artistas.length}
-                label="Artistas em destaque"
-                detalhe="Comunidade"
-              />
-
-              <ResumoCard
-                valor={totalCategorias}
-                label="Categorias"
-                detalhe="Feed filtrável"
-              />
-
-              <ResumoCard
-                valor="OK"
-                label="Moderação"
-                detalhe="Apenas aprovadas"
-              />
-            </div>
-
-            <div className="bg-artBlue/5 border border-artBlue/10 rounded-[1.7rem] p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex gap-4">
-                <div className="w-11 h-11 rounded-2xl bg-artBlue/10 text-artBlue flex items-center justify-center shrink-0">
-                  <i className="fa-solid fa-shield-halved"></i>
-                </div>
-
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-widest">
-                    Feed público moderado
-                  </h2>
-
-                  <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
-                    No sistema real, o feed exibirá apenas obras aprovadas pela
-                    moderação. Obras pendentes ou recusadas ficam fora da área
-                    pública.
-                  </p>
-                </div>
-              </div>
-
-              <Link
-                to="/meu-portfolio"
-                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-              >
-                Ver portfólio
-              </Link>
-            </div>
 
             <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
               {filtros.map((filtro) => (
@@ -264,7 +192,14 @@ export default function Home() {
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             <section className="xl:col-span-9">
-              {postsFiltrados.length === 0 ? (
+              {loading ? (
+                <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center">
+                  <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+                  <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
+                    Carregando feed...
+                  </p>
+                </div>
+              ) : postsFiltrados.length === 0 ? (
                 <div className="bg-white rounded-[2rem] border border-black/5 p-10 text-center">
                   <i className="fa-solid fa-palette text-4xl text-gray-200 mb-4"></i>
 
@@ -273,7 +208,7 @@ export default function Home() {
                   </h2>
 
                   <p className="text-sm text-gray-500 mt-2">
-                    Tente selecionar outra categoria do feed.
+                    Seja o primeiro a publicar ou tente selecionar outra categoria.
                   </p>
                 </div>
               ) : (
@@ -282,7 +217,9 @@ export default function Home() {
                     <FeedCard
                       key={post.id}
                       post={post}
-                      onAction={handleAcaoFutura}
+                      currentUserId={currentUser?.id}
+                      onToggleLike={() => handleToggleLike(post.id, post.curtido_por_mim)}
+                      onToggleFollow={() => handleToggleFollow(post.usuario?.id, post.seguindo_usuario)}
                     />
                   ))}
                 </div>
@@ -290,55 +227,6 @@ export default function Home() {
             </section>
 
             <aside className="xl:col-span-3 space-y-5">
-              <div className="bg-white rounded-[2rem] border border-black/5 p-5">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="font-editorial text-2xl italic">
-                    Artistas em alta
-                  </h2>
-
-                  <i className="fa-solid fa-sparkles text-artOrange"></i>
-                </div>
-
-                <div className="space-y-4">
-                  {artistas.map((artista) => (
-                    <div
-                      key={artista.nome}
-                      className="flex items-center gap-3 bg-[#F9F8F6] rounded-[1.3rem] p-3"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-artPurple overflow-hidden shrink-0">
-                        <img
-                          src={artista.avatar}
-                          alt={artista.nome}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-bold truncate">
-                          {artista.nome}
-                        </h3>
-
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 truncate">
-                          {artista.area}
-                        </p>
-
-                        <p className="text-[10px] text-gray-400 mt-1">
-                          {artista.obras} obras aprovadas
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleAcaoFutura}
-                        className="w-8 h-8 rounded-full bg-white border border-black/5 hover:bg-artDark hover:text-white transition-all shrink-0"
-                      >
-                        <i className="fa-solid fa-plus text-xs"></i>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               <div className="bg-artDark text-white rounded-[2rem] p-5 relative overflow-hidden">
                 <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
                   Dica do dia
@@ -349,8 +237,8 @@ export default function Home() {
                 </h2>
 
                 <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Obras com descrição, processo criativo e categoria clara
-                  ajudam a moderação e deixam o portfólio mais profissional.
+                  Obras com legenda clara e boa visualização recebem mais
+                  interações e curtidas na comunidade.
                 </p>
 
                 {isArtista ? (
@@ -371,40 +259,6 @@ export default function Home() {
 
                 <i className="fa-solid fa-lightbulb absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
               </div>
-
-              <div className="bg-white rounded-[2rem] border border-black/5 p-5">
-                <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Plano atual
-                </span>
-
-                <h2 className="font-editorial text-2xl italic leading-tight">
-                  Free
-                </h2>
-
-                <p className="text-xs text-gray-500 mt-3 leading-relaxed">
-                  Os planos Premium e Pro liberam recursos como estatísticas,
-                  destaques e ferramentas comerciais para artistas.
-                </p>
-
-                <Link
-                  to="/planos"
-                  className="inline-block mt-5 bg-[#F9F8F6] px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all"
-                >
-                  Ver planos
-                </Link>
-              </div>
-
-              <div className="bg-artPurple/5 border border-artPurple/10 rounded-[2rem] p-5">
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Integração futura
-                </span>
-
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Curtidas, comentários, salvos, recomendações e artistas
-                  seguidos serão controlados pelo backend com o usuário
-                  autenticado.
-                </p>
-              </div>
             </aside>
           </div>
         </div>
@@ -413,113 +267,107 @@ export default function Home() {
   );
 }
 
-function ResumoCard({ valor, label, detalhe }) {
-  return (
-    <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-      <p className="text-2xl font-black">{valor}</p>
+function FeedCard({ post, currentUserId, onToggleLike, onToggleFollow }) {
+  const isMe = currentUserId === post.usuario?.id;
 
-      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-        {label}
-      </span>
-
-      <p className="text-[10px] text-gray-400 mt-2">{detalhe}</p>
-    </div>
-  );
-}
-
-function FeedCard({ post, onAction }) {
   return (
     <article className="break-inside-avoid bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all group mb-6">
       <Link to={`/obra/${post.id}`} className="block overflow-hidden">
         <img
-          src={post.image}
-          alt={post.title}
+          src={post.arquivoUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
+          alt={post.legenda || "Obra"}
           className="w-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
       </Link>
 
       <div className="p-5">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-            {post.category}
-          </span>
-
-          <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-            {post.status}
-          </span>
-
-          {post.tag && (
-            <span className="bg-artOrange/10 text-artOrange px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-              {post.tag}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          {post.categoria?.nomeCategoria && (
+            <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+              {post.categoria.nomeCategoria}
             </span>
+          )}
+
+          <span className="text-[10px] text-gray-400 font-bold">
+            {post.dataPostagem ? new Date(post.dataPostagem).toLocaleDateString() : ""}
+          </span>
+        </div>
+
+        {post.legenda && (
+          <h2 className="font-editorial text-xl italic leading-snug mb-3">
+            {post.legenda}
+          </h2>
+        )}
+
+        {/* Autor */}
+        <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-black/5">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0">
+              {post.usuario?.fotoPerfil ? (
+                <img
+                  src={post.usuario.fotoPerfil}
+                  alt={post.usuario.nome}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-artPurple flex items-center justify-center text-white text-xs font-bold">
+                  {post.usuario?.nome?.charAt(0)?.toUpperCase() || "A"}
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <p className="text-sm font-bold truncate">{post.usuario?.nome || "Artista"}</p>
+              <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
+                {post.usuario?.tipo_conta || "artista"} • {post.seguidores} seguidores
+              </p>
+            </div>
+          </div>
+
+          {!isMe && post.usuario?.id && (
+            <button
+              type="button"
+              onClick={onToggleFollow}
+              className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                post.seguindo_usuario
+                  ? "bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-500"
+                  : "bg-artDark text-white hover:bg-artPurple"
+              }`}
+            >
+              {post.seguindo_usuario ? "Seguindo" : "+ Seguir"}
+            </button>
           )}
         </div>
 
-        <h2 className="font-editorial text-2xl italic leading-none">
-          {post.title}
-        </h2>
-
-        {post.description && (
-          <p className="text-sm text-gray-500 mt-3 leading-relaxed">
-            {post.description}
-          </p>
-        )}
-
-        <div className="flex items-center gap-3 mt-5">
-          <div className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0">
-            <img
-              src={post.avatar}
-              alt={post.user}
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold truncate">{post.user}</p>
-
-            <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-              Artista
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-black/5">
-          <div className="flex items-center gap-4 text-xs text-gray-400 font-bold">
-            <span>
-              <i className="fa-regular fa-heart mr-1"></i>
-              {post.likes}
-            </span>
-
-            <span>
-              <i className="fa-regular fa-comment mr-1"></i>
-              {post.comments}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
+        {/* Bar de Interação */}
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/5">
+          <div className="flex items-center gap-4 text-xs font-bold">
             <button
               type="button"
-              onClick={onAction}
-              className="w-9 h-9 rounded-full bg-[#F9F8F6] text-gray-400 hover:bg-artOrange/10 hover:text-artOrange transition-all"
+              onClick={onToggleLike}
+              className={`flex items-center gap-1.5 transition-colors ${
+                post.curtido_por_mim ? "text-red-500" : "text-gray-400 hover:text-red-500"
+              }`}
             >
-              <i className="fa-regular fa-heart"></i>
-            </button>
-
-            <button
-              type="button"
-              onClick={onAction}
-              className="w-9 h-9 rounded-full bg-[#F9F8F6] text-gray-400 hover:bg-artBlue/10 hover:text-artBlue transition-all"
-            >
-              <i className="fa-regular fa-bookmark"></i>
+              <i className={post.curtido_por_mim ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
+              <span>{post.likes}</span>
             </button>
 
             <Link
               to={`/obra/${post.id}`}
-              className="w-9 h-9 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center"
+              className="flex items-center gap-1.5 text-gray-400 hover:text-artBlue transition-colors"
             >
-              <i className="fa-solid fa-arrow-right text-xs"></i>
+              <i className="fa-regular fa-comment"></i>
+              <span>{post.comentarios}</span>
             </Link>
           </div>
+
+          <Link
+            to={`/obra/${post.id}`}
+            className="w-8 h-8 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center"
+          >
+            <i className="fa-solid fa-arrow-right text-xs"></i>
+          </Link>
         </div>
       </div>
     </article>

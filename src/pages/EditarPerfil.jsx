@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { authService, usuarioService, getUser, getToken } from "../services/api";
 
 const categorias = [
   { value: "pintura-digital", label: "Pintura Digital" },
@@ -12,52 +13,73 @@ const categorias = [
   { value: "arte-conceitual", label: "Arte Conceitual" },
 ];
 
-const perfilAtual = {
-  nome: "Marina Silva",
-  categoria: "pintura-digital",
-  cidade: "São Paulo",
-  estado: "SP",
-  biografia:
-    "Explorando a intersecção entre o artesanato têxtil e a modelagem 3D. Transformando sentimentos em formas tangíveis desde 2018.",
-  instagram: "@marinasilva.art",
-  behance: "behance.net/marinasilva",
-  emailPublico: "contato@marinasilva.com",
-  siteExterno: "marinasilva.com",
-  imagem:
-    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format&fit=crop",
-  seguidores: "1.2k",
-  obras: 48,
-  plano: "Pro",
-};
-
 function EditarPerfil() {
-  const [nome, setNome] = useState(perfilAtual.nome);
-  const [categoria, setCategoria] = useState(perfilAtual.categoria);
-  const [cidade, setCidade] = useState(perfilAtual.cidade);
-  const [estado, setEstado] = useState(perfilAtual.estado);
-  const [biografia, setBiografia] = useState(perfilAtual.biografia);
-  const [instagram, setInstagram] = useState(perfilAtual.instagram);
-  const [behance, setBehance] = useState(perfilAtual.behance);
-  const [emailPublico, setEmailPublico] = useState(perfilAtual.emailPublico);
-  const [siteExterno, setSiteExterno] = useState(perfilAtual.siteExterno);
-  const [imagePreview, setImagePreview] = useState(perfilAtual.imagem);
+  const navigate = useNavigate();
+
+  // Estados dos campos do formulário
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [biografia, setBiografia] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [behance, setBehance] = useState("");
+  const [website, setWebsite] = useState("");
+  const [portfolio, setPortfolio] = useState("");
+  const [fotoPerfil, setFotoPerfil] = useState("");
+  const [imagePreview, setImagePreview] = useState("");
   const [nomeArquivo, setNomeArquivo] = useState("");
+
+  // Dados extras (somente leitura, vindos da API)
+  const [tipoConta, setTipoConta] = useState("cliente");
+  const [email, setEmail] = useState("");
+
+  // Estados de controle
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [noticeType, setNoticeType] = useState("info"); // "info" | "success" | "error"
 
-  const tipoPerfil = "artista";
-  const isArtista = tipoPerfil === "artista";
-
-  const categoriaSelecionada = categorias.find(
-    (item) => item.value === categoria
-  );
+  const isArtista = tipoConta === "artista";
 
   const nomeSeparado = nome.trim().split(" ");
   const primeiroNome = nomeSeparado[0] || "Perfil";
   const restanteNome = nomeSeparado.slice(1).join(" ");
 
-  const mostrarAviso = (mensagem) => {
+  // Carregar dados do usuário ao montar o componente
+  useEffect(() => {
+    const carregarPerfil = async () => {
+      if (!getToken()) {
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const usuario = await authService.getMe();
+        setNome(usuario.nome || "");
+        setTelefone(usuario.telefone || "");
+        setBiografia(usuario.biografia || "");
+        setInstagram(usuario.instagram || "");
+        setBehance(usuario.behance || "");
+        setWebsite(usuario.website || "");
+        setPortfolio(usuario.portfolio || "");
+        setFotoPerfil(usuario.fotoPerfil || "");
+        setImagePreview(usuario.fotoPerfil || "");
+        setTipoConta(usuario.tipo_conta || "cliente");
+        setEmail(usuario.email || "");
+      } catch (error) {
+        mostrarAviso("Erro ao carregar dados do perfil. Faça login novamente.", "error");
+        setTimeout(() => navigate("/login"), 2000);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarPerfil();
+  }, [navigate]);
+
+  const mostrarAviso = (mensagem, tipo = "info") => {
     setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4000);
+    setNoticeType(tipo);
+    setTimeout(() => setNoticeMessage(""), 5000);
   };
 
   const handleFileChange = (event) => {
@@ -66,7 +88,7 @@ function EditarPerfil() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      mostrarAviso("Selecione apenas arquivos de imagem.");
+      mostrarAviso("Selecione apenas arquivos de imagem.", "error");
       return;
     }
 
@@ -80,13 +102,80 @@ function EditarPerfil() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setSaving(true);
 
-    mostrarAviso(
-      "Com o backend integrado, as alterações do perfil serão salvas no PostgreSQL."
-    );
+    try {
+      // Montar objeto apenas com os campos que serão atualizados
+      const dados = {};
+
+      // Comparar com dados atuais do localStorage para enviar apenas alterações
+      const usuarioAtual = getUser();
+
+      if (nome !== (usuarioAtual?.nome || "")) dados.nome = nome;
+      if (telefone !== (usuarioAtual?.telefone || "")) dados.telefone = telefone || null;
+      if (biografia !== (usuarioAtual?.biografia || "")) dados.biografia = biografia || null;
+      if (instagram !== (usuarioAtual?.instagram || "")) dados.instagram = instagram || null;
+      if (behance !== (usuarioAtual?.behance || "")) dados.behance = behance || null;
+      if (website !== (usuarioAtual?.website || "")) dados.website = website || null;
+      if (portfolio !== (usuarioAtual?.portfolio || "")) dados.portfolio = portfolio || null;
+      if (fotoPerfil !== (usuarioAtual?.fotoPerfil || "")) dados.fotoPerfil = fotoPerfil || null;
+
+      if (Object.keys(dados).length === 0) {
+        mostrarAviso("Nenhuma alteração detectada.", "info");
+        setSaving(false);
+        return;
+      }
+
+      const usuarioAtualizado = await usuarioService.atualizarPerfil(dados);
+
+      // Atualizar os estados com os dados retornados
+      setNome(usuarioAtualizado.nome || "");
+      setTelefone(usuarioAtualizado.telefone || "");
+      setBiografia(usuarioAtualizado.biografia || "");
+      setInstagram(usuarioAtualizado.instagram || "");
+      setBehance(usuarioAtualizado.behance || "");
+      setWebsite(usuarioAtualizado.website || "");
+      setPortfolio(usuarioAtualizado.portfolio || "");
+      setFotoPerfil(usuarioAtualizado.fotoPerfil || "");
+      setImagePreview(usuarioAtualizado.fotoPerfil || "");
+
+      mostrarAviso("Perfil atualizado com sucesso!", "success");
+    } catch (error) {
+      mostrarAviso(error.message || "Erro ao salvar alterações.", "error");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const noticeStyles = {
+    info: "bg-artOrange/10 text-artOrange border-artOrange/10",
+    success: "bg-green-50 text-green-600 border-green-200",
+    error: "bg-red-50 text-red-500 border-red-200",
+  };
+
+  const noticeIcons = {
+    info: "fa-solid fa-circle-info",
+    success: "fa-solid fa-circle-check",
+    error: "fa-solid fa-circle-exclamation",
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
+        <Sidebar />
+        <main className="ml-16 min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
+              Carregando perfil...
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen">
@@ -124,17 +213,27 @@ function EditarPerfil() {
               <button
                 type="submit"
                 form="form-editar-perfil"
-                className="bg-artDark text-white px-6 py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95"
+                disabled={saving}
+                className="bg-artDark text-white px-6 py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <i className="fa-solid fa-floppy-disk mr-2"></i>
-                Salvar Alterações
+                {saving ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-floppy-disk mr-2"></i>
+                    Salvar Alterações
+                  </>
+                )}
               </button>
             </div>
           </header>
 
           {noticeMessage && (
-            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
-              <i className="fa-solid fa-circle-info mr-2"></i>
+            <div className={`${noticeStyles[noticeType]} border rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold`}>
+              <i className={`${noticeIcons[noticeType]} mr-2`}></i>
               {noticeMessage}
             </div>
           )}
@@ -149,11 +248,17 @@ function EditarPerfil() {
                 <div className="flex flex-col items-center text-center">
                   <div className="relative mb-5">
                     <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-[2.3rem] overflow-hidden border-4 border-white shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500 bg-gray-100">
-                      <img
-                        src={imagePreview}
-                        alt="Foto de perfil"
-                        className="w-full h-full object-cover"
-                      />
+                      {imagePreview ? (
+                        <img
+                          src={imagePreview}
+                          alt="Foto de perfil"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-artPurple/10 flex items-center justify-center">
+                          <i className="fa-solid fa-user text-4xl text-artPurple/30"></i>
+                        </div>
+                      )}
                     </div>
 
                     <label className="absolute -bottom-3 -right-3 w-12 h-12 rounded-full bg-artOrange text-white flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-artPurple transition-colors">
@@ -185,54 +290,25 @@ function EditarPerfil() {
                     {isArtista ? "Artista Verificado" : "Perfil Artfolio"}
                   </p>
 
-                  <div className="grid grid-cols-3 gap-3 w-full mt-6">
+                  <div className="mt-6 w-full">
                     <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3">
-                      <p className="text-lg font-black">
-                        {perfilAtual.seguidores}
+                      <p className="text-sm font-black text-artPurple uppercase">
+                        {tipoConta}
                       </p>
-
                       <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">
-                        Seguidores
-                      </span>
-                    </div>
-
-                    <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3">
-                      <p className="text-lg font-black">{perfilAtual.obras}</p>
-
-                      <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">
-                        Obras
-                      </span>
-                    </div>
-
-                    <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3">
-                      <p className="text-lg font-black">{perfilAtual.plano}</p>
-
-                      <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">
-                        Plano
+                        Tipo de conta
                       </span>
                     </div>
                   </div>
 
-                  <div className="mt-6 bg-artPurple/5 border border-artPurple/10 rounded-[1.5rem] p-4 text-left">
+                  <div className="mt-4 bg-artPurple/5 border border-artPurple/10 rounded-[1.5rem] p-4 text-left w-full">
                     <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2">
                       Prévia pública
                     </h3>
 
                     <p className="text-xs text-gray-500 leading-relaxed font-light">
                       Essas informações aparecerão no seu perfil público e nas
-                      obras publicadas no Feed, quando estiverem integradas ao
-                      backend.
-                    </p>
-                  </div>
-
-                  <div className="mt-4 bg-artBlue/5 border border-artBlue/10 rounded-[1.5rem] p-4 text-left">
-                    <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2">
-                      Integração futura
-                    </h3>
-
-                    <p className="text-xs text-gray-500 leading-relaxed font-light">
-                      A foto de perfil e os dados editados serão salvos
-                      futuramente pelo backend com FastAPI e PostgreSQL.
+                      obras publicadas no Feed.
                     </p>
                   </div>
                 </div>
@@ -248,7 +324,7 @@ function EditarPerfil() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Nome artístico
+                      Nome completo
                     </label>
 
                     <input
@@ -257,65 +333,58 @@ function EditarPerfil() {
                       onChange={(event) => setNome(event.target.value)}
                       className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       required
+                      minLength={3}
+                      maxLength={100}
                     />
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Categoria principal
-                    </label>
-
-                    <select
-                      value={categoria}
-                      onChange={(event) => setCategoria(event.target.value)}
-                      className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                    >
-                      {categorias.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Cidade
+                      Telefone
                     </label>
 
                     <input
                       type="text"
-                      value={cidade}
-                      onChange={(event) => setCidade(event.target.value)}
+                      value={telefone}
+                      onChange={(event) => setTelefone(event.target.value)}
+                      placeholder="(11) 99999-9999"
                       className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Estado
-                    </label>
-
-                    <input
-                      type="text"
-                      value={estado}
-                      onChange={(event) => setEstado(event.target.value)}
-                      maxLength="2"
-                      className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm uppercase"
+                      maxLength={20}
                     />
                   </div>
 
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
                       Biografia
+                      <span className="text-gray-300 ml-2 normal-case tracking-normal font-normal">
+                        {biografia.length}/1000
+                      </span>
                     </label>
 
                     <textarea
                       rows="4"
                       value={biografia}
                       onChange={(event) => setBiografia(event.target.value)}
+                      maxLength={1000}
                       className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm resize-none leading-relaxed"
                     ></textarea>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                      URL da foto de perfil
+                    </label>
+
+                    <input
+                      type="url"
+                      value={fotoPerfil}
+                      onChange={(event) => {
+                        setFotoPerfil(event.target.value);
+                        setImagePreview(event.target.value);
+                      }}
+                      placeholder="https://exemplo.com/minha-foto.jpg"
+                      className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+                    />
                   </div>
                 </div>
               </div>
@@ -338,6 +407,7 @@ function EditarPerfil() {
                         type="text"
                         value={instagram}
                         onChange={(event) => setInstagram(event.target.value)}
+                        placeholder="usuario ou https://instagram.com/usuario"
                         className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       />
                     </div>
@@ -355,6 +425,7 @@ function EditarPerfil() {
                         type="text"
                         value={behance}
                         onChange={(event) => setBehance(event.target.value)}
+                        placeholder="usuario ou https://behance.net/usuario"
                         className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       />
                     </div>
@@ -362,16 +433,17 @@ function EditarPerfil() {
 
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      E-mail público
+                      Portfólio
                     </label>
 
                     <div className="relative">
-                      <i className="fa-solid fa-envelope absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                      <i className="fa-solid fa-briefcase absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
 
                       <input
-                        type="email"
-                        value={emailPublico}
-                        onChange={(event) => setEmailPublico(event.target.value)}
+                        type="text"
+                        value={portfolio}
+                        onChange={(event) => setPortfolio(event.target.value)}
+                        placeholder="https://meuportfolio.com"
                         className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       />
                     </div>
@@ -379,7 +451,7 @@ function EditarPerfil() {
 
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Site / Portfólio externo
+                      Website
                     </label>
 
                     <div className="relative">
@@ -387,8 +459,9 @@ function EditarPerfil() {
 
                       <input
                         type="text"
-                        value={siteExterno}
-                        onChange={(event) => setSiteExterno(event.target.value)}
+                        value={website}
+                        onChange={(event) => setWebsite(event.target.value)}
+                        placeholder="https://meusite.com.br"
                         className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       />
                     </div>
@@ -410,25 +483,43 @@ function EditarPerfil() {
                   </div>
 
                   <div className="flex justify-between gap-4">
-                    <span className="text-gray-500">Categoria</span>
+                    <span className="text-gray-500">E-mail</span>
                     <strong className="text-artDark text-right">
-                      {categoriaSelecionada?.label || "Não selecionada"}
+                      {email || "Não informado"}
                     </strong>
                   </div>
 
                   <div className="flex justify-between gap-4">
-                    <span className="text-gray-500">Localização</span>
+                    <span className="text-gray-500">Telefone</span>
                     <strong className="text-artDark text-right">
-                      {cidade || "Cidade"} / {estado || "UF"}
+                      {telefone || "Não informado"}
                     </strong>
                   </div>
 
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500">Tipo de perfil</span>
-                    <strong className="text-artPurple text-right">
-                      {isArtista ? "Artista" : "Cliente"}
+                    <strong className="text-artPurple text-right capitalize">
+                      {tipoConta}
                     </strong>
                   </div>
+
+                  {instagram && (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-500">Instagram</span>
+                      <strong className="text-artDark text-right">
+                        @{instagram}
+                      </strong>
+                    </div>
+                  )}
+
+                  {behance && (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-gray-500">Behance</span>
+                      <strong className="text-artDark text-right">
+                        {behance}
+                      </strong>
+                    </div>
+                  )}
                 </div>
               </div>
 

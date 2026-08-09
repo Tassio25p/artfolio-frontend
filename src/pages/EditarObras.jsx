@@ -1,22 +1,73 @@
+import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { obrasService } from "../services/api";
 
 export default function EditarObra() {
   const navigate = useNavigate();
+  const { id } = useParams();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const [legenda, setLegenda] = useState("");
+  const [categoria, setCategoria] = useState("1");
+  const [imagemAtual, setImagemAtual] = useState(
+    "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1000&auto=format&fit=crop"
+  );
+  const [noticeMessage, setNoticeMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    // Futuramente aqui vamos enviar as alterações para o backend
-    navigate("/meu-portfolio");
+  const mostrarAviso = (mensagem) => {
+    setNoticeMessage(mensagem);
+    setTimeout(() => setNoticeMessage(""), 5000);
   };
 
-  const handleDelete = () => {
-    const confirmar = confirm("Tem certeza que deseja excluir esta obra?");
+  // Carrega os dados reais da obra ao abrir a página
+  useEffect(() => {
+    if (!id) return;
+    async function carregarObra() {
+      try {
+        const obra = await obrasService.obterObraPorId(id);
+        if (obra) {
+          setLegenda(obra.legenda || "");
+          setCategoria(String(obra.idCategoria || "1"));
+          if (obra.arquivoUrl) setImagemAtual(obra.arquivoUrl);
+        }
+      } catch (err) {
+        mostrarAviso("Não foi possível carregar os dados da obra.");
+      }
+    }
+    carregarObra();
+  }, [id]);
 
-    if (confirmar) {
-      // Futuramente aqui vamos chamar a API para excluir a obra
-      navigate("/meu-portfolio");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await obrasService.atualizarObra(id, {
+        idCategoria: parseInt(categoria),
+        legenda,
+      });
+      mostrarAviso("Obra atualizada com sucesso! Redirecionando...");
+      setTimeout(() => navigate("/meu-portfolio"), 1500);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao atualizar a obra.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    const confirmar = confirm("Tem certeza que deseja excluir esta obra?");
+    if (!confirmar) return;
+
+    setLoading(true);
+    try {
+      await obrasService.deletarObra(id);
+      mostrarAviso("Obra excluída com sucesso! Redirecionando...");
+      setTimeout(() => navigate("/meu-portfolio"), 1500);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao excluir a obra.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -56,13 +107,21 @@ export default function EditarObra() {
               <button
                 type="submit"
                 form="form-editar-obra"
-                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10"
+                disabled={loading}
+                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 disabled:opacity-50"
               >
-                <i className="fa-solid fa-floppy-disk mr-2"></i>
-                Salvar Alterações
+                <i className={`fa-solid ${loading ? "fa-spinner fa-spin" : "fa-floppy-disk"} mr-2`}></i>
+                {loading ? "Salvando..." : "Salvar Alterações"}
               </button>
             </div>
           </header>
+
+          {noticeMessage && (
+            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
+              <i className="fa-solid fa-circle-info mr-2"></i>
+              {noticeMessage}
+            </div>
+          )}
 
           <form
             id="form-editar-obra"
@@ -83,7 +142,7 @@ export default function EditarObra() {
 
                 <div className="rounded-[1.7rem] overflow-hidden bg-[#F9F8F6] border border-black/5 mb-5">
                   <img
-                    src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1000&auto=format&fit=crop"
+                    src={imagemAtual}
                     alt="Obra atual"
                     className="w-full h-[360px] object-cover"
                   />
@@ -160,14 +219,16 @@ export default function EditarObra() {
                     </label>
 
                     <select
-                      defaultValue="pintura-digital"
+                      value={categoria}
+                      onChange={(e) => setCategoria(e.target.value)}
                       className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                     >
-                      <option value="pintura-digital">Pintura Digital</option>
-                      <option value="modelagem-3d">Modelagem 3D</option>
-                      <option value="textil">Têxtil</option>
-                      <option value="artesanato">Artesanato</option>
-                      <option value="desenho">Desenho Manual</option>
+                      <option value="1">Pintura Digital</option>
+                      <option value="2">Modelagem 3D</option>
+                      <option value="3">Têxtil</option>
+                      <option value="4">Artesanato</option>
+                      <option value="5">Desenho Manual</option>
+                      <option value="6">Ilustração</option>
                     </select>
                   </div>
 
@@ -222,7 +283,9 @@ export default function EditarObra() {
 
                     <textarea
                       rows="5"
-                      defaultValue="Uma composição visual inspirada na mistura entre memória, movimento e camadas emocionais. A obra explora formas orgânicas, cores intensas e texturas digitais para representar sentimentos em transformação."
+                      value={legenda}
+                      onChange={(e) => setLegenda(e.target.value)}
+                      placeholder="Descreva sua obra..."
                       className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm resize-none leading-relaxed"
                     ></textarea>
                   </div>

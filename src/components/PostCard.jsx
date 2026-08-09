@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import MenuOpcoes from "./MenuOpcoes";
 import ModalDenuncia from "./ModalDenuncia";
+import { obrasService } from "../services/api";
 
 const colorClasses = {
   artPurple: "bg-artPurple",
@@ -18,13 +19,35 @@ export default function PostCard({
   title,
   description,
   tag,
-  likes,
-  comments,
+  likes = 0,
+  comments = 0,
+  curtidoPorMim = false,
   color = "artPurple",
 }) {
   const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
+  const [likesCount, setLikesCount] = useState(Number(likes) || 0);
+  const [isLiked, setIsLiked] = useState(Boolean(curtidoPorMim));
 
   const avatarColor = colorClasses[color] || "bg-artPurple";
+
+  const handleLikeClick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      if (isLiked) {
+        await obrasService.descurtir(id);
+        setIsLiked(false);
+        setLikesCount((prev) => Math.max(0, prev - 1));
+      } else {
+        await obrasService.curtir(id);
+        setIsLiked(true);
+        setLikesCount((prev) => prev + 1);
+      }
+    } catch (err) {
+      console.error("Erro ao curtir:", err);
+    }
+  };
 
   const handleActionClick = (e) => {
     e.preventDefault();
@@ -64,15 +87,17 @@ export default function PostCard({
 
         <div className="relative z-20 p-6">
           <div className="flex items-center space-x-3 mb-5">
-            <div
-              className={`w-8 h-8 rounded-full ${avatarColor} overflow-hidden`}
-            >
-              {avatar && (
+            <div className={`w-8 h-8 rounded-full ${avatarColor} overflow-hidden`}>
+              {avatar ? (
                 <img
                   src={avatar}
                   alt={user}
                   className="object-cover w-full h-full"
                 />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white font-bold text-xs">
+                  {user?.charAt(0)?.toUpperCase() || "A"}
+                </div>
               )}
             </div>
 
@@ -93,21 +118,22 @@ export default function PostCard({
             <div className="flex space-x-5 text-gray-400">
               <button
                 type="button"
-                onClick={handleActionClick}
-                className="relative z-30 hover:text-artOrange transition-colors flex items-center space-x-1"
+                onClick={handleLikeClick}
+                className={`relative z-30 transition-colors flex items-center space-x-1 ${
+                  isLiked ? "text-red-500" : "hover:text-artOrange"
+                }`}
               >
-                <i className="fa-regular fa-heart"></i>
-                <span className="text-[10px] font-bold">{likes}</span>
+                <i className={isLiked ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
+                <span className="text-[10px] font-bold">{likesCount}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleActionClick}
+              <Link
+                to={`/obra/${id}`}
                 className="relative z-30 hover:text-artBlue transition-colors flex items-center space-x-1"
               >
                 <i className="fa-regular fa-comment"></i>
                 <span className="text-[10px] font-bold">{comments}</span>
-              </button>
+              </Link>
             </div>
 
             <button

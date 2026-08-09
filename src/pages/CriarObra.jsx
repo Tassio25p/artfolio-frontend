@@ -1,23 +1,26 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import { obrasService, getUser } from "../services/api";
 
 const categorias = [
-  { value: "pintura-digital", label: "Pintura Digital" },
-  { value: "modelagem-3d", label: "Modelagem 3D" },
-  { value: "artesanato-croche", label: "Artesanato / Crochê" },
-  { value: "desenho-manual", label: "Desenho Manual" },
-  { value: "ilustracao", label: "Ilustração" },
-  { value: "arte-conceitual", label: "Arte Conceitual" },
+  { value: "1", label: "Pintura Digital" },
+  { value: "2", label: "Modelagem 3D" },
+  { value: "3", label: "Artesanato / Crochê" },
+  { value: "4", label: "Desenho Manual" },
+  { value: "5", label: "Ilustração" },
+  { value: "6", label: "Arte Conceitual" },
 ];
 
 function CriarObra() {
+  const navigate = useNavigate();
   const [titulo, setTitulo] = useState("");
   const [legenda, setLegenda] = useState("");
   const [categoria, setCategoria] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const categoriaSelecionada = categorias.find(
     (item) => item.value === categoria
@@ -25,7 +28,7 @@ function CriarObra() {
 
   const mostrarAviso = (mensagem) => {
     setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4000);
+    setTimeout(() => setNoticeMessage(""), 5000);
   };
 
   const handleFileChange = (event) => {
@@ -50,17 +53,36 @@ function CriarObra() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!imagePreview) {
-      mostrarAviso("Anexe uma imagem antes de preparar o envio da obra.");
+      mostrarAviso("Anexe uma imagem antes de enviar a obra.");
       return;
     }
 
-    mostrarAviso(
-      "Com o backend integrado, esta obra será enviada para a quarentena com status Pendente."
-    );
+    const usuario = getUser();
+    if (!usuario) {
+      mostrarAviso("Você precisa estar logado para publicar uma obra.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await obrasService.criarObra({
+        idUsuario: usuario.id,
+        idCategoria: parseInt(categoria),
+        legenda: legenda || titulo,
+        arquivoUrl: imagePreview,
+      });
+
+      mostrarAviso("Obra enviada com sucesso! Redirecionando para o portfólio...");
+      setTimeout(() => navigate("/meu-portfolio"), 1500);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao enviar a obra. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -308,16 +330,12 @@ function CriarObra() {
 
               <button
                 type="submit"
-                className="w-full bg-artDark text-white py-5 rounded-full font-bold hover:bg-artBlue transition-all shadow-xl shadow-black/10 flex items-center justify-center space-x-3 active:scale-95"
+                disabled={loading}
+                className="w-full bg-artDark text-white py-5 rounded-full font-bold hover:bg-artBlue transition-all shadow-xl shadow-black/10 flex items-center justify-center space-x-3 active:scale-95 disabled:opacity-50"
               >
-                <span>Enviar para Análise</span>
-                <i className="fa-solid fa-paper-plane"></i>
+                <span>{loading ? "Enviando..." : "Enviar para Análise"}</span>
+                <i className={`fa-solid ${loading ? "fa-spinner fa-spin" : "fa-paper-plane"}`}></i>
               </button>
-
-              <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                O envio real da obra, upload da imagem e registro no PostgreSQL
-                serão integrados futuramente com o backend FastAPI.
-              </p>
             </div>
           </form>
         </div>

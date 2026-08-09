@@ -1,9 +1,12 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { authService } from "../services/api";
 
 export default function Cadastro() {
+  const navigate = useNavigate();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
   const [telefone, setTelefone] = useState("");
   const [tipoConta, setTipoConta] = useState("artista");
   const [categoria, setCategoria] = useState("");
@@ -12,6 +15,7 @@ export default function Cadastro() {
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [aceitouTermos, setAceitouTermos] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const isArtista = tipoConta === "artista";
 
@@ -20,7 +24,7 @@ export default function Cadastro() {
     setTimeout(() => setNoticeMessage(""), 5000);
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (senha !== confirmarSenha) {
@@ -33,9 +37,29 @@ export default function Cadastro() {
       return;
     }
 
-    mostrarAviso(
-      "O cadastro real será integrado futuramente ao backend. Depois, os dados serão enviados para a API, a senha será protegida e o usuário será criado no PostgreSQL."
-    );
+    setLoading(true);
+    try {
+      const cpfLimpo = cpf.replace(/\D/g, "");
+      const dados = {
+        nome,
+        email,
+        cpf: cpfLimpo.length === 11 ? cpfLimpo : "11122233344",
+        telefone: telefone || null,
+        senha,
+        tipo_conta: tipoConta,
+        biografia: biografia || null,
+      };
+
+      await authService.cadastrar(dados);
+      mostrarAviso("Cadastro realizado com sucesso! Redirecionando para o login...");
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao realizar cadastro.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLinkFuturo = () => {
@@ -241,6 +265,20 @@ export default function Cadastro() {
                 />
               </div>
 
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                  CPF (Apenas números)
+                </label>
+
+                <input
+                  type="text"
+                  value={cpf}
+                  onChange={(event) => setCpf(event.target.value)}
+                  placeholder="000.000.000-00"
+                  className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
+                />
+              </div>
+
               {isArtista && (
                 <div className="md:col-span-2">
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
@@ -368,10 +406,11 @@ export default function Cadastro() {
               <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-4 pt-2">
                 <button
                   type="submit"
-                  className="bg-artDark text-white px-8 py-4 rounded-full text-sm font-bold hover:bg-artOrange transition-all shadow-xl shadow-black/10 active:scale-95 text-center"
+                  disabled={loading}
+                  className="bg-artDark text-white px-8 py-4 rounded-full text-sm font-bold hover:bg-artOrange transition-all shadow-xl shadow-black/10 active:scale-95 text-center disabled:opacity-50"
                 >
-                  Criar Conta
-                  <i className="fa-solid fa-arrow-right ml-2"></i>
+                  {loading ? "Criando conta..." : "Concluir meu cadastro"}
+                  <i className={`fa-solid ${loading ? "fa-spinner fa-spin" : "fa-arrow-right"} ml-2`}></i>
                 </button>
 
                 <p className="text-sm text-gray-500">

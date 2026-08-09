@@ -1,23 +1,35 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { authService } from "../services/api";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [lembrarAcesso, setLembrarAcesso] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const mostrarAviso = (mensagem) => {
     setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4500);
+    setTimeout(() => setNoticeMessage(""), 5000);
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setLoading(true);
 
-    mostrarAviso(
-      "O login real será integrado futuramente ao backend. Depois, o sistema validará e-mail e senha, receberá o token JWT e redirecionará conforme o perfil do usuário."
-    );
+    try {
+      const response = await authService.login(email, senha);
+      mostrarAviso("Login realizado com sucesso! Redirecionando...");
+      setTimeout(() => {
+        navigate("/feed");
+      }, 1000);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao realizar login. Verifique suas credenciais.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,10 +121,11 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="w-full bg-artDark text-white py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95"
+                disabled={loading}
+                className="w-full bg-artDark text-white py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50"
               >
-                Entrar no Artfolio
-                <i className="fa-solid fa-arrow-right ml-2"></i>
+                {loading ? "Entrando..." : "Entrar no Artfolio"}
+                <i className={`fa-solid ${loading ? "fa-spinner fa-spin" : "fa-arrow-right"} ml-2`}></i>
               </button>
             </form>
 

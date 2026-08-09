@@ -16,54 +16,58 @@ import Cadastro from "./pages/Cadastro";
 import RecuperarSenha from "./pages/RecuperarSenha";
 import Seguidores from "./pages/Seguidores";
 import Seguindo from "./pages/Seguindo";
-import EditarObra from "./pages/EditarObras";
+import EditarObras from "./pages/EditarObras";
 import Salvos from "./pages/Salvos";
 import Encomendas from "./pages/Encomendas";
 import Estatisticas from "./pages/Estatisticas";
 import Buscar from "./pages/Buscar";
 import Admin from "./pages/Admin";
+import Chatbot from "./components/Chatbot/Chatbot";
 
 function App() {
   return (
-    <Routes>
-      {/* Rotas públicas */}
-      <Route path="/" element={<Inicio />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/cadastro" element={<Cadastro />} />
-      <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+    <>
+      <Routes>
+        {/* Rotas públicas */}
+        <Route path="/" element={<Inicio />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/recuperar-senha" element={<RecuperarSenha />} />
 
-      {/* Área principal */}
-      <Route path="/feed" element={<Home />} />
-      <Route path="/buscar" element={<Buscar />} />
-      <Route path="/planos" element={<Plans />} />
-      <Route path="/mensagens" element={<Messages />} />
-      <Route path="/notificacoes" element={<Notificacoes />} />
-      <Route path="/configuracoes" element={<Configuracoes />} />
+        {/* Área principal */}
+        <Route path="/feed" element={<Home />} />
+        <Route path="/buscar" element={<Buscar />} />
+        <Route path="/planos" element={<Plans />} />
+        <Route path="/mensagens" element={<Messages />} />
+        <Route path="/notificacoes" element={<Notificacoes />} />
+        <Route path="/configuracoes" element={<Configuracoes />} />
 
-      {/* Obras */}
-      <Route path="/criar-obra" element={<CriarObra />} />
-      <Route path="/obra/:id" element={<DetalhesObra />} />
-      <Route path="/editar-obra/:id" element={<EditarObras />} />
+        {/* Obras */}
+        <Route path="/criar-obra" element={<CriarObra />} />
+        <Route path="/obra/:id" element={<DetalhesObra />} />
+        <Route path="/editar-obra/:id" element={<EditarObras />} />
 
-      {/* Perfil e portfólio */}
-      <Route path="/perfil" element={<ArtistProfile />} />
-      <Route path="/artista/:id" element={<ArtistProfile />} />
-      <Route path="/editar-perfil" element={<EditarPerfil />} />
-      <Route path="/meu-portfolio" element={<MeuPortfolio />} />
-      <Route path="/seguidores" element={<Seguidores />} />
-      <Route path="/seguindo" element={<Seguindo />} />
+        {/* Perfil e portfólio */}
+        <Route path="/perfil" element={<ArtistProfile />} />
+        <Route path="/artista/:id" element={<ArtistProfile />} />
+        <Route path="/editar-perfil" element={<EditarPerfil />} />
+        <Route path="/meu-portfolio" element={<MeuPortfolio />} />
+        <Route path="/seguidores" element={<Seguidores />} />
+        <Route path="/seguindo" element={<Seguindo />} />
 
-      {/* Recursos do usuário */}
-      <Route path="/salvos" element={<Salvos />} />
-      <Route path="/encomendas" element={<Encomendas />} />
-      <Route path="/estatisticas" element={<Estatisticas />} />
+        {/* Recursos do usuário */}
+        <Route path="/salvos" element={<Salvos />} />
+        <Route path="/encomendas" element={<Encomendas />} />
+        <Route path="/estatisticas" element={<Estatisticas />} />
 
-      {/* Administração */}
-      <Route path="/admin" element={<Admin />} />
+        {/* Administração */}
+        <Route path="/admin" element={<Admin />} />
 
-      {/* Rota inexistente */}
-      <Route path="*" element={<PaginaNaoEncontrada />} />
-    </Routes>
+        {/* Rota inexistente */}
+        <Route path="*" element={<PaginaNaoEncontrada />} />
+      </Routes>
+      <Chatbot />
+    </>
   );
 }
 

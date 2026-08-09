@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
+import { getUser, getToken, notificacaoService } from "../services/api";
 
 const baseItems = [
   {
@@ -42,6 +44,7 @@ const baseItems = [
     to: "/notificacoes",
     active: "bg-white text-artPurple shadow-md ring-1 ring-artPurple/10",
     hover: "hover:text-artPurple hover:bg-artPurple/5",
+    isNotificacao: true,
   },
 ];
 
@@ -109,9 +112,27 @@ function getMenuByUser(tipoUsuario) {
 }
 
 export default function Sidebar() {
-  const tipoUsuario = "admin"; // Substitua pelo tipo de usuário real, por exemplo, obtido do contexto ou estado global
-// cliente, artista, moderador, admin
+  const [naoLidas, setNaoLidas] = useState(0);
+  const usuario = getUser();
+  const tipoUsuario = usuario?.tipo_conta || "cliente";
+  const fotoPerfil = usuario?.fotoPerfil || null;
   const menuItems = getMenuByUser(tipoUsuario);
+
+  useEffect(() => {
+    async function checarNotificacoes() {
+      if (getToken()) {
+        try {
+          const res = await notificacaoService.contarNaoLidas();
+          if (res && typeof res.quantidade === "number") {
+            setNaoLidas(res.quantidade);
+          }
+        } catch {
+          // Fallback silencioso
+        }
+      }
+    }
+    checarNotificacoes();
+  }, []);
 
   return (
     <nav className="fixed left-0 top-0 h-screen w-14 border-r border-black/5 bg-[#F9F8F6] z-50 flex flex-col items-center justify-between py-5">
@@ -137,8 +158,14 @@ export default function Sidebar() {
           >
             <i className={item.icon}></i>
 
+            {item.isNotificacao && naoLidas > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                {naoLidas > 9 ? "9+" : naoLidas}
+              </span>
+            )}
+
             <span className="absolute left-[3.25rem] px-3 py-2 rounded-xl bg-artDark text-white text-[10px] font-bold uppercase tracking-widest opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-              {item.title}
+              {item.title} {item.isNotificacao && naoLidas > 0 ? `(${naoLidas})` : ""}
             </span>
           </NavLink>
         ))}
@@ -148,11 +175,23 @@ export default function Sidebar() {
         to="/perfil"
         title="Perfil"
         className={({ isActive }) =>
-          `group relative w-8 h-8 rounded-full bg-artPurple border-2 border-white shadow-md hover:scale-110 transition-transform ${
+          `group relative w-8 h-8 rounded-full border-2 border-white shadow-md hover:scale-110 transition-transform overflow-hidden ${
             isActive ? "ring-4 ring-artPurple/20 scale-110" : ""
-          }`
+          } ${fotoPerfil ? "" : "bg-artPurple"}`
         }
       >
+        {fotoPerfil ? (
+          <img
+            src={fotoPerfil}
+            alt="Perfil"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="w-full h-full flex items-center justify-center text-white text-[10px] font-bold">
+            {usuario?.nome?.charAt(0)?.toUpperCase() || "U"}
+          </span>
+        )}
+
         <span className="absolute left-[3.25rem] top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-artDark text-white text-[10px] font-bold uppercase tracking-widest opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
           Perfil
         </span>
