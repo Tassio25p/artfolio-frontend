@@ -1,17 +1,41 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { authService } from "../services/api";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated, loading: authLoading, sessionMessage, setSessionMessage } = useAuth();
+
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [lembrarAcesso, setLembrarAcesso] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [noticeType, setNoticeType] = useState("info");
   const [loading, setLoading] = useState(false);
 
-  const mostrarAviso = (mensagem) => {
+  // Rota que o usuário tentou acessar antes de ser redirecionado para login
+  const rotaOrigem = location.state?.from?.pathname || "/feed";
+
+  // Se já está autenticado, redireciona para a rota de destino
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate(rotaOrigem, { replace: true });
+    }
+  }, [isAuthenticated, authLoading, navigate, rotaOrigem]);
+
+  // Exibe mensagem de sessão expirada vinda do AuthContext
+  useEffect(() => {
+    if (sessionMessage) {
+      setNoticeMessage(sessionMessage);
+      setNoticeType("warning");
+      setSessionMessage("");
+    }
+  }, [sessionMessage, setSessionMessage]);
+
+  const mostrarAviso = (mensagem, tipo = "info") => {
     setNoticeMessage(mensagem);
+    setNoticeType(tipo);
     setTimeout(() => setNoticeMessage(""), 5000);
   };
 
@@ -20,16 +44,24 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await authService.login(email, senha);
-      mostrarAviso("Login realizado com sucesso! Redirecionando...");
+      await login(email, senha, lembrarAcesso);
+      mostrarAviso("Login realizado com sucesso! Redirecionando...", "success");
       setTimeout(() => {
-        navigate("/feed");
-      }, 1000);
+        navigate(rotaOrigem, { replace: true });
+      }, 800);
     } catch (err) {
-      mostrarAviso(err.message || "Erro ao realizar login. Verifique suas credenciais.");
+      mostrarAviso(err.message || "Erro ao realizar login. Verifique suas credenciais.", "error");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Cores dinâmicas para o aviso baseadas no tipo
+  const noticeStyles = {
+    info: "bg-artOrange/10 text-artOrange border-artOrange/10",
+    success: "bg-green-50 text-green-600 border-green-200",
+    error: "bg-red-50 text-red-500 border-red-200",
+    warning: "bg-amber-50 text-amber-600 border-amber-200",
   };
 
   return (
@@ -61,7 +93,7 @@ export default function Login() {
             </p>
 
             {noticeMessage && (
-              <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold leading-relaxed">
+              <div className={`${noticeStyles[noticeType] || noticeStyles.info} border rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold leading-relaxed`}>
                 <i className="fa-solid fa-circle-info mr-2"></i>
                 {noticeMessage}
               </div>
@@ -141,18 +173,6 @@ export default function Login() {
               </p>
             </div>
 
-            <div className="mt-5 bg-artPurple/5 border border-artPurple/10 rounded-[1.5rem] p-4">
-              <h2 className="text-xs font-bold uppercase tracking-widest mb-2">
-                Integração futura
-              </h2>
-
-              <p className="text-xs text-gray-500 leading-relaxed">
-                No backend, o login validará as credenciais, retornará um token
-                JWT e enviará dados como nome, e-mail, papel do usuário e plano
-                ativo.
-              </p>
-            </div>
-
             <Link
               to="/"
               className="inline-block mt-5 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors"
@@ -181,14 +201,14 @@ export default function Login() {
               </h2>
 
               <p className="text-sm text-white/70 max-w-md mt-6 leading-relaxed">
-                Depois da autenticação real, cada usuário será direcionado para
-                a área correta conforme seu papel: cliente, artista, moderador ou
+                Após a autenticação, você será direcionado para a área correta
+                conforme seu papel: cliente, artista, moderador ou
                 administrador.
               </p>
 
               <div className="mt-8 bg-white/10 border border-white/10 rounded-[1.7rem] p-5 max-w-md">
                 <h3 className="text-sm font-bold mb-3">
-                  Caminho futuro após o login
+                  Como funciona o login
                 </h3>
 
                 <div className="space-y-3 text-xs text-white/70">

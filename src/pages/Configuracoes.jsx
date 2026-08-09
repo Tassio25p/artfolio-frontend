@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { Link, useNavigate } from "react-router-dom";
-import { authService, usuarioService, getUser, getToken } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { authService, usuarioService, getMediaUrl } from "../services/api";
 
 export default function Configuracoes() {
   const navigate = useNavigate();
@@ -45,13 +46,11 @@ export default function Configuracoes() {
 
   const planoAtual = "FREE"; // Será integrado futuramente
 
+  const { user: authUser } = useAuth();
+
   // Carregar dados do usuário ao montar o componente
   useEffect(() => {
     const carregarDados = async () => {
-      if (!getToken()) {
-        navigate("/login");
-        return;
-      }
 
       try {
         const usuario = await authService.getMe();
@@ -125,7 +124,7 @@ export default function Configuracoes() {
     if (activeTab === "conta") {
       setSaving(true);
       try {
-        const usuarioAtual = getUser();
+        const usuarioAtual = authUser;
         const dados = {};
 
         if (nome !== (usuarioAtual?.nome || "")) dados.nome = nome;
@@ -394,7 +393,7 @@ export default function Configuracoes() {
                     <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-lg shadow-black/10">
                       {avatar ? (
                         <img
-                          src={avatar}
+                          src={getMediaUrl(avatar)}
                           alt="Perfil"
                           className="w-full h-full object-cover"
                         />

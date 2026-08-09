@@ -4,7 +4,8 @@ import PortfolioCard from "../components/PortfolioCard";
 import Sidebar from "../components/Sidebar";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
-import { authService, obrasService, getUser, getToken } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { authService, obrasService, usuarioService, getMediaUrl } from "../services/api";
 
 const filtros = ["Todas", "Digital", "Físico", "3D"];
 
@@ -23,147 +24,60 @@ export default function ArtistProfile() {
   // Obras do artista
   const [obrasPublicas, setObrasPublicas] = useState([]);
 
+  const { user: authUser } = useAuth();
+
   useEffect(() => {
     const carregarPerfil = async () => {
-      if (!getToken()) {
-        navigate("/login");
-        return;
-      }
-
       try {
-        // Se não tem ID na URL, é o perfil do próprio usuário
-        if (!id) {
-          const usuario = await authService.getMe();
-          setPerfil({
-            nome: usuario.nome || "",
-            biografia: usuario.biografia || "",
-            email: usuario.email || "",
-            tipoConta: usuario.tipo_conta || "cliente",
-            avatar: usuario.fotoPerfil || "",
-            instagram: usuario.instagram || "",
-            behance: usuario.behance || "",
-            website: usuario.website || "",
-            portfolio: usuario.portfolio || "",
-            telefone: usuario.telefone || "",
-            // Dados que serão integrados futuramente
-            seguidores: "0",
-            seguindo: 0,
-            obras: 0,
-            visualizacoes: "0",
-            curtidas: 0,
-            encomendas: 0,
-            plano: "FREE",
-            categoria: usuario.tipo_conta === "artista" ? "Artista" : "Cliente",
-            categoriaResumo: usuario.tipo_conta === "artista" ? "Artista" : "Cliente",
-          });
-          setIsOwner(true);
+        setLoading(true);
+        // Se não tem ID na URL, usa o ID do usuário logado
+        const targetId = id || authUser?.id;
+        if (!targetId) return;
 
-          // Carregar obras do usuário
-          try {
-            const obras = await obrasService.listarObras({ usuario_id: usuario.id });
-            setObrasPublicas(
-              obras.map((obra) => ({
-                id: obra.id,
-                image: obra.arquivoUrl || obra.arquivo_url || "",
-                category: obra.categoria?.nome || "Sem categoria",
-                title: obra.legenda || "Sem título",
-                color: "text-artOrange",
-                tipo: "Digital",
-              }))
-            );
-            // Atualizar contagem de obras
-            setPerfil((prev) => prev ? { ...prev, obras: obras.length } : prev);
-          } catch {
-            // Sem obras ainda — não é erro
-          }
-        } else {
-          // Perfil de outro artista — usa dados do localStorage para comparar
-          const usuarioLogado = getUser();
-          const isMe = usuarioLogado && String(usuarioLogado.id) === String(id);
+        // Buscar dados completos do perfil público via API
+        const dadosPerfil = await usuarioService.obterPerfil(targetId);
+        
+        setIsOwner(dadosPerfil.relacionamento?.isMe || (authUser && String(authUser.id) === String(dadosPerfil.id)));
 
-          if (isMe) {
-            const usuario = await authService.getMe();
-            setPerfil({
-              nome: usuario.nome || "",
-              biografia: usuario.biografia || "",
-              email: usuario.email || "",
-              tipoConta: usuario.tipo_conta || "cliente",
-              avatar: usuario.fotoPerfil || "",
-              instagram: usuario.instagram || "",
-              behance: usuario.behance || "",
-              website: usuario.website || "",
-              portfolio: usuario.portfolio || "",
-              telefone: usuario.telefone || "",
-              seguidores: "0",
-              seguindo: 0,
-              obras: 0,
-              visualizacoes: "0",
-              curtidas: 0,
-              encomendas: 0,
-              plano: "FREE",
-              categoria: usuario.tipo_conta === "artista" ? "Artista" : "Cliente",
-              categoriaResumo: usuario.tipo_conta === "artista" ? "Artista" : "Cliente",
-            });
-            setIsOwner(true);
+        setPerfil({
+          id: dadosPerfil.id,
+          nome: dadosPerfil.nome || "",
+          biografia: dadosPerfil.biografia || "",
+          email: dadosPerfil.email || "",
+          tipoConta: dadosPerfil.tipo_conta || "cliente",
+          avatar: dadosPerfil.fotoPerfil || "",
+          instagram: dadosPerfil.instagram || "",
+          behance: dadosPerfil.behance || "",
+          website: dadosPerfil.website || "",
+          portfolio: dadosPerfil.portfolio || "",
+          telefone: dadosPerfil.telefone || "",
+          seguidores: dadosPerfil.seguidoresCount || 0,
+          seguindo: dadosPerfil.seguindoCount || 0,
+          obras: dadosPerfil.obrasCount || 0,
+          visualizacoes: "0",
+          curtidas: 0,
+          encomendas: 0,
+          plano: "FREE",
+          categoria: dadosPerfil.tipo_conta === "artista" ? "Artista" : "Cliente",
+          categoriaResumo: dadosPerfil.tipo_conta === "artista" ? "Artista" : "Cliente",
+          relacionamento: dadosPerfil.relacionamento || {},
+        });
 
-            try {
-              const obras = await obrasService.listarObras({ usuario_id: usuario.id });
-              setObrasPublicas(
-                obras.map((obra) => ({
-                  id: obra.id,
-                  image: obra.arquivoUrl || obra.arquivo_url || "",
-                  category: obra.categoria?.nome || "Sem categoria",
-                  title: obra.legenda || "Sem título",
-                  color: "text-artOrange",
-                  tipo: "Digital",
-                }))
-              );
-              setPerfil((prev) => prev ? { ...prev, obras: obras.length } : prev);
-            } catch {
-              // Sem obras
-            }
-          } else {
-            // Perfil de outro usuário — dados limitados disponíveis
-            // Futuramente terá um endpoint GET /usuarios/:id
-            setPerfil({
-              nome: "Artista",
-              biografia: "",
-              email: "",
-              tipoConta: "artista",
-              avatar: "",
-              instagram: "",
-              behance: "",
-              website: "",
-              portfolio: "",
-              telefone: "",
-              seguidores: "0",
-              seguindo: 0,
-              obras: 0,
-              visualizacoes: "0",
-              curtidas: 0,
-              encomendas: 0,
-              plano: "FREE",
-              categoria: "Artista",
-              categoriaResumo: "Artista",
-            });
-            setIsOwner(false);
-
-            try {
-              const obras = await obrasService.listarObras({ usuario_id: id });
-              setObrasPublicas(
-                obras.map((obra) => ({
-                  id: obra.id,
-                  image: obra.arquivoUrl || obra.arquivo_url || "",
-                  category: obra.categoria?.nome || "Sem categoria",
-                  title: obra.legenda || "Sem título",
-                  color: "text-artOrange",
-                  tipo: "Digital",
-                }))
-              );
-            } catch {
-              // Sem obras
-            }
-          }
+        // Carregar obras do usuário
+        try {
+          const obras = await obrasService.listarObras({ usuario_id: targetId });
+          setObrasPublicas(
+            obras.map((obra) => ({
+              id: obra.id,
+              image: obra.arquivoUrl || obra.arquivo_url || "",
+              category: obra.categoria?.nome || "Sem categoria",
+              title: obra.legenda || "Sem título",
+              color: "text-artOrange",
+              tipo: "Digital",
+            }))
+          );
+        } catch {
+          // Sem obras ainda
         }
       } catch (error) {
         console.error("Erro ao carregar perfil:", error);
@@ -173,7 +87,37 @@ export default function ArtistProfile() {
     };
 
     carregarPerfil();
-  }, [id, navigate]);
+  }, [id, authUser, navigate]);
+
+  const handleToggleFollow = async () => {
+    if (!perfil || !perfil.id) return;
+    try {
+      const estaSeguindo = perfil.relacionamento?.seguindo;
+      if (estaSeguindo) {
+        await usuarioService.deixarDeSeguir(perfil.id);
+        setPerfil((prev) => ({
+          ...prev,
+          seguidores: Math.max(0, (prev.seguidores || 1) - 1),
+          relacionamento: {
+            ...prev.relacionamento,
+            seguindo: false,
+          },
+        }));
+      } else {
+        await usuarioService.seguir(perfil.id);
+        setPerfil((prev) => ({
+          ...prev,
+          seguidores: (prev.seguidores || 0) + 1,
+          relacionamento: {
+            ...prev.relacionamento,
+            seguindo: true,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error("Erro ao alterar relacionamento de seguir:", err);
+    }
+  };
 
   if (loading || !perfil) {
     return (
@@ -214,7 +158,7 @@ export default function ArtistProfile() {
                   <div className="w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-[2rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform duration-500 bg-gray-100">
                     {perfil.avatar ? (
                       <img
-                        src={perfil.avatar}
+                        src={getMediaUrl(perfil.avatar)}
                         alt={`Avatar de ${perfil.nome}`}
                         className="w-full h-full object-cover"
                       />
@@ -274,7 +218,7 @@ export default function ArtistProfile() {
               <div className="lg:col-span-4">
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <Link
-                    to="/seguidores"
+                    to={`/seguidores${perfil?.id ? `?usuario_id=${perfil.id}` : ""}`}
                     className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all text-center lg:text-left"
                   >
                     <span className="text-artDark text-xl font-black block">
@@ -349,13 +293,34 @@ export default function ArtistProfile() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
-                    >
-                      <i className="fa-solid fa-user-plus mr-2"></i>
-                      Seguir
-                    </button>
+                    {perfil.relacionamento?.seguindo ? (
+                      <button
+                        type="button"
+                        onClick={handleToggleFollow}
+                        className="bg-artDark/10 text-artDark border border-black/10 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                      >
+                        <i className="fa-solid fa-user-check mr-2"></i>
+                        Seguindo
+                      </button>
+                    ) : perfil.relacionamento?.segueDeVolta ? (
+                      <button
+                        type="button"
+                        onClick={handleToggleFollow}
+                        className="bg-artOrange text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark transition-all flex items-center justify-center shadow-md shadow-artOrange/20"
+                      >
+                        <i className="fa-solid fa-user-plus mr-2"></i>
+                        Seguir de volta
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleToggleFollow}
+                        className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all flex items-center justify-center"
+                      >
+                        <i className="fa-solid fa-user-plus mr-2"></i>
+                        Seguir
+                      </button>
+                    )}
 
                     <Link
                       to="/mensagens"

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { notificacaoService, getUser, getToken } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { useNotifications } from "../contexts/NotificationContext";
+import { notificacaoService, getMediaUrl } from "../services/api";
 
 const filtros = [
   { id: "Todas", label: "Todas" },
@@ -35,15 +37,10 @@ export default function Notificacoes() {
   const [noticeMessage, setNoticeMessage] = useState("");
   const [noticeType, setNoticeType] = useState("info");
 
-  const usuario = getUser();
-  const tipoUsuario = usuario?.tipo_conta || "cliente";
+  const { user } = useAuth();
+  const tipoUsuario = user?.tipo_conta || "cliente";
 
   const carregarNotificacoes = async () => {
-    if (!getToken()) {
-      navigate("/login");
-      return;
-    }
-
     try {
       const res = await notificacaoService.listar();
       if (res && Array.isArray(res.items)) {
@@ -67,9 +64,11 @@ export default function Notificacoes() {
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
+  const { markAsRead, markAllAsRead, refreshUnreadCount } = useNotifications();
+
   const handleMarcarComoLida = async (id) => {
     try {
-      await notificacaoService.marcarComoLida(id);
+      await markAsRead(id);
       setNotificacoes((prev) =>
         prev.map((item) => (item.id === id ? { ...item, lida: true } : item))
       );
@@ -81,7 +80,7 @@ export default function Notificacoes() {
 
   const handleMarcarTodasComoLidas = async () => {
     try {
-      await notificacaoService.marcarTodasComoLidas();
+      await markAllAsRead();
       setNotificacoes((prev) => prev.map((item) => ({ ...item, lida: true })));
       mostrarAviso("Todas as notificações foram marcadas como lidas.", "success");
     } catch (err) {
@@ -209,11 +208,10 @@ export default function Notificacoes() {
                       key={btn.id}
                       type="button"
                       onClick={() => setFilter(btn.id)}
-                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all ${
-                        filter === btn.id
+                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all ${filter === btn.id
                           ? "bg-artDark text-white shadow-md shadow-black/10"
                           : "bg-[#F9F8F6] text-gray-400 hover:text-artDark hover:bg-[#eae7df]"
-                      }`}
+                        }`}
                     >
                       {btn.label}
                     </button>
@@ -291,16 +289,15 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
 
   return (
     <article
-      className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 ${
-        item.lida
+      className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 ${item.lida
           ? "bg-[#F9F8F6] border-black/5 opacity-80"
           : "bg-white border-artPurple/30 shadow-md shadow-black/5 hover:border-artPurple"
-      } hover:shadow-lg hover:shadow-black/5`}
+        } hover:shadow-lg hover:shadow-black/5`}
     >
       <div className="flex items-center gap-3 shrink-0">
         {item.remetente?.fotoPerfil ? (
           <img
-            src={item.remetente.fotoPerfil}
+            src={getMediaUrl(item.remetente.fotoPerfil)}
             alt={item.remetente.nome}
             className="w-11 h-11 rounded-2xl object-cover border border-black/5"
           />

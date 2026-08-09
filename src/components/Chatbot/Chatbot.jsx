@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { assistenteService } from '../../services/api';
 import './Chatbot.css';
 
 const Chatbot = () => {
@@ -7,6 +8,7 @@ const Chatbot = () => {
   const [isWaiting, setIsWaiting] = useState(false); 
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [conversaId, setConversaId] = useState(null);
   const messagesEndRef = useRef(null);
 
   const [messages, setMessages] = useState([
@@ -53,46 +55,12 @@ const Chatbot = () => {
     setIsTyping(true);
 
     try {
-      const response = await fetch('/webhook/artfolio-agent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: userText }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro do servidor: ${response.status}`);
+      const res = await assistenteService.enviarMensagem(userText, conversaId);
+      if (res && res.idConversa) {
+        setConversaId(res.idConversa);
       }
 
-      const rawText = await response.text();
-      console.log('Resposta bruta do n8n:', rawText);
-
-      let aiText = 'Resposta recebida, mas sem conteúdo.';
-
-      try {
-        const data = JSON.parse(rawText);
-        console.log('Resposta parseada do n8n:', data);
-
-        // n8n pode retornar array ou objeto
-        const result = Array.isArray(data) ? data[0] : data;
-
-        // Tenta extrair o texto de campos comuns do n8n
-        aiText = result?.output
-          || result?.response
-          || result?.message
-          || result?.text
-          || result?.data?.output
-          || result?.data?.response
-          || result?.data?.message
-          || (typeof result === 'string' ? result : null)
-          || aiText;
-      } catch {
-        // Se não for JSON, usa o texto bruto como resposta
-        if (rawText.trim()) {
-          aiText = rawText;
-        }
-      }
+      const aiText = res?.resposta || 'Resposta recebida, mas sem conteúdo.';
 
       setIsTyping(false);
       setMessages(prev => [...prev, {
@@ -106,7 +74,7 @@ const Chatbot = () => {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         sender: 'ai',
-        text: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.',
+        text: error.message || 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.',
       }]);
     }
   };

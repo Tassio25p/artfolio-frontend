@@ -3,7 +3,8 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
-import { obrasService, getUser, getToken } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { obrasService, getMediaUrl } from "../services/api";
 
 function DetalhesObra() {
   const { id } = useParams();
@@ -20,7 +21,9 @@ function DetalhesObra() {
   const [loading, setLoading] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
 
-  const currentUser = getUser();
+  const { user: currentUser, isAuthenticated } = useAuth();
+
+  const [isSalvo, setIsSalvo] = useState(false);
 
   const carregarDadosObra = async () => {
     if (!id) return;
@@ -33,6 +36,18 @@ function DetalhesObra() {
       // Carregar comentários reais
       const listaComentarios = await obrasService.listarComentarios(id);
       setComentarios(listaComentarios || []);
+
+      // Checar status de salvamento se autenticado
+      if (isAuthenticated) {
+        try {
+          const resSalvo = await obrasService.checarSalvo(id);
+          if (resSalvo && typeof resSalvo.salvo === "boolean") {
+            setIsSalvo(resSalvo.salvo);
+          }
+        } catch {
+          // Ignorar se não autenticado ou erro
+        }
+      }
     } catch (err) {
       console.error("Erro ao carregar obra:", err);
       mostrarAviso(err.message || "Obra não encontrada.", "error");
@@ -43,7 +58,7 @@ function DetalhesObra() {
 
   useEffect(() => {
     carregarDadosObra();
-  }, [id]);
+  }, [id, isAuthenticated]);
 
   const mostrarAviso = (mensagem, tipo = "info") => {
     setNoticeMessage(mensagem);
@@ -53,11 +68,31 @@ function DetalhesObra() {
 
   const isOwner = currentUser?.id === obraDetalhe?.usuario?.id;
 
+  const handleToggleSave = async () => {
+    if (!isAuthenticated) {
+      mostrarAviso("Faça login para salvar esta obra.", "error");
+      return;
+    }
+    try {
+      if (isSalvo) {
+        await obrasService.removerSalvo(id);
+        setIsSalvo(false);
+        mostrarAviso("Obra removida dos salvos com sucesso.", "info");
+      } else {
+        await obrasService.salvarObra(id);
+        setIsSalvo(true);
+        mostrarAviso("Obra salva com sucesso!", "success");
+      }
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao alterar salvamento.", "error");
+    }
+  };
+
   const handleComentarioSubmit = async (event) => {
     event.preventDefault();
     if (!novoComentario.trim()) return;
 
-    if (!getToken()) {
+    if (!isAuthenticated) {
       mostrarAviso("Você precisa estar logado para comentar.", "error");
       return;
     }
@@ -157,9 +192,12 @@ function DetalhesObra() {
                   <MenuOpcoes
                     tipo="obra"
                     detalhesLink={`/obra/${obraDetalhe.id}`}
+                    isSalvo={isSalvo}
+                    onSalvar={handleToggleSave}
                     onDenunciar={() =>
                       abrirDenuncia("obra", obraDetalhe.legenda || `Obra #${obraDetalhe.id}`)
                     }
+                    onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "success")}
                   />
                 )}
               </div>
@@ -198,10 +236,14 @@ function DetalhesObra() {
             <div className="bg-white rounded-[1.7rem] p-4 border border-black/5 mb-5">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="w-11 h-11 rounded-full bg-artPurple overflow-hidden shrink-0">
+                  <Link
+                    to={isOwner ? "/perfil" : `/artista/${obraDetalhe.usuario?.id}`}
+                    className="w-11 h-11 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-opacity"
+                    title={`Ver perfil de ${obraDetalhe.usuario?.nome || "Artista"}`}
+                  >
                     {obraDetalhe.usuario?.fotoPerfil ? (
                       <img
-                        src={obraDetalhe.usuario.fotoPerfil}
+                        src={getMediaUrl(obraDetalhe.usuario.fotoPerfil)}
                         alt={obraDetalhe.usuario.nome}
                         className="w-full h-full object-cover"
                       />
@@ -210,16 +252,19 @@ function DetalhesObra() {
                         {obraDetalhe.usuario?.nome?.charAt(0)?.toUpperCase() || "A"}
                       </div>
                     )}
-                  </div>
+                  </Link>
 
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
                       {obraDetalhe.usuario?.tipo_conta || "Artista"}
                     </p>
 
-                    <h3 className="font-bold text-base">
+                    <Link
+                      to={isOwner ? "/perfil" : `/artista/${obraDetalhe.usuario?.id}`}
+                      className="font-bold text-base hover:text-artPurple transition-colors block"
+                    >
                       {obraDetalhe.usuario?.nome || "Artista"}
-                    </h3>
+                    </Link>
                   </div>
                 </div>
 
@@ -312,10 +357,14 @@ function DetalhesObra() {
             ) : (
               comentarios.map((item) => (
                 <div key={item.id} className="flex gap-3 items-start">
-                  <div className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0">
+                  <Link
+                    to={currentUser?.id === item.usuario?.id ? "/perfil" : `/artista/${item.usuario?.id}`}
+                    className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-opacity"
+                    title={`Ver perfil de ${item.usuario?.nome || "Usuário"}`}
+                  >
                     {item.usuario?.fotoPerfil ? (
                       <img
-                        src={item.usuario.fotoPerfil}
+                        src={getMediaUrl(item.usuario.fotoPerfil)}
                         alt={item.usuario.nome}
                         className="w-full h-full object-cover"
                       />
@@ -324,11 +373,16 @@ function DetalhesObra() {
                         {item.usuario?.nome?.charAt(0)?.toUpperCase() || "U"}
                       </div>
                     )}
-                  </div>
+                  </Link>
 
                   <div className="flex-1 bg-[#F9F8F6] rounded-[1.3rem] p-4">
                     <div className="flex justify-between gap-3 mb-1">
-                      <strong className="text-sm">{item.usuario?.nome || "Usuário"}</strong>
+                      <Link
+                        to={currentUser?.id === item.usuario?.id ? "/perfil" : `/artista/${item.usuario?.id}`}
+                        className="text-sm font-bold hover:text-artPurple transition-colors"
+                      >
+                        {item.usuario?.nome || "Usuário"}
+                      </Link>
 
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[9px] text-gray-400 font-bold">
@@ -385,8 +439,11 @@ function DetalhesObra() {
       <ModalDenuncia
         aberto={modalDenunciaAberto}
         onFechar={() => setModalDenunciaAberto(false)}
+        postagemId={obraDetalhe?.id}
         tipo={denunciaAtual.tipo}
         alvo={denunciaAtual.alvo}
+        onSucesso={(msg) => mostrarAviso(msg, "success")}
+        onErro={(msg) => mostrarAviso(msg, "error")}
       />
     </div>
   );

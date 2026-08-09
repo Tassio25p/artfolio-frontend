@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { obrasService } from "../services/api";
 
 const motivos = [
   "Plágio ou obra copiada",
@@ -14,20 +15,54 @@ export default function ModalDenuncia({
   onFechar,
   tipo = "obra",
   alvo = "conteúdo",
+  postagemId = null,
+  onSucesso = null,
+  onErro = null,
 }) {
   const [motivo, setMotivo] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [erroLocal, setErroLocal] = useState("");
 
   if (!aberto) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setErroLocal("");
 
-    alert("Denúncia enviada para análise da moderação.");
+    if (!motivo) {
+      setErroLocal("Selecione um motivo para realizar a denúncia.");
+      return;
+    }
 
-    setMotivo("");
-    setDescricao("");
-    onFechar();
+    try {
+      setLoading(true);
+
+      if (postagemId) {
+        await obrasService.denunciarObra(postagemId, {
+          motivo,
+          descricao: descricao.trim() || null,
+        });
+
+        if (onSucesso) {
+          onSucesso("Denúncia enviada com sucesso para a moderação.");
+        }
+      } else {
+        if (onSucesso) {
+          onSucesso("Denúncia registrada com sucesso.");
+        }
+      }
+
+      setMotivo("");
+      setDescricao("");
+      onFechar();
+    } catch (err) {
+      const msg = err.message || "Erro ao enviar denúncia.";
+      setErroLocal(msg);
+      if (onErro) onErro(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,7 +72,7 @@ export default function ModalDenuncia({
           <button
             type="button"
             onClick={onFechar}
-            className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 hover:bg-white hover:text-artDark transition-all"
+            className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 hover:bg-white hover:text-artDark transition-all flex items-center justify-center"
           >
             <i className="fa-solid fa-xmark"></i>
           </button>
@@ -60,6 +95,13 @@ export default function ModalDenuncia({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {erroLocal && (
+            <div className="bg-red-50 text-red-600 border border-red-200 rounded-[1.2rem] p-3 text-xs font-bold">
+              <i className="fa-solid fa-circle-exclamation mr-2"></i>
+              {erroLocal}
+            </div>
+          )}
+
           <div className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5">
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">
               Conteúdo denunciado
@@ -70,13 +112,16 @@ export default function ModalDenuncia({
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-              Motivo da denúncia
+              Motivo da denúncia *
             </label>
 
             <select
               value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+              onChange={(e) => {
+                setMotivo(e.target.value);
+                setErroLocal("");
+              }}
+              className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm font-bold text-artDark"
               required
             >
               <option value="" disabled>
@@ -111,7 +156,7 @@ export default function ModalDenuncia({
               Análise da moderação
             </h3>
 
-            <p className="text-sm text-gray-500 leading-relaxed">
+            <p className="text-sm text-gray-500 leading-relaxed font-light">
               Após o envio, a denúncia ficará disponível no painel de moderação
               para ser analisada por um moderador ou administrador.
             </p>
@@ -121,16 +166,25 @@ export default function ModalDenuncia({
             <button
               type="button"
               onClick={onFechar}
-              className="flex-1 bg-[#F9F8F6] border border-black/5 px-6 py-4 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all"
+              disabled={loading}
+              className="flex-1 bg-[#F9F8F6] border border-black/5 px-6 py-4 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all disabled:opacity-50"
             >
               Cancelar
             </button>
 
             <button
               type="submit"
-              className="flex-1 bg-artDark text-white px-6 py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10"
+              disabled={loading}
+              className="flex-1 bg-artDark text-white px-6 py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              Enviar Denúncia
+              {loading ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                  Enviando...
+                </>
+              ) : (
+                "Enviar Denúncia"
+              )}
             </button>
           </div>
         </form>

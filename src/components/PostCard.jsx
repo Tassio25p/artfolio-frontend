@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import MenuOpcoes from "./MenuOpcoes";
 import ModalDenuncia from "./ModalDenuncia";
-import { obrasService } from "../services/api";
+import { obrasService, getMediaUrl } from "../services/api";
 
 const colorClasses = {
   artPurple: "bg-artPurple",
@@ -90,7 +90,7 @@ export default function PostCard({
             <div className={`w-8 h-8 rounded-full ${avatarColor} overflow-hidden`}>
               {avatar ? (
                 <img
-                  src={avatar}
+                  src={getMediaUrl(avatar)}
                   alt={user}
                   className="object-cover w-full h-full"
                 />

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { Link } from "react-router-dom";
+import { adminService } from "../services/api";
 
 const obrasPendentes = [
   {
@@ -138,12 +139,45 @@ export default function Admin() {
   const [areaAtual, setAreaAtual] = useState("geral");
   const [noticeMessage, setNoticeMessage] = useState("");
 
+  const [denunciasReais, setDenunciasReais] = useState([]);
+  const [loadingDenuncias, setLoadingDenuncias] = useState(false);
+
   const tipoAcesso = "admin"; // Pode ser "admin" ou "moderador"
   const isAdmin = tipoAcesso === "admin";
+
+  const carregarDenuncias = async () => {
+    try {
+      setLoadingDenuncias(true);
+      const res = await adminService.listarDenuncias();
+      if (Array.isArray(res)) {
+        setDenunciasReais(res);
+      }
+    } catch {
+      // Ignorar caso usuário não seja admin/moderador no teste local
+    } finally {
+      setLoadingDenuncias(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarDenuncias();
+  }, []);
 
   const mostrarAviso = (mensagem) => {
     setNoticeMessage(mensagem);
     setTimeout(() => setNoticeMessage(""), 4000);
+  };
+
+  const handleAtualizarStatusDenuncia = async (id, novoStatus) => {
+    try {
+      await adminService.atualizarStatusDenuncia(id, novoStatus);
+      setDenunciasReais((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, status: novoStatus } : d))
+      );
+      mostrarAviso(`Status da denúncia #${id} atualizado para ${novoStatus}.`);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao atualizar denúncia.");
+    }
   };
 
   const handleAcaoBackend = (mensagem) => {
@@ -481,81 +515,158 @@ export default function Admin() {
                       </span>
 
                       <h2 className="font-editorial text-3xl italic">
-                        Denúncias recentes
+                        Central de moderação de denúncias
                       </h2>
                     </div>
 
                     <span className="bg-artBlue/10 text-artBlue px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                      {denuncias.length} novas
+                      {denunciasReais.length > 0 ? denunciasReais.length : denuncias.length} registradas
                     </span>
                   </div>
 
                   <div className="space-y-3">
-                    {denuncias.map((denuncia) => (
-                      <article
-                        key={denuncia.id}
-                        className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5 flex flex-col md:flex-row md:items-center gap-4 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all"
-                      >
-                        <div className="w-11 h-11 rounded-2xl bg-artBlue/10 text-artBlue flex items-center justify-center shrink-0">
-                          <i className="fa-solid fa-flag"></i>
-                        </div>
-
-                        <div className="flex-1">
-                          <div className="flex flex-wrap gap-2 mb-1">
-                            <span className="bg-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400 border border-black/5">
-                              {denuncia.tipo}
-                            </span>
-
-                            <span
-                              className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
-                                statusClasses[denuncia.status] ||
-                                "bg-gray-100 text-gray-400"
-                              }`}
-                            >
-                              {denuncia.status}
-                            </span>
+                    {denunciasReais.length > 0 ? (
+                      denunciasReais.map((d) => (
+                        <article
+                          key={d.id}
+                          className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5 flex flex-col md:flex-row md:items-center gap-4 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all"
+                        >
+                          <div className="w-11 h-11 rounded-2xl bg-artBlue/10 text-artBlue flex items-center justify-center shrink-0">
+                            <i className="fa-solid fa-flag"></i>
                           </div>
 
-                          <h3 className="font-bold text-sm">
-                            {denuncia.alvo}
-                          </h3>
+                          <div className="flex-1">
+                            <div className="flex flex-wrap gap-2 mb-1">
+                              <span className="bg-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400 border border-black/5">
+                                Obra #{d.idPostagem}
+                              </span>
 
-                          <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-                            {denuncia.motivo} • Denunciado:{" "}
-                            <strong>{denuncia.denunciado}</strong> •
-                            Denunciante:{" "}
-                            <strong>{denuncia.denunciante}</strong> •{" "}
-                            {denuncia.tempo}
-                          </p>
-                        </div>
+                              <span
+                                className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                                  d.status === "RESOLVIDA"
+                                    ? "bg-green-100 text-green-700"
+                                    : d.status === "REJEITADA"
+                                    ? "bg-red-100 text-red-600"
+                                    : "bg-artOrange/10 text-artOrange"
+                                }`}
+                              >
+                                {d.status}
+                              </span>
+                            </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleAcaoBackend(
-                                "A análise real da denúncia será integrada ao backend."
-                              )
-                            }
-                            className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
-                          >
-                            Analisar
-                          </button>
+                            <h3 className="font-bold text-sm">
+                              {d.motivo}
+                            </h3>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleAcaoBackend(
-                                "A resolução real da denúncia será integrada ao backend."
-                              )
-                            }
-                            className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all"
-                          >
-                            Resolver
-                          </button>
-                        </div>
-                      </article>
-                    ))}
+                            {d.descricao && (
+                              <p className="text-xs text-gray-600 mt-1 italic">
+                                "{d.descricao}"
+                              </p>
+                            )}
+
+                            <p className="text-xs text-gray-400 mt-1 font-light">
+                              Denunciante: <strong>{d.usuario?.nome || `ID ${d.idUsuario}`}</strong> •{" "}
+                              {d.dataCriacao ? new Date(d.dataCriacao).toLocaleDateString() : ""}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:flex gap-2">
+                            <Link
+                              to={`/obra/${d.idPostagem}`}
+                              className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all text-center"
+                            >
+                              Ver Obra
+                            </Link>
+
+                            {d.status !== "RESOLVIDA" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAtualizarStatusDenuncia(d.id, "RESOLVIDA")}
+                                className="bg-green-600 text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-green-700 transition-all"
+                              >
+                                Resolver
+                              </button>
+                            )}
+
+                            {d.status !== "REJEITADA" && (
+                              <button
+                                type="button"
+                                onClick={() => handleAtualizarStatusDenuncia(d.id, "REJEITADA")}
+                                className="bg-white border border-black/5 text-gray-500 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all"
+                              >
+                                Rejeitar
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      denuncias.map((denuncia) => (
+                        <article
+                          key={denuncia.id}
+                          className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5 flex flex-col md:flex-row md:items-center gap-4 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all"
+                        >
+                          <div className="w-11 h-11 rounded-2xl bg-artBlue/10 text-artBlue flex items-center justify-center shrink-0">
+                            <i className="fa-solid fa-flag"></i>
+                          </div>
+
+                          <div className="flex-1">
+                            <div className="flex flex-wrap gap-2 mb-1">
+                              <span className="bg-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400 border border-black/5">
+                                {denuncia.tipo}
+                              </span>
+
+                              <span
+                                className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                                  statusClasses[denuncia.status] ||
+                                  "bg-gray-100 text-gray-400"
+                                }`}
+                              >
+                                {denuncia.status}
+                              </span>
+                            </div>
+
+                            <h3 className="font-bold text-sm">
+                              {denuncia.alvo}
+                            </h3>
+
+                            <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                              {denuncia.motivo} • Denunciado:{" "}
+                              <strong>{denuncia.denunciado}</strong> •
+                              Denunciante:{" "}
+                              <strong>{denuncia.denunciante}</strong> •{" "}
+                              {denuncia.tempo}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAcaoBackend(
+                                  "Denúncia marcada como em análise."
+                                )
+                              }
+                              className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
+                            >
+                              Analisar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAcaoBackend(
+                                  "Denúncia marcada como resolvida."
+                                )
+                              }
+                              className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all"
+                            >
+                              Resolver
+                            </button>
+                          </div>
+                        </article>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

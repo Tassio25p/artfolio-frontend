@@ -4,14 +4,23 @@ import { Link } from "react-router-dom";
 export default function MenuOpcoes({
   tipo = "obra",
   detalhesLink = "#",
+  onSalvar,
+  isSalvo = false,
   onDenunciar,
+  onCopiarLinkSuccess,
 }) {
   const [aberto, setAberto] = useState(false);
 
-  const handleCopiarLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+  const handleCopiarLink = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(window.location.origin + detallesLink);
     setAberto(false);
-    alert("Link copiado!");
+    if (onCopiarLinkSuccess) {
+      onCopiarLinkSuccess("Link da obra copiado para a área de transferência!");
+    } else {
+      alert("Link copiado!");
+    }
   };
 
   return (
@@ -31,14 +40,16 @@ export default function MenuOpcoes({
 
       {aberto && (
         <div className="absolute right-0 top-11 w-52 bg-white rounded-[1.3rem] border border-black/5 shadow-2xl shadow-black/10 p-2 z-50">
-          <Link
-            to={detalhesLink}
-            onClick={() => setAberto(false)}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold hover:bg-[#F9F8F6] transition-colors"
-          >
-            <i className="fa-regular fa-eye text-artBlue w-4"></i>
-            Ver detalhes
-          </Link>
+          {detalhesLink && detalhesLink !== "#" && (
+            <Link
+              to={detalhesLink}
+              onClick={() => setAberto(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold hover:bg-[#F9F8F6] transition-colors text-artDark"
+            >
+              <i className="fa-regular fa-eye text-artBlue w-4"></i>
+              Ver detalhes
+            </Link>
+          )}
 
           {tipo === "obra" && (
             <button
@@ -47,11 +58,12 @@ export default function MenuOpcoes({
                 e.preventDefault();
                 e.stopPropagation();
                 setAberto(false);
+                if (onSalvar) onSalvar();
               }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold hover:bg-[#F9F8F6] transition-colors text-left"
             >
-              <i className="fa-regular fa-bookmark text-artPurple w-4"></i>
-              Salvar obra
+              <i className={`${isSalvo ? "fa-solid text-artPurple" : "fa-regular text-artPurple"} fa-bookmark w-4`}></i>
+              {isSalvo ? "Obra salva" : "Salvar obra"}
             </button>
           )}
 

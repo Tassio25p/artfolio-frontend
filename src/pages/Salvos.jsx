@@ -1,118 +1,95 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-
-const obrasSalvas = [
-  {
-    id: 1,
-    titulo: "Abstração em Tons de Púrpura",
-    artista: "Marina Silva",
-    categoria: "Pintura Digital",
-    preco: "R$ 350,00",
-    statusVenda: "Disponível",
-    statusModeracao: "Aprovada",
-    salvoEm: "Salvo hoje",
-    imagem:
-      "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800&auto=format&fit=crop",
-  },
-  {
-    id: 2,
-    titulo: "Conexões de Algodão",
-    artista: "Helena Matos",
-    categoria: "Têxtil",
-    preco: "Sob consulta",
-    statusVenda: "Aceita encomenda",
-    statusModeracao: "Aprovada",
-    salvoEm: "Salvo ontem",
-    imagem:
-      "https://images.unsplash.com/photo-1549490349-8643362247b5?q=80&w=800&auto=format&fit=crop",
-  },
-  {
-    id: 3,
-    titulo: "Ecos da Metrópole",
-    artista: "Luan Rocha",
-    categoria: "3D Art",
-    preco: "R$ 620,00",
-    statusVenda: "Disponível",
-    statusModeracao: "Aprovada",
-    salvoEm: "Salvo há 3 dias",
-    imagem:
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800",
-  },
-  {
-    id: 4,
-    titulo: "Fragmentos de Vidro",
-    artista: "Gabriel Duarte",
-    categoria: "Arte Conceitual",
-    preco: "Indisponível",
-    statusVenda: "Vendido",
-    statusModeracao: "Aprovada",
-    salvoEm: "Salvo há 1 semana",
-    imagem:
-      "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=800",
-  },
-];
+import MenuOpcoes from "../components/MenuOpcoes";
+import ModalDenuncia from "../components/ModalDenuncia";
+import { useAuth } from "../contexts/AuthContext";
+import { obrasService, getMediaUrl } from "../services/api";
 
 const filtros = [
   { id: "Todas", label: "Todas" },
-  { id: "Disponível", label: "Disponíveis" },
-  { id: "Aceita encomenda", label: "Aceita encomenda" },
-  { id: "Vendido", label: "Vendidas" },
+  { id: "artista", label: "Artistas" },
+  { id: "cliente", label: "Clientes" },
 ];
 
-const statusClasses = {
-  Disponível: "bg-artBlue/10 text-artBlue",
-  "Aceita encomenda": "bg-artPurple/10 text-artPurple",
-  Vendido: "bg-artOrange/10 text-artOrange",
-};
+export default function Salvos() {
+  const { user: authUser } = useAuth();
 
-function Salvos() {
+  const [obrasSalvas, setObrasSalvas] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filtroAtual, setFiltroAtual] = useState("Todas");
   const [termoBusca, setTermoBusca] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [noticeType, setNoticeType] = useState("info");
 
-  const tipoUsuario = "cliente";
+  const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
+  const [denunciaAtual, setDenunciaAtual] = useState({ idPostagem: null, alvo: "" });
 
-  const obrasAprovadas = obrasSalvas.filter(
-    (obra) => obra.statusModeracao === "Aprovada"
-  );
+  const carregarObrasSalvas = async () => {
+    try {
+      setLoading(true);
+      const lista = await obrasService.listarSalvas();
+      if (Array.isArray(lista)) {
+        setObrasSalvas(lista);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar obras salvas:", err);
+      mostrarAviso("Erro ao carregar sua lista de obras salvas.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const obrasFiltradas = obrasAprovadas.filter((obra) => {
+  useEffect(() => {
+    carregarObrasSalvas();
+  }, []);
+
+  const mostrarAviso = (mensagem, tipo = "info") => {
+    setNoticeMessage(mensagem);
+    setNoticeType(tipo);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
+
+  const handleRemoverSalvo = async (obraId) => {
+    try {
+      await obrasService.removerSalvo(obraId);
+      setObrasSalvas((prev) => prev.filter((o) => o.id !== obraId));
+      mostrarAviso("Obra removida dos salvos com sucesso.", "success");
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao remover obra dos salvos.", "error");
+    }
+  };
+
+  const handleAbrirDenuncia = (obra) => {
+    setDenunciaAtual({
+      idPostagem: obra.id,
+      alvo: obra.legenda || `Obra #${obra.id} por ${obra.usuario?.nome || "Artista"}`,
+    });
+    setModalDenunciaAberto(true);
+  };
+
+  const obrasFiltradas = obrasSalvas.filter((obra) => {
     const termo = termoBusca.toLowerCase();
 
     const correspondeBusca =
-      obra.titulo.toLowerCase().includes(termo) ||
-      obra.artista.toLowerCase().includes(termo) ||
-      obra.categoria.toLowerCase().includes(termo) ||
-      obra.statusVenda.toLowerCase().includes(termo);
+      (obra.legenda || "").toLowerCase().includes(termo) ||
+      (obra.usuario?.nome || "").toLowerCase().includes(termo) ||
+      (obra.categoria?.nomeCategoria || "").toLowerCase().includes(termo);
 
     const correspondeFiltro =
-      filtroAtual === "Todas" || obra.statusVenda === filtroAtual;
+      filtroAtual === "Todas" || obra.usuario?.tipo_conta === filtroAtual;
 
     return correspondeBusca && correspondeFiltro;
   });
 
-  const disponiveis = obrasAprovadas.filter(
-    (obra) =>
-      obra.statusVenda === "Disponível" ||
-      obra.statusVenda === "Aceita encomenda"
-  ).length;
+  const totalArtistas = new Set(
+    obrasSalvas.map((obra) => obra.usuario?.nome).filter(Boolean)
+  ).size;
 
-  const vendidas = obrasAprovadas.filter(
-    (obra) => obra.statusVenda === "Vendido"
-  ).length;
-
-  const totalArtistas = new Set(obrasAprovadas.map((obra) => obra.artista)).size;
-
-  const mostrarAviso = (mensagem) => {
-    setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4000);
-  };
-
-  const handleRemoverSalvo = () => {
-    mostrarAviso(
-      "A remoção real de obras salvas será integrada futuramente ao backend."
-    );
+  const noticeStyles = {
+    info: "bg-artOrange/10 text-artOrange border-artOrange/10",
+    success: "bg-green-50 text-green-600 border-green-200",
+    error: "bg-red-50 text-red-500 border-red-200",
   };
 
   return (
@@ -126,99 +103,52 @@ function Salvos() {
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                Coleção pessoal
+                Galeria pessoal
               </span>
 
               <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
-                Obras <span className="italic text-artOrange">Salvas.</span>
+                Salvos<span className="italic text-artPurple">.</span>
               </h1>
 
               <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
-                Guarde obras de interesse para consultar depois, conversar com o
-                artista, acompanhar disponibilidade ou solicitar uma encomenda.
+                Guarde referências, obras que inspiram seu trabalho e
+                projetos que você deseja acompanhar ou encomendar no futuro.
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
                 to="/feed"
-                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+                className="bg-white border border-black/5 px-6 py-3.5 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all text-center"
               >
-                <i className="fa-solid fa-arrow-left mr-2"></i>
-                Voltar ao Feed
-              </Link>
-
-              <Link
-                to="/buscar"
-                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 text-center"
-              >
-                Buscar Obras
+                Explorar Feed
               </Link>
             </div>
           </header>
 
           {noticeMessage && (
-            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
+            <div className={`${noticeStyles[noticeType]} border rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold`}>
               <i className="fa-solid fa-circle-info mr-2"></i>
               {noticeMessage}
             </div>
           )}
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{obrasAprovadas.length}</p>
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Obras salvas
-              </span>
-            </div>
+              <p className="text-2xl font-black">{obrasSalvas.length}</p>
 
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{disponiveis}</p>
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Disponíveis
-              </span>
-            </div>
-
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{vendidas}</p>
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Vendidas
+                Obras Salvas
               </span>
             </div>
 
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
               <p className="text-2xl font-black">{totalArtistas}</p>
+
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Artistas
+                Artistas Distintos
               </span>
             </div>
-          </section>
-
-          <section className="bg-artPurple/5 border border-artPurple/10 rounded-[1.7rem] p-5 mb-8 flex flex-col md:flex-row gap-4 md:items-center justify-between">
-            <div className="flex gap-4">
-              <div className="w-11 h-11 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
-                <i className="fa-solid fa-bookmark"></i>
-              </div>
-
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest">
-                  Para comprar ou encomendar depois
-                </h2>
-
-                <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
-                  As obras salvas funcionam como uma lista de interesse. No
-                  backend, somente obras aprovadas pela moderação poderão
-                  aparecer nesta área.
-                </p>
-              </div>
-            </div>
-
-            <Link
-              to="/mensagens"
-              className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-            >
-              Ver conversas
-            </Link>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -245,34 +175,6 @@ function Salvos() {
                   ))}
                 </div>
               </div>
-
-              <div className="bg-artDark text-white rounded-[1.7rem] p-5 relative overflow-hidden">
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Dica
-                </span>
-
-                <h3 className="font-editorial text-2xl italic leading-tight">
-                  Salve obras de interesse.
-                </h3>
-
-                <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Use esta área para acompanhar obras que você deseja comprar,
-                  negociar ou usar como referência para uma encomenda.
-                </p>
-
-                <i className="fa-solid fa-bookmark absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
-              </div>
-
-              <div className="bg-artBlue/5 border border-artBlue/10 rounded-[1.7rem] p-5">
-                <h3 className="text-xs font-bold uppercase tracking-widest mb-2">
-                  Integração futura
-                </h3>
-
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Os salvos reais serão carregados pelo backend conforme o
-                  usuário logado. Esta tela representa a interface visual.
-                </p>
-              </div>
             </aside>
 
             <section className="lg:col-span-9">
@@ -280,11 +182,11 @@ function Salvos() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                   <div>
                     <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
-                      Lista de interesse
+                      Sua coleção
                     </span>
 
                     <h2 className="font-editorial text-3xl italic">
-                      Obras guardadas para depois
+                      Obras registradas
                     </h2>
                   </div>
 
@@ -294,124 +196,105 @@ function Salvos() {
                     <input
                       type="text"
                       value={termoBusca}
-                      onChange={(event) => setTermoBusca(event.target.value)}
+                      onChange={(e) => setTermoBusca(e.target.value)}
                       placeholder="Buscar obra salva..."
                       className="w-full bg-[#F9F8F6] rounded-full pl-11 pr-5 py-3 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                     />
                   </div>
                 </div>
 
-                {obrasFiltradas.length === 0 ? (
+                {loading ? (
+                  <div className="bg-[#F9F8F6] rounded-[1.7rem] p-12 text-center">
+                    <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                      Carregando suas obras salvas...
+                    </p>
+                  </div>
+                ) : obrasFiltradas.length === 0 ? (
                   <div className="bg-[#F9F8F6] rounded-[1.7rem] p-8 sm:p-12 text-center">
                     <i className="fa-solid fa-bookmark text-4xl text-gray-200 mb-4"></i>
 
                     <h3 className="font-editorial text-3xl italic">
-                      Nenhuma obra encontrada.
+                      Nenhuma obra salva.
                     </h3>
 
                     <p className="text-sm text-gray-500 mt-2">
-                      Tente alterar o filtro ou buscar por outro título, artista
-                      ou categoria.
+                      Explore o feed e salve obras de artistas que você aprecia.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                     {obrasFiltradas.map((obra) => (
                       <article
                         key={obra.id}
-                        className="group bg-[#F9F8F6] rounded-[1.7rem] p-4 border border-black/5 flex flex-col lg:flex-row gap-4 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
+                        className="group bg-[#F9F8F6] rounded-[1.7rem] border border-black/5 overflow-hidden flex flex-col hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
                       >
-                        <Link
-                          to={`/obra/${obra.id}`}
-                          className="w-full lg:w-44 h-44 lg:h-32 rounded-[1.4rem] overflow-hidden bg-gray-100 shrink-0"
-                        >
+                        <div className="relative h-56 bg-artDark/5 overflow-hidden">
                           <img
-                            src={obra.imagem}
-                            alt={obra.titulo}
+                            src={getMediaUrl(obra.arquivoUrl)}
+                            alt={obra.legenda || "Obra Salva"}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
-                        </Link>
 
-                        <div className="flex-1 flex flex-col justify-between gap-4">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-artPurple">
-                                {obra.categoria}
-                              </span>
-
-                              <span
-                                className={`text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full ${
-                                  statusClasses[obra.statusVenda] ||
-                                  "bg-gray-100 text-gray-400"
-                                }`}
-                              >
-                                {obra.statusVenda}
-                              </span>
-
-                              <span className="bg-artBlue/10 text-artBlue text-[9px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
-                                {obra.statusModeracao}
-                              </span>
-                            </div>
-
-                            <h3 className="font-bold text-xl leading-tight">
-                              {obra.titulo}
-                            </h3>
-
-                            <p className="text-sm text-gray-500 mt-1">
-                              Por <strong>{obra.artista}</strong> •{" "}
-                              {obra.salvoEm}
-                            </p>
+                          <div className="absolute top-3 right-3 z-10">
+                            <MenuOpcoes
+                              tipo="obra"
+                              detalhesLink={`/obra/${obra.id}`}
+                              isSalvo={true}
+                              onSalvar={() => handleRemoverSalvo(obra.id)}
+                              onDenunciar={() => handleAbrirDenuncia(obra)}
+                              onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "success")}
+                            />
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-5 text-xs text-gray-400 font-bold">
-                            <span>
-                              <i className="fa-solid fa-tag mr-1"></i>
-                              {obra.preco}
+                          {obra.categoria?.nomeCategoria && (
+                            <span className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-artDark border border-black/5">
+                              {obra.categoria.nomeCategoria}
                             </span>
-
-                            <span>
-                              <i className="fa-solid fa-bookmark mr-1"></i>
-                              Salva para depois
-                            </span>
-
-                            <span>
-                              <i className="fa-solid fa-user mr-1"></i>
-                              Visualização: {tipoUsuario}
-                            </span>
-                          </div>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 lg:flex lg:flex-col gap-3 lg:justify-center">
-                          <Link
-                            to={`/obra/${obra.id}`}
-                            className="px-5 py-3 rounded-full bg-artDark text-white text-xs font-bold hover:bg-artPurple transition-all text-center"
-                          >
-                            Ver Obra
-                          </Link>
-
-                          {obra.statusVenda === "Aceita encomenda" ? (
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
                             <Link
-                              to="/encomendas"
-                              className="px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                              to={`/obra/${obra.id}`}
+                              className="font-editorial text-xl italic hover:text-artPurple transition-colors line-clamp-1 block mb-2"
                             >
-                              Encomenda
+                              {obra.legenda || `Obra #${obra.id}`}
                             </Link>
-                          ) : (
-                            <Link
-                              to="/mensagens"
-                              className="px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
-                            >
-                              Mensagem
-                            </Link>
-                          )}
 
-                          <button
-                            type="button"
-                            onClick={handleRemoverSalvo}
-                            className="px-5 py-3 rounded-full bg-white border border-black/5 text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all"
-                          >
-                            Remover
-                          </button>
+                            <div className="flex items-center gap-2">
+                              <Link
+                                to={
+                                  authUser?.id === obra.usuario?.id
+                                    ? "/perfil"
+                                    : `/artista/${obra.usuario?.id}`
+                                }
+                                className="text-xs font-bold text-gray-600 hover:text-artPurple transition-colors"
+                              >
+                                {obra.usuario?.nome || "Artista"}
+                              </Link>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverSalvo(obra.id)}
+                              className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1.5"
+                            >
+                              <i className="fa-solid fa-bookmark text-artPurple"></i>
+                              Remover dos salvos
+                            </button>
+
+                            <Link
+                              to={`/obra/${obra.id}`}
+                              className="w-8 h-8 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center"
+                            >
+                              <i className="fa-solid fa-arrow-right text-xs"></i>
+                            </Link>
+                          </div>
                         </div>
                       </article>
                     ))}
@@ -422,8 +305,15 @@ function Salvos() {
           </section>
         </div>
       </main>
+
+      <ModalDenuncia
+        aberto={modalDenunciaAberto}
+        onFechar={() => setModalDenunciaAberto(false)}
+        postagemId={denunciaAtual.idPostagem}
+        alvo={denunciaAtual.alvo}
+        onSucesso={(msg) => mostrarAviso(msg, "success")}
+        onErro={(msg) => mostrarAviso(msg, "error")}
+      />
     </div>
   );
 }
-
-export default Salvos;

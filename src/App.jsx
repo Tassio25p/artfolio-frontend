@@ -1,4 +1,5 @@
 import { Routes, Route, Link } from "react-router-dom";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import Inicio from "./pages/Inicio";
 import Home from "./pages/Home";
@@ -22,7 +23,7 @@ import Encomendas from "./pages/Encomendas";
 import Estatisticas from "./pages/Estatisticas";
 import Buscar from "./pages/Buscar";
 import Admin from "./pages/Admin";
-import Chatbot from "./components/Chatbot/Chatbot";
+import AIChatGuard from "./components/Chatbot/ChatbotGuard";
 
 function App() {
   return (
@@ -34,39 +35,39 @@ function App() {
         <Route path="/cadastro" element={<Cadastro />} />
         <Route path="/recuperar-senha" element={<RecuperarSenha />} />
 
-        {/* Área principal */}
-        <Route path="/feed" element={<Home />} />
-        <Route path="/buscar" element={<Buscar />} />
-        <Route path="/planos" element={<Plans />} />
-        <Route path="/mensagens" element={<Messages />} />
-        <Route path="/notificacoes" element={<Notificacoes />} />
-        <Route path="/configuracoes" element={<Configuracoes />} />
+        {/* Área principal — rotas protegidas */}
+        <Route path="/feed" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/buscar" element={<ProtectedRoute><Buscar /></ProtectedRoute>} />
+        <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
+        <Route path="/mensagens" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+        <Route path="/notificacoes" element={<ProtectedRoute><Notificacoes /></ProtectedRoute>} />
+        <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
 
-        {/* Obras */}
-        <Route path="/criar-obra" element={<CriarObra />} />
+        {/* Obras — rotas protegidas */}
+        <Route path="/criar-obra" element={<ProtectedRoute><CriarObra /></ProtectedRoute>} />
         <Route path="/obra/:id" element={<DetalhesObra />} />
-        <Route path="/editar-obra/:id" element={<EditarObras />} />
+        <Route path="/editar-obra/:id" element={<ProtectedRoute><EditarObras /></ProtectedRoute>} />
 
-        {/* Perfil e portfólio */}
-        <Route path="/perfil" element={<ArtistProfile />} />
-        <Route path="/artista/:id" element={<ArtistProfile />} />
-        <Route path="/editar-perfil" element={<EditarPerfil />} />
-        <Route path="/meu-portfolio" element={<MeuPortfolio />} />
-        <Route path="/seguidores" element={<Seguidores />} />
-        <Route path="/seguindo" element={<Seguindo />} />
+        {/* Perfil e portfólio — rotas protegidas */}
+        <Route path="/perfil" element={<ProtectedRoute><ArtistProfile /></ProtectedRoute>} />
+        <Route path="/artista/:id" element={<ProtectedRoute><ArtistProfile /></ProtectedRoute>} />
+        <Route path="/editar-perfil" element={<ProtectedRoute><EditarPerfil /></ProtectedRoute>} />
+        <Route path="/meu-portfolio" element={<ProtectedRoute><MeuPortfolio /></ProtectedRoute>} />
+        <Route path="/seguidores" element={<ProtectedRoute><Seguidores /></ProtectedRoute>} />
+        <Route path="/seguindo" element={<ProtectedRoute><Seguindo /></ProtectedRoute>} />
 
-        {/* Recursos do usuário */}
-        <Route path="/salvos" element={<Salvos />} />
-        <Route path="/encomendas" element={<Encomendas />} />
-        <Route path="/estatisticas" element={<Estatisticas />} />
+        {/* Recursos do usuário — rotas protegidas */}
+        <Route path="/salvos" element={<ProtectedRoute><Salvos /></ProtectedRoute>} />
+        <Route path="/encomendas" element={<ProtectedRoute><Encomendas /></ProtectedRoute>} />
+        <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
 
-        {/* Administração */}
-        <Route path="/admin" element={<Admin />} />
+        {/* Administração — rota protegida */}
+        <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
 
         {/* Rota inexistente */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Routes>
-      <Chatbot />
+      <AIChatGuard />
     </>
   );
 }

@@ -1,108 +1,74 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { Link } from "react-router-dom";
-
-const artistasSeguidos = [
-  {
-    id: 1,
-    nome: "Marina Silva",
-    tipo: "Artista",
-    area: "Pintura Digital",
-    cidade: "São Paulo, SP",
-    obras: 48,
-    seguidores: "1.2k",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop",
-    destaque: true,
-  },
-  {
-    id: 2,
-    nome: "Gabriel Duarte",
-    tipo: "Artista",
-    area: "Arte Têxtil",
-    cidade: "Curitiba, PR",
-    obras: 32,
-    seguidores: "840",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
-    destaque: false,
-  },
-  {
-    id: 3,
-    nome: "Helena Matos",
-    tipo: "Artista",
-    area: "Ilustração Digital",
-    cidade: "São Paulo, SP",
-    obras: 64,
-    seguidores: "1.5k",
-    avatar:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200&auto=format&fit=crop",
-    destaque: true,
-  },
-  {
-    id: 4,
-    nome: "Luan Rocha",
-    tipo: "Artista",
-    area: "Modelagem 3D",
-    cidade: "Rio de Janeiro, RJ",
-    obras: 29,
-    seguidores: "2.1k",
-    avatar:
-      "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=200&auto=format&fit=crop",
-    destaque: false,
-  },
-];
+import { useAuth } from "../contexts/AuthContext";
+import { usuarioService, getMediaUrl } from "../services/api";
 
 const filtros = [
   { id: "Todos", label: "Todos" },
-  { id: "Pintura Digital", label: "Pintura Digital" },
-  { id: "Arte Têxtil", label: "Têxtil" },
-  { id: "Modelagem 3D", label: "3D Art" },
-  { id: "Ilustração Digital", label: "Ilustração" },
+  { id: "artista", label: "Artistas" },
+  { id: "cliente", label: "Clientes" },
 ];
 
 export default function Seguindo() {
+  const [searchParams] = useSearchParams();
+  const { user: authUser } = useAuth();
+
+  const targetId = searchParams.get("usuario_id") || authUser?.id;
+  const isOwner = authUser && String(authUser.id) === String(targetId);
+
+  const [seguindoLista, setSeguindoLista] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filtroAtual, setFiltroAtual] = useState("Todos");
   const [termoBusca, setTermoBusca] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
 
-  const tipoVisualizacao = "visitante"; // Simulação de tipo de visualização - pode ser "dono" ou "visitante"
-  const isOwner = tipoVisualizacao === "dono";
+  const carregarSeguindo = async () => {
+    if (!targetId) return;
+    try {
+      setLoading(true);
+      const lista = await usuarioService.listarSeguindo(targetId);
+      setSeguindoLista(lista);
+    } catch (err) {
+      console.error("Erro ao carregar lista de pessoas seguidas:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const artistasFiltrados = artistasSeguidos.filter((artista) => {
-    const termo = termoBusca.toLowerCase();
-
-    const correspondeBusca =
-      artista.nome.toLowerCase().includes(termo) ||
-      artista.area.toLowerCase().includes(termo) ||
-      artista.cidade.toLowerCase().includes(termo) ||
-      artista.tipo.toLowerCase().includes(termo);
-
-    const correspondeFiltro =
-      filtroAtual === "Todos" || artista.area === filtroAtual;
-
-    return correspondeBusca && correspondeFiltro;
-  });
-
-  const totalDestaques = artistasSeguidos.filter(
-    (artista) => artista.destaque
-  ).length;
-
-  const totalObras = artistasSeguidos.reduce(
-    (total, artista) => total + artista.obras,
-    0
-  );
+  useEffect(() => {
+    carregarSeguindo();
+  }, [targetId]);
 
   const mostrarAviso = (mensagem) => {
     setNoticeMessage(mensagem);
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const handleAcaoFutura = () => {
-    mostrarAviso(
-      "A ação real de deixar de seguir será integrada futuramente ao backend."
-    );
+  const handleDeixarDeSeguir = async (usrItem) => {
+    try {
+      await usuarioService.deixarDeSeguir(usrItem.id);
+      setSeguindoLista((prev) => prev.filter((item) => item.id !== usrItem.id));
+      mostrarAviso(`Você deixou de seguir ${usrItem.nome}.`);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao deixar de seguir.", "error");
+    }
   };
+
+  const seguindoFiltrados = seguindoLista.filter((item) => {
+    const termo = termoBusca.toLowerCase();
+    const correspondeBusca =
+      (item.nome || "").toLowerCase().includes(termo) ||
+      (item.email || "").toLowerCase().includes(termo) ||
+      (item.biografia || "").toLowerCase().includes(termo);
+
+    const correspondeFiltro =
+      filtroAtual === "Todos" || item.tipo_conta === filtroAtual;
+
+    return correspondeBusca && correspondeFiltro;
+  });
+
+  const totalArtistas = seguindoLista.filter((s) => s.tipo_conta === "artista").length;
 
   return (
     <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
@@ -114,8 +80,8 @@ export default function Seguindo() {
         <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
-              <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                Sua rede artística
+              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
+                Comunidade artística
               </span>
 
               <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
@@ -124,14 +90,14 @@ export default function Seguindo() {
 
               <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
                 {isOwner
-                  ? "Acompanhe os artistas, galerias e criadores que você segue dentro da comunidade Artfolio."
-                  : "Veja os artistas e criadores acompanhados por este perfil dentro da comunidade Artfolio."}
+                  ? "Acompanhe as atualizações dos artistas e perfis que você escolheu seguir dentro do Artfolio."
+                  : "Perfis acompanhados por este usuário na plataforma."}
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                to="/perfil"
+                to={targetId ? `/artista/${targetId}` : "/perfil"}
                 className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
               >
                 <i className="fa-solid fa-arrow-left mr-2"></i>
@@ -156,68 +122,27 @@ export default function Seguindo() {
             </div>
           )}
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{artistasSeguidos.length}</p>
+              <p className="text-2xl font-black">{seguindoLista.length}</p>
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Seguindo
+                Pessoas Seguidas
               </span>
             </div>
 
             <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">1.2k</p>
+              <p className="text-2xl font-black">{totalArtistas}</p>
               <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Seguidores
+                Artistas Acompanhados
               </span>
             </div>
-
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{totalDestaques}</p>
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Destaques
-              </span>
-            </div>
-
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{totalObras}</p>
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Obras no radar
-              </span>
-            </div>
-          </section>
-
-          <section className="bg-artPurple/5 border border-artPurple/10 rounded-[1.7rem] p-5 mb-8 flex flex-col md:flex-row gap-4 md:items-center justify-between">
-            <div className="flex gap-4">
-              <div className="w-11 h-11 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
-                <i className="fa-solid fa-user-check"></i>
-              </div>
-
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest">
-                  Curadoria pessoal
-                </h2>
-
-                <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
-                  No backend, esta lista será carregada conforme o usuário
-                  autenticado. Deixar de seguir será uma ação real apenas depois
-                  da integração.
-                </p>
-              </div>
-            </div>
-
-            <Link
-              to="/buscar"
-              className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-            >
-              Buscar artistas
-            </Link>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <aside className="lg:col-span-3 space-y-4">
               <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
                 <h2 className="font-editorial text-2xl italic mb-4">
-                  Categorias
+                  Filtros
                 </h2>
 
                 <div className="space-y-2">
@@ -237,49 +162,18 @@ export default function Seguindo() {
                   ))}
                 </div>
               </div>
-
-              <div className="bg-artDark text-white rounded-[1.7rem] p-5 relative overflow-hidden">
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Curadoria pessoal
-                </span>
-
-                <h3 className="font-editorial text-2xl italic leading-tight">
-                  Seu feed aprende com quem você segue.
-                </h3>
-
-                <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Seguir artistas ajuda o sistema a destacar obras mais próximas
-                  dos seus interesses.
-                </p>
-
-                <i className="fa-solid fa-user-check absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
-              </div>
-
-              <div className="bg-artBlue/5 border border-artBlue/10 rounded-[1.7rem] p-5">
-                <h3 className="text-xs font-bold uppercase tracking-widest mb-2">
-                  Integração futura
-                </h3>
-
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  A lista de perfis seguidos e a recomendação do feed serão
-                  controladas futuramente pelo backend com base no usuário
-                  logado.
-                </p>
-              </div>
             </aside>
 
             <section className="lg:col-span-9">
               <div className="bg-white rounded-[2rem] border border-black/5 p-4 sm:p-5 lg:p-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                   <div>
-                    <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
-                      Artistas acompanhados
+                    <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Minhas conexões
                     </span>
 
                     <h2 className="font-editorial text-3xl italic">
-                      {isOwner
-                        ? "Pessoas que você segue"
-                        : "Pessoas acompanhadas"}
+                      Pessoas acompanhadas
                     </h2>
                   </div>
 
@@ -290,109 +184,88 @@ export default function Seguindo() {
                       type="text"
                       value={termoBusca}
                       onChange={(event) => setTermoBusca(event.target.value)}
-                      placeholder="Buscar artista..."
+                      placeholder="Buscar por nome..."
                       className="w-full bg-[#F9F8F6] rounded-full pl-11 pr-5 py-3 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                     />
                   </div>
                 </div>
 
-                {artistasFiltrados.length === 0 ? (
+                {loading ? (
+                  <div className="bg-[#F9F8F6] rounded-[1.7rem] p-12 text-center">
+                    <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-3"></i>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                      Carregando pessoas seguidas...
+                    </p>
+                  </div>
+                ) : seguindoFiltrados.length === 0 ? (
                   <div className="bg-[#F9F8F6] rounded-[1.7rem] p-8 sm:p-12 text-center">
-                    <i className="fa-solid fa-user-slash text-4xl text-gray-200 mb-4"></i>
+                    <i className="fa-solid fa-users-slash text-4xl text-gray-200 mb-4"></i>
 
                     <h3 className="font-editorial text-3xl italic">
-                      Nenhum perfil encontrado.
+                      Nenhuma pessoa encontrada.
                     </h3>
 
                     <p className="text-sm text-gray-500 mt-2">
-                      Tente buscar por outro nome, cidade ou categoria artística.
+                      Você ainda não está seguindo nenhum usuário correspondente ao filtro.
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {artistasFiltrados.map((artista) => (
+                  <div className="space-y-3">
+                    {seguindoFiltrados.map((seguido) => (
                       <article
-                        key={artista.id}
-                        className="group bg-[#F9F8F6] rounded-[1.7rem] p-4 border border-black/5 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
+                        key={seguido.id}
+                        className="group bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5 flex flex-col md:flex-row md:items-center gap-4 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-2xl overflow-hidden bg-artPurple shrink-0">
-                            <img
-                              src={artista.avatar}
-                              alt={artista.nome}
-                              className="w-full h-full object-cover"
-                            />
+                        <div className="flex items-center gap-4 flex-1">
+                          <div className="w-14 h-14 rounded-2xl overflow-hidden bg-artPurple/10 shrink-0">
+                            {seguido.fotoPerfil ? (
+                              <img
+                                src={getMediaUrl(seguido.fotoPerfil)}
+                                alt={seguido.nome}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center font-editorial text-2xl text-artPurple">
+                                {seguido.nome?.charAt(0)?.toUpperCase() || "A"}
+                              </div>
+                            )}
                           </div>
 
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
+                          <div>
+                            <div className="flex flex-wrap gap-2 items-center">
                               <h3 className="font-bold text-base">
-                                {artista.nome}
+                                {seguido.nome}
                               </h3>
 
-                              <span className="bg-white border border-black/5 text-gray-400 px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                                {artista.tipo}
+                              <span className="bg-white border border-black/5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400">
+                                {seguido.tipo_conta === "artista" ? "Artista" : "Cliente"}
                               </span>
-
-                              {artista.destaque && (
-                                <span className="bg-artPurple/10 text-artPurple px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                                  Pro
-                                </span>
-                              )}
                             </div>
 
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
-                              {artista.area}
-                            </p>
-
-                            <p className="text-sm text-gray-500 mt-1">
-                              <i className="fa-solid fa-location-dot mr-1 text-artBlue"></i>
-                              {artista.cidade}
-                            </p>
+                            {seguido.biografia && (
+                              <p className="text-xs text-gray-500 line-clamp-1 mt-1 font-light">
+                                {seguido.biografia}
+                              </p>
+                            )}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 mt-4">
-                          <div className="bg-white rounded-[1.2rem] p-3 border border-black/5">
-                            <p className="font-black">{artista.obras}</p>
-                            <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">
-                              Obras
-                            </span>
-                          </div>
-
-                          <div className="bg-white rounded-[1.2rem] p-3 border border-black/5">
-                            <p className="font-black">
-                              {artista.seguidores}
-                            </p>
-                            <span className="text-[8px] uppercase tracking-widest font-bold text-gray-400">
-                              Seguidores
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex gap-2">
                           <Link
-                            to="/perfil"
-                            className="text-center bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
+                            to={`/artista/${seguido.id}`}
+                            className="px-4 py-2.5 rounded-full bg-white border border-black/5 text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
                           >
-                            Ver Perfil
+                            Ver perfil
                           </Link>
 
-                          {isOwner ? (
+                          {isOwner && (
                             <button
                               type="button"
-                              onClick={handleAcaoFutura}
-                              className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold text-gray-400 hover:bg-artOrange hover:text-white transition-all"
+                              onClick={() => handleDeixarDeSeguir(seguido)}
+                              className="px-4 py-2.5 rounded-full text-xs font-bold bg-white border border-black/5 text-gray-500 hover:bg-red-500 hover:text-white transition-all"
                             >
                               Deixar de seguir
                             </button>
-                          ) : (
-                            <Link
-                              to="/mensagens"
-                              className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
-                            >
-                              Mensagem
-                            </Link>
                           )}
                         </div>
                       </article>

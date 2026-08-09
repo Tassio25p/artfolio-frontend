@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { Link } from "react-router-dom";
-import { feedService, obrasService, usuarioService, getUser, getToken } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { feedService, obrasService, usuarioService, getMediaUrl } from "../services/api";
+import MenuOpcoes from "../components/MenuOpcoes";
+import ModalDenuncia from "../components/ModalDenuncia";
 
 const filtros = [
   { id: "Tudo", label: "Tudo" },
@@ -18,16 +21,12 @@ export default function Home() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const currentUser = getUser();
+  const { user: currentUser } = useAuth();
   const tipoUsuario = currentUser?.tipo_conta || "cliente";
   const isArtista = tipoUsuario === "artista";
 
   const carregarFeed = async () => {
     try {
-      if (!getToken()) {
-        setLoading(false);
-        return;
-      }
       const feedData = await feedService.obterFeed();
       if (Array.isArray(feedData)) {
         setPosts(feedData);
@@ -57,7 +56,6 @@ export default function Home() {
       } else {
         await obrasService.curtir(postId);
       }
-      // Atualizar localmente
       setPosts((prevPosts) =>
         prevPosts.map((post) => {
           if (post.id === postId) {
@@ -75,6 +73,42 @@ export default function Home() {
     }
   };
 
+  const handleToggleSave = async (postId, estaSalvo) => {
+    try {
+      if (estaSalvo) {
+        await obrasService.removerSalvo(postId);
+        mostrarAviso("Obra removida dos salvos com sucesso.", "info");
+      } else {
+        await obrasService.salvarObra(postId);
+        mostrarAviso("Obra salva com sucesso!", "info");
+      }
+      setPosts((prevPosts) =>
+        prevPosts.map((post) => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              salvo_por_mim: !estaSalvo,
+            };
+          }
+          return post;
+        })
+      );
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao alterar salvamento da obra.", "error");
+    }
+  };
+
+  const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
+  const [denunciaAtual, setDenunciaAtual] = useState({ idPostagem: null, alvo: "" });
+
+  const handleAbrirDenuncia = (post) => {
+    setDenunciaAtual({
+      idPostagem: post.id,
+      alvo: post.legenda || `Obra #${post.id} por ${post.usuario?.nome || "Artista"}`,
+    });
+    setModalDenunciaAberto(true);
+  };
+
   const handleToggleFollow = async (usuarioId, estaSeguindo) => {
     try {
       if (estaSeguindo) {
@@ -82,7 +116,6 @@ export default function Home() {
       } else {
         await usuarioService.seguir(usuarioId);
       }
-      // Atualizar localmente todas as postagens daquele autor no feed
       setPosts((prevPosts) =>
         prevPosts.map((post) => {
           if (post.usuario?.id === usuarioId) {
@@ -219,7 +252,10 @@ export default function Home() {
                       post={post}
                       currentUserId={currentUser?.id}
                       onToggleLike={() => handleToggleLike(post.id, post.curtido_por_mim)}
+                      onToggleSave={() => handleToggleSave(post.id, post.salvo_por_mim)}
                       onToggleFollow={() => handleToggleFollow(post.usuario?.id, post.seguindo_usuario)}
+                      onDenunciar={() => handleAbrirDenuncia(post)}
+                      mostrarAviso={mostrarAviso}
                     />
                   ))}
                 </div>
@@ -263,22 +299,44 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      <ModalDenuncia
+        aberto={modalDenunciaAberto}
+        onFechar={() => setModalDenunciaAberto(false)}
+        postagemId={denunciaAtual.idPostagem}
+        alvo={denunciaAtual.alvo}
+        onSucesso={(msg) => mostrarAviso(msg, "info")}
+        onErro={(msg) => mostrarAviso(msg, "error")}
+      />
     </div>
   );
 }
 
-function FeedCard({ post, currentUserId, onToggleLike, onToggleFollow }) {
+function FeedCard({ post, currentUserId, onToggleLike, onToggleSave, onToggleFollow, onDenunciar, mostrarAviso }) {
   const isMe = currentUserId === post.usuario?.id;
 
   return (
-    <article className="break-inside-avoid bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all group mb-6">
-      <Link to={`/obra/${post.id}`} className="block overflow-hidden">
-        <img
-          src={post.arquivoUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
-          alt={post.legenda || "Obra"}
-          className="w-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
-      </Link>
+    <article className="break-inside-avoid bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all group mb-6 relative">
+      <div className="relative overflow-hidden">
+        <Link to={`/obra/${post.id}`} className="block">
+          <img
+            src={getMediaUrl(post.arquivoUrl) || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
+            alt={post.legenda || "Obra"}
+            className="w-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        </Link>
+
+        <div className="absolute top-3 right-3 z-10">
+          <MenuOpcoes
+            tipo="obra"
+            detalhesLink={`/obra/${post.id}`}
+            isSalvo={post.salvo_por_mim}
+            onSalvar={onToggleSave}
+            onDenunciar={onDenunciar}
+            onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "info")}
+          />
+        </div>
+      </div>
 
       <div className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -302,10 +360,14 @@ function FeedCard({ post, currentUserId, onToggleLike, onToggleFollow }) {
         {/* Autor */}
         <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-black/5">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0">
+            <Link
+              to={isMe ? "/perfil" : `/artista/${post.usuario?.id}`}
+              className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-opacity"
+              title={`Ver perfil de ${post.usuario?.nome || "Artista"}`}
+            >
               {post.usuario?.fotoPerfil ? (
                 <img
-                  src={post.usuario.fotoPerfil}
+                  src={getMediaUrl(post.usuario.fotoPerfil)}
                   alt={post.usuario.nome}
                   className="w-full h-full object-cover"
                 />
@@ -314,10 +376,15 @@ function FeedCard({ post, currentUserId, onToggleLike, onToggleFollow }) {
                   {post.usuario?.nome?.charAt(0)?.toUpperCase() || "A"}
                 </div>
               )}
-            </div>
+            </Link>
 
             <div className="min-w-0">
-              <p className="text-sm font-bold truncate">{post.usuario?.nome || "Artista"}</p>
+              <Link
+                to={isMe ? "/perfil" : `/artista/${post.usuario?.id}`}
+                className="text-sm font-bold truncate block hover:text-artPurple transition-colors"
+              >
+                {post.usuario?.nome || "Artista"}
+              </Link>
               <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
                 {post.usuario?.tipo_conta || "artista"} • {post.seguidores} seguidores
               </p>
@@ -348,9 +415,21 @@ function FeedCard({ post, currentUserId, onToggleLike, onToggleFollow }) {
               className={`flex items-center gap-1.5 transition-colors ${
                 post.curtido_por_mim ? "text-red-500" : "text-gray-400 hover:text-red-500"
               }`}
+              title={post.curtido_por_mim ? "Remover curtida" : "Curtir obra"}
             >
               <i className={post.curtido_por_mim ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
               <span>{post.likes}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleSave}
+              className={`flex items-center gap-1.5 transition-colors ${
+                post.salvo_por_mim ? "text-artPurple" : "text-gray-400 hover:text-artPurple"
+              }`}
+              title={post.salvo_por_mim ? "Remover dos salvos" : "Salvar obra"}
+            >
+              <i className={post.salvo_por_mim ? "fa-solid fa-bookmark" : "fa-regular fa-bookmark"}></i>
             </button>
 
             <Link

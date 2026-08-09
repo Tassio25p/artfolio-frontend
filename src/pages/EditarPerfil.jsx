@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import { Link, useNavigate } from "react-router-dom";
-import { authService, usuarioService, getUser, getToken } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { authService, usuarioService, getMediaUrl } from "../services/api";
 
 const categorias = [
   { value: "pintura-digital", label: "Pintura Digital" },
@@ -35,6 +36,7 @@ function EditarPerfil() {
   // Estados de controle
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
   const [noticeType, setNoticeType] = useState("info"); // "info" | "success" | "error"
 
@@ -45,13 +47,10 @@ function EditarPerfil() {
   const restanteNome = nomeSeparado.slice(1).join(" ");
 
   // Carregar dados do usuário ao montar o componente
+  const { user: authUser, refreshUser } = useAuth();
+
   useEffect(() => {
     const carregarPerfil = async () => {
-      if (!getToken()) {
-        navigate("/login");
-        return;
-      }
-
       try {
         const usuario = await authService.getMe();
         setNome(usuario.nome || "");
@@ -62,7 +61,7 @@ function EditarPerfil() {
         setWebsite(usuario.website || "");
         setPortfolio(usuario.portfolio || "");
         setFotoPerfil(usuario.fotoPerfil || "");
-        setImagePreview(usuario.fotoPerfil || "");
+        setImagePreview(getMediaUrl(usuario.fotoPerfil) || "");
         setTipoConta(usuario.tipo_conta || "cliente");
         setEmail(usuario.email || "");
       } catch (error) {
@@ -82,24 +81,50 @@ function EditarPerfil() {
     setTimeout(() => setNoticeMessage(""), 5000);
   };
 
-  const handleFileChange = (event) => {
+  const handleFileChange = async (event) => {
     const file = event.target.files[0];
-
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      mostrarAviso("Selecione apenas arquivos de imagem.", "error");
+      mostrarAviso("Selecione apenas arquivos de imagem (JPG, PNG, WEBP).", "error");
       return;
     }
 
-    const reader = new FileReader();
+    if (file.size > 5 * 1024 * 1024) {
+      mostrarAviso("A imagem excede o tamanho máximo permitido de 5 MB.", "error");
+      return;
+    }
 
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-      setNomeArquivo(file.name);
-    };
+    setUploadingPhoto(true);
+    try {
+      const usuarioAtualizado = await usuarioService.uploadFotoPerfil(file);
+      const novaFoto = usuarioAtualizado.fotoPerfil;
+      setFotoPerfil(novaFoto || "");
+      setImagePreview(getMediaUrl(novaFoto) || "");
+      setNomeArquivo("");
+      await refreshUser();
+      mostrarAviso("Foto de perfil atualizada com sucesso!", "success");
+    } catch (error) {
+      mostrarAviso(error.message || "Erro ao fazer upload da foto de perfil.", "error");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
-    reader.readAsDataURL(file);
+  const handleRemoverFoto = async () => {
+    setUploadingPhoto(true);
+    try {
+      await usuarioService.removerFotoPerfil();
+      setFotoPerfil("");
+      setImagePreview("");
+      setNomeArquivo("");
+      await refreshUser();
+      mostrarAviso("Foto de perfil removida com sucesso!", "success");
+    } catch (error) {
+      mostrarAviso(error.message || "Erro ao remover a foto de perfil.", "error");
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -107,11 +132,8 @@ function EditarPerfil() {
     setSaving(true);
 
     try {
-      // Montar objeto apenas com os campos que serão atualizados
       const dados = {};
-
-      // Comparar com dados atuais do localStorage para enviar apenas alterações
-      const usuarioAtual = getUser();
+      const usuarioAtual = authUser;
 
       if (nome !== (usuarioAtual?.nome || "")) dados.nome = nome;
       if (telefone !== (usuarioAtual?.telefone || "")) dados.telefone = telefone || null;
@@ -120,7 +142,6 @@ function EditarPerfil() {
       if (behance !== (usuarioAtual?.behance || "")) dados.behance = behance || null;
       if (website !== (usuarioAtual?.website || "")) dados.website = website || null;
       if (portfolio !== (usuarioAtual?.portfolio || "")) dados.portfolio = portfolio || null;
-      if (fotoPerfil !== (usuarioAtual?.fotoPerfil || "")) dados.fotoPerfil = fotoPerfil || null;
 
       if (Object.keys(dados).length === 0) {
         mostrarAviso("Nenhuma alteração detectada.", "info");
@@ -130,7 +151,6 @@ function EditarPerfil() {
 
       const usuarioAtualizado = await usuarioService.atualizarPerfil(dados);
 
-      // Atualizar os estados com os dados retornados
       setNome(usuarioAtualizado.nome || "");
       setTelefone(usuarioAtualizado.telefone || "");
       setBiografia(usuarioAtualizado.biografia || "");
@@ -138,9 +158,8 @@ function EditarPerfil() {
       setBehance(usuarioAtualizado.behance || "");
       setWebsite(usuarioAtualizado.website || "");
       setPortfolio(usuarioAtualizado.portfolio || "");
-      setFotoPerfil(usuarioAtualizado.fotoPerfil || "");
-      setImagePreview(usuarioAtualizado.fotoPerfil || "");
 
+      await refreshUser();
       mostrarAviso("Perfil atualizado com sucesso!", "success");
     } catch (error) {
       mostrarAviso(error.message || "Erro ao salvar alterações.", "error");
@@ -247,8 +266,12 @@ function EditarPerfil() {
               <div className="bg-white rounded-[2rem] border border-black/5 p-5 sm:p-6 lg:sticky lg:top-8">
                 <div className="flex flex-col items-center text-center">
                   <div className="relative mb-5">
-                    <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-[2.3rem] overflow-hidden border-4 border-white shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500 bg-gray-100">
-                      {imagePreview ? (
+                    <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-[2.3rem] overflow-hidden border-4 border-white shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500 bg-gray-100 relative">
+                      {uploadingPhoto ? (
+                        <div className="w-full h-full bg-black/40 flex items-center justify-center text-white">
+                          <i className="fa-solid fa-spinner fa-spin text-2xl"></i>
+                        </div>
+                      ) : imagePreview ? (
                         <img
                           src={imagePreview}
                           alt="Foto de perfil"
@@ -262,16 +285,29 @@ function EditarPerfil() {
                     </div>
 
                     <label className="absolute -bottom-3 -right-3 w-12 h-12 rounded-full bg-artOrange text-white flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-artPurple transition-colors">
-                      <i className="fa-solid fa-camera text-sm"></i>
+                      <i className={`fa-solid ${uploadingPhoto ? "fa-spinner fa-spin" : "fa-camera"} text-sm`}></i>
 
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp"
                         onChange={handleFileChange}
+                        disabled={uploadingPhoto}
                         className="hidden"
                       />
                     </label>
                   </div>
+
+                  {fotoPerfil && (
+                    <button
+                      type="button"
+                      onClick={handleRemoverFoto}
+                      disabled={uploadingPhoto}
+                      className="text-xs font-bold text-red-500 hover:text-red-700 hover:underline flex items-center justify-center gap-1.5 mb-3"
+                    >
+                      <i className="fa-solid fa-trash text-[10px]"></i>
+                      Remover foto
+                    </button>
+                  )}
 
                   {nomeArquivo && (
                     <span className="text-[10px] text-artBlue font-bold mb-3">
@@ -368,23 +404,6 @@ function EditarPerfil() {
                       maxLength={1000}
                       className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm resize-none leading-relaxed"
                     ></textarea>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      URL da foto de perfil
-                    </label>
-
-                    <input
-                      type="url"
-                      value={fotoPerfil}
-                      onChange={(event) => {
-                        setFotoPerfil(event.target.value);
-                        setImagePreview(event.target.value);
-                      }}
-                      placeholder="https://exemplo.com/minha-foto.jpg"
-                      className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                    />
                   </div>
                 </div>
               </div>

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { obrasService, getUser } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
+import { obrasService } from "../services/api";
 
 const categorias = [
   { value: "1", label: "Pintura Digital" },
@@ -14,6 +15,7 @@ const categorias = [
 
 function CriarObra() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [titulo, setTitulo] = useState("");
   const [legenda, setLegenda] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -61,7 +63,7 @@ function CriarObra() {
       return;
     }
 
-    const usuario = getUser();
+    const usuario = user;
     if (!usuario) {
       mostrarAviso("Você precisa estar logado para publicar uma obra.");
       return;
