@@ -284,7 +284,7 @@ export default function Salvos() {
                               onClick={() => handleRemoverSalvo(obra.id)}
                               className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1.5"
                             >
-                              <i className="fa-solid fa-bookmark text-artPurple"></i>
+                              <i className="fa-solid fa-bookmark text-amber-500"></i>
                               Remover dos salvos
                             </button>
 

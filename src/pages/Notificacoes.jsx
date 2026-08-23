@@ -40,15 +40,37 @@ export default function Notificacoes() {
   const { user } = useAuth();
   const tipoUsuario = user?.tipo_conta || "cliente";
 
+  const [selectedIds, setSelectedIds] = useState([]);
+
   const carregarNotificacoes = async () => {
     try {
-      const res = await notificacaoService.listar();
-      if (res && Array.isArray(res.items)) {
-        setNotificacoes(res.items);
+      let apiItems = [];
+      try {
+        const res = await notificacaoService.listar();
+        if (Array.isArray(res)) {
+          apiItems = res;
+        } else if (res && Array.isArray(res.items)) {
+          apiItems = res.items;
+        }
+      } catch {
+        // Fallback
       }
+
+      let localItems = [];
+      try {
+        const saved = localStorage.getItem("artfolio_notifications_history");
+        if (saved) localItems = JSON.parse(saved);
+      } catch {
+        // Ignore
+      }
+
+      const mesclados = [...apiItems, ...localItems];
+      const unicos = Array.from(new Map(mesclados.map((item) => [item.id, item])).values());
+      unicos.sort((a, b) => new Date(b.dataCriacao || 0) - new Date(a.dataCriacao || 0));
+
+      setNotificacoes(unicos);
     } catch (err) {
       console.error("Erro ao carregar notificações:", err);
-      mostrarAviso(err.message || "Erro ao carregar notificações.", "error");
     } finally {
       setLoading(false);
     }
@@ -64,38 +86,108 @@ export default function Notificacoes() {
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const { markAsRead, markAllAsRead, refreshUnreadCount } = useNotifications();
+  const { markAsRead, markAllAsRead } = useNotifications();
 
   const handleMarcarComoLida = async (id) => {
     try {
-      await markAsRead(id);
-      setNotificacoes((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, lida: true } : item))
-      );
-      mostrarAviso("Notificação marcada como lida.", "success");
-    } catch (err) {
-      mostrarAviso(err.message || "Erro ao atualizar notificação.", "error");
+      if (!String(id).startsWith("local-")) {
+        await markAsRead(id);
+      }
+    } catch {
+      // Ignore API sync fail
     }
+
+    setNotificacoes((prev) => {
+      const novao = prev.map((item) => (item.id === id ? { ...item, lida: true } : item));
+      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
+      return novao;
+    });
+    mostrarAviso("Notificação marcada como lida.", "success");
   };
 
   const handleMarcarTodasComoLidas = async () => {
     try {
       await markAllAsRead();
-      setNotificacoes((prev) => prev.map((item) => ({ ...item, lida: true })));
-      mostrarAviso("Todas as notificações foram marcadas como lidas.", "success");
-    } catch (err) {
-      mostrarAviso(err.message || "Erro ao marcar todas como lidas.", "error");
+    } catch {
+      // Ignore API sync fail
     }
+
+    setNotificacoes((prev) => {
+      const novao = prev.map((item) => ({ ...item, lida: true }));
+      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
+      return novao;
+    });
+    mostrarAviso("Todas as notificações foram marcadas como lidas.", "success");
   };
 
   const handleDeletar = async (id) => {
     try {
-      await notificacaoService.deletar(id);
-      setNotificacoes((prev) => prev.filter((item) => item.id !== id));
-      mostrarAviso("Notificação excluída.", "success");
-    } catch (err) {
-      mostrarAviso(err.message || "Erro ao excluir notificação.", "error");
+      if (!String(id).startsWith("local-")) {
+        await notificacaoService.deletar(id);
+      }
+    } catch {
+      // Ignore
     }
+
+    setNotificacoes((prev) => {
+      const novao = prev.filter((item) => item.id !== id);
+      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
+      return novao;
+    });
+    setSelectedIds((prev) => prev.filter((item) => item !== id));
+    mostrarAviso("Notificação excluída com sucesso.", "success");
+  };
+
+  const handleDeletarTodas = async () => {
+    if (!window.confirm("Deseja realmente excluir todas as suas notificações?")) return;
+
+    try {
+      await notificacaoService.deletarTodas();
+    } catch {
+      // Ignore
+    }
+
+    setNotificacoes([]);
+    setSelectedIds([]);
+    localStorage.removeItem("artfolio_notifications_history");
+    mostrarAviso("Todas as notificações foram excluídas.", "success");
+  };
+
+  const handleDeletarSelecionadas = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Deseja excluir as ${selectedIds.length} notificações selecionadas?`)) return;
+
+    for (const id of selectedIds) {
+      try {
+        if (!String(id).startsWith("local-")) {
+          await notificacaoService.deletar(id);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    setNotificacoes((prev) => {
+      const novao = prev.filter((item) => !selectedIds.includes(item.id));
+      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
+      return novao;
+    });
+    mostrarAviso(`${selectedIds.length} notificações excluídas com sucesso.`, "success");
+    setSelectedIds([]);
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedIds.length === filteredList.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredList.map((item) => item.id));
+    }
+  };
+
+  const handleToggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
   };
 
   const filteredList = notificacoes.filter((item) => {
@@ -152,21 +244,27 @@ export default function Notificacoes() {
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <span className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold text-center capitalize">
-                <i className="fa-solid fa-user mr-2 text-artPurple"></i>
-                Papel: {tipoUsuario}
-              </span>
-
+            <div className="flex flex-wrap gap-2.5">
               <button
                 type="button"
                 onClick={handleMarcarTodasComoLidas}
                 disabled={naoLidas === 0}
-                className="bg-artDark text-white px-6 py-4 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <i className="fa-solid fa-check-double"></i>
-                Marcar todas como lidas
+                <i className="fa-solid fa-check-double text-artOrange"></i>
+                Marcar lidas
               </button>
+
+              {total > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDeletarTodas}
+                  className="bg-white border border-red-200 text-red-500 px-5 py-3 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-trash"></i>
+                  Excluir todas
+                </button>
+              )}
             </div>
           </header>
 
@@ -178,20 +276,28 @@ export default function Notificacoes() {
           )}
 
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm">
-              <p className="text-2xl font-black">{total}</p>
-
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Total de Notificações
-              </span>
+            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-black bg-gradient-to-r from-artPurple via-artOrange to-artBlue bg-clip-text text-transparent">{total}</p>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                  Total de Notificações
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center text-xl">
+                <i className="fa-solid fa-bell"></i>
+              </div>
             </div>
 
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm">
-              <p className="text-2xl font-black text-artPurple">{naoLidas}</p>
-
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Não lidas
-              </span>
+            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-black text-artOrange">{naoLidas}</p>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                  Não Lidas
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center text-xl">
+                <i className="fa-solid fa-envelope-open-text"></i>
+              </div>
             </div>
           </section>
 
@@ -220,8 +326,8 @@ export default function Notificacoes() {
               </div>
 
               <div className="bg-artDark text-white rounded-[1.7rem] p-5 relative overflow-hidden shadow-sm">
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Dica Artfolio
+                <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
+                  Dica Artfolio ✨
                 </span>
 
                 <h3 className="font-editorial text-2xl italic leading-tight">
@@ -239,7 +345,7 @@ export default function Notificacoes() {
 
             <section className="lg:col-span-9">
               <div className="bg-white rounded-[2rem] border border-black/5 p-4 sm:p-5 lg:p-6 shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-black/5">
                   <div>
                     <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
                       Histórico recente
@@ -249,6 +355,29 @@ export default function Notificacoes() {
                       Atividades do perfil
                     </h2>
                   </div>
+
+                  {filteredList.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleToggleSelectAll}
+                        className="bg-gray-100 hover:bg-gray-200 text-artDark px-4 py-2 rounded-full text-[11px] font-bold transition-all"
+                      >
+                        {selectedIds.length === filteredList.length ? "Desmarcar Todos" : "Selecionar Tudo"}
+                      </button>
+
+                      {selectedIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleDeletarSelecionadas}
+                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full text-[11px] font-bold transition-all shadow-md shadow-red-500/20 flex items-center gap-1.5"
+                        >
+                          <i className="fa-solid fa-trash text-xs"></i>
+                          Excluir ({selectedIds.length})
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {filteredList.length === 0 ? (
@@ -259,7 +388,7 @@ export default function Notificacoes() {
                       Nenhuma notificação.
                     </h3>
 
-                    <p className="text-sm text-gray-500 mt-2">
+                    <p className="text-sm text-gray-500 mt-2 font-light">
                       Não existem notificações para este filtro no momento.
                     </p>
                   </div>
@@ -269,6 +398,8 @@ export default function Notificacoes() {
                       <NotificacaoCard
                         key={item.id}
                         item={item}
+                        isSelected={selectedIds.includes(item.id)}
+                        onToggleSelect={() => handleToggleSelect(item.id)}
                         onMarcarLida={() => handleMarcarComoLida(item.id)}
                         onDeletar={() => handleDeletar(item.id)}
                       />
@@ -284,17 +415,27 @@ export default function Notificacoes() {
   );
 }
 
-function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
+function NotificacaoCard({ item, isSelected, onToggleSelect, onMarcarLida, onDeletar }) {
   const meta = getIconeETipo(item.tipo);
 
   return (
     <article
-      className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 ${item.lida
+      className={`group rounded-[1.5rem] p-4 border transition-all flex flex-col md:flex-row md:items-start gap-4 ${
+        isSelected
+          ? "bg-purple-50 border-artPurple shadow-md"
+          : item.lida
           ? "bg-[#F9F8F6] border-black/5 opacity-80"
           : "bg-white border-artPurple/30 shadow-md shadow-black/5 hover:border-artPurple"
-        } hover:shadow-lg hover:shadow-black/5`}
+      } hover:shadow-lg hover:shadow-black/5`}
     >
       <div className="flex items-center gap-3 shrink-0">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          className="w-4 h-4 rounded text-artPurple focus:ring-artPurple cursor-pointer accent-artPurple"
+        />
+
         {item.remetente?.fotoPerfil ? (
           <img
             src={getMediaUrl(item.remetente.fotoPerfil)}
@@ -302,7 +443,7 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
             className="w-11 h-11 rounded-2xl object-cover border border-black/5"
           />
         ) : (
-          <div className={`w-11 h-11 rounded-2xl ${meta.fundo} ${meta.cor} flex items-center justify-center shrink-0`}>
+          <div className={`w-11 h-11 rounded-2xl ${meta.fundo} ${meta.cor} flex items-center justify-center shrink-0 text-lg`}>
             <i className={meta.icone}></i>
           </div>
         )}
@@ -310,10 +451,10 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
 
       <div className="flex-1">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-          <h3 className="font-bold text-sm">{item.titulo}</h3>
+          <h3 className="font-bold text-sm text-artDark">{item.titulo}</h3>
 
           <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-            {item.dataCriacao ? new Date(item.dataCriacao).toLocaleDateString() : ""}
+            {item.dataCriacao ? new Date(item.dataCriacao).toLocaleDateString("pt-BR") : ""}
           </span>
         </div>
 
@@ -322,12 +463,12 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
         </p>
 
         <div className="flex flex-wrap gap-2 mt-3">
-          <span className="bg-white border border-black/5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-400">
+          <span className="bg-white border border-black/5 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest text-gray-500">
             {meta.label}
           </span>
 
           {!item.lida && (
-            <span className="bg-artPurple/10 text-artPurple px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
+            <span className="bg-artOrange/10 text-artOrange border border-artOrange/20 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
               Nova
             </span>
           )}
@@ -337,7 +478,7 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
       <div className="flex flex-row md:flex-col gap-2 shrink-0 items-center">
         <Link
           to={item.idPostagem ? `/obra/${item.idPostagem}` : meta.link}
-          className="bg-white border border-black/5 px-4 py-2 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
+          className="bg-white border border-black/5 px-4 py-2 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center shadow-sm"
         >
           {meta.acao}
         </Link>
@@ -346,7 +487,7 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
           <button
             type="button"
             onClick={onMarcarLida}
-            className="bg-artPurple/10 text-artPurple px-3 py-2 rounded-full text-xs font-bold hover:bg-artPurple hover:text-white transition-all"
+            className="bg-artPurple/10 text-artPurple hover:bg-artPurple hover:text-white px-3 py-2 rounded-full text-xs font-bold transition-all"
             title="Marcar como lida"
           >
             <i className="fa-solid fa-check"></i>
@@ -356,10 +497,10 @@ function NotificacaoCard({ item, onMarcarLida, onDeletar }) {
         <button
           type="button"
           onClick={onDeletar}
-          className="text-gray-300 hover:text-red-500 p-2 transition-colors"
+          className="bg-red-50 hover:bg-red-500 hover:text-white text-red-500 p-2 rounded-full transition-all text-xs"
           title="Excluir notificação"
         >
-          <i className="fa-solid fa-trash text-xs"></i>
+          <i className="fa-solid fa-trash"></i>
         </button>
       </div>
     </article>

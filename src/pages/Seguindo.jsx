@@ -122,45 +122,38 @@ export default function Seguindo() {
             </div>
           )}
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-8">
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{seguindoLista.length}</p>
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Pessoas Seguidas
-              </span>
-            </div>
-
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-              <p className="text-2xl font-black">{totalArtistas}</p>
-              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                Artistas Acompanhados
-              </span>
+          <section className="mb-8">
+            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 flex items-center justify-between shadow-sm max-w-sm">
+              <div>
+                <p className="text-3xl font-black bg-gradient-to-r from-artPurple via-artOrange to-artBlue bg-clip-text text-transparent">
+                  {seguindoLista.length}
+                </p>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                  Perfis em Seguindo
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center text-xl">
+                <i className="fa-solid fa-users"></i>
+              </div>
             </div>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <aside className="lg:col-span-3 space-y-4">
-              <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                <h2 className="font-editorial text-2xl italic mb-4">
-                  Filtros
-                </h2>
+              <div className="bg-artDark text-white rounded-[1.7rem] p-6 relative overflow-hidden shadow-xl">
+                <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
+                  Inspiração Contínua ✨
+                </span>
 
-                <div className="space-y-2">
-                  {filtros.map((filtro) => (
-                    <button
-                      key={filtro.id}
-                      type="button"
-                      onClick={() => setFiltroAtual(filtro.id)}
-                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all ${
-                        filtroAtual === filtro.id
-                          ? "bg-artDark text-white shadow-md shadow-black/10"
-                          : "bg-[#F9F8F6] text-gray-400 hover:text-artDark hover:bg-[#eae7df]"
-                      }`}
-                    >
-                      {filtro.label}
-                    </button>
-                  ))}
-                </div>
+                <h3 className="font-editorial text-2xl italic leading-tight mb-2">
+                  Acompanhe quem inspira seu olhar.
+                </h3>
+
+                <p className="text-xs text-gray-400 leading-relaxed font-light">
+                  Manter-se conectado a outros criadores expande seus horizontes visuais e estimula novas ideias diariamente.
+                </p>
+
+                <i className="fa-solid fa-[#fa-compass] fa-compass absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
               </div>
             </aside>
 

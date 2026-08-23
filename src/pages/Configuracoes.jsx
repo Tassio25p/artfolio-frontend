@@ -39,8 +39,19 @@ export default function Configuracoes() {
   const [valorMinimo, setValorMinimo] = useState("150,00");
   const [prazoPadrao, setPrazoPadrao] = useState("10");
 
-  // Dados de bloqueados (manter local até backend suportar)
-  const [bloqueados] = useState(["Lucas Ferreira", "Gabriel Duarte"]);
+  // Dados reais de bloqueados persistidos no localStorage
+  const [bloqueados, setBloqueados] = useState(() => {
+    const saved = localStorage.getItem("artfolio_blocked_users");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [artistasCadastrados, setArtistasCadastrados] = useState([]);
 
   const isArtista = tipoConta === "artista" || tipoConta === "galeria";
 
@@ -51,14 +62,17 @@ export default function Configuracoes() {
   // Carregar dados do usuário ao montar o componente
   useEffect(() => {
     const carregarDados = async () => {
-
       try {
-        const usuario = await authService.getMe();
+        const [usuario, todosArtistas] = await Promise.all([
+          authService.getMe(),
+          usuarioService.listarArtistas().catch(() => []),
+        ]);
         setNome(usuario.nome || "");
         setEmail(usuario.email || "");
         setTelefone(usuario.telefone || "");
         setTipoConta(usuario.tipo_conta || "cliente");
         setAvatar(usuario.fotoPerfil || "");
+        setArtistasCadastrados(Array.isArray(todosArtistas) ? todosArtistas : []);
       } catch (error) {
         mostrarAviso("Erro ao carregar dados. Faça login novamente.", "error");
         setTimeout(() => navigate("/login"), 2000);
@@ -87,15 +101,7 @@ export default function Configuracoes() {
       label: "Notificações",
       icon: "fa-solid fa-bell",
     },
-    ...(isArtista
-      ? [
-          {
-            id: "encomendas",
-            label: "Encomendas",
-            icon: "fa-solid fa-handshake",
-          },
-        ]
-      : []),
+
     {
       id: "bloqueados",
       label: "Bloqueados",
@@ -622,8 +628,8 @@ export default function Configuracoes() {
                     />
 
                     <ToggleOption
-                      title="Alertas de moderação"
-                      description="Receber avisos quando suas obras mudarem de status na quarentena."
+                      title="Alertas da comunidade"
+                      description="Receber avisos quando outros artistas interagirem com suas obras."
                       active={notifModeracao}
                       onToggle={() => setNotifModeracao(!notifModeracao)}
                     />
@@ -631,93 +637,11 @@ export default function Configuracoes() {
                 </div>
               )}
 
-              {activeTab === "encomendas" && isArtista && (
-                <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6 transition-all duration-300">
-                  <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
-                        Área comercial
-                      </span>
-
-                      <h2 className="font-editorial text-3xl italic">
-                        Preferências de encomendas
-                      </h2>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAceitaEncomendas(!aceitaEncomendas)
-                      }
-                      className={`w-14 h-8 rounded-full p-1 transition-all shrink-0 ${
-                        aceitaEncomendas ? "bg-artBlue" : "bg-gray-300"
-                      }`}
-                    >
-                      <span
-                        className={`w-6 h-6 rounded-full bg-white block transition-all ${
-                          aceitaEncomendas
-                            ? "translate-x-6"
-                            : "translate-x-0"
-                        }`}
-                      ></span>
-                    </button>
-                  </div>
-
-                  <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-                    Ajuste se você está aberto a solicitações de artes ou
-                    projetos personalizados de clientes.
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                        Valor mínimo inicial (R$)
-                      </label>
-
-                      <input
-                        type="text"
-                        disabled={!aceitaEncomendas}
-                        value={valorMinimo}
-                        onChange={(event) =>
-                          setValorMinimo(event.target.value)
-                        }
-                        placeholder="Ex: 150,00"
-                        className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artBlue/20 text-sm disabled:opacity-50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                        Prazo padrão em dias
-                      </label>
-
-                      <input
-                        type="number"
-                        disabled={!aceitaEncomendas}
-                        value={prazoPadrao}
-                        onChange={(event) =>
-                          setPrazoPadrao(event.target.value)
-                        }
-                        placeholder="Ex: 7"
-                        className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artBlue/20 text-sm disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-5 bg-artBlue/5 border border-artBlue/10 rounded-[1.5rem] p-4">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      Essas preferências serão integradas ao backend futuramente
-                      para controlar o botão de encomenda no perfil público.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {activeTab === "bloqueados" && (
                 <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6 transition-all duration-300">
                   <div className="mb-6">
-                    <span className="text-red-400 font-bold tracking-widest uppercase text-[10px] block mb-1">
-                      Filtros de interação
+                    <span className="text-red-500 font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Filtros de interação & Segurança
                     </span>
 
                     <h2 className="font-editorial text-3xl italic">
@@ -726,43 +650,63 @@ export default function Configuracoes() {
                   </div>
 
                   <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                    Usuários bloqueados não poderão enviar mensagens, solicitar
-                    encomendas ou interagir com seu perfil quando o backend
-                    estiver integrado.
+                    Usuários bloqueados não podem enviar mensagens diretas para você nem interagir com suas publicações.
                   </p>
 
                   {bloqueados.length === 0 ? (
                     <div className="bg-[#F9F8F6] rounded-2xl p-8 text-center text-gray-400 text-sm italic">
-                      Nenhuma conta bloqueada.
+                      Nenhuma conta bloqueada no momento.
                     </div>
                   ) : (
                     <div className="divide-y divide-black/5">
-                      {bloqueados.map((user) => (
-                        <div
-                          key={user}
-                          className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0 last:pb-0"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center font-bold text-xs text-gray-600">
-                              {user.charAt(0)}
+                      {bloqueados.map((blockedId) => {
+                        const artistaObj = artistasCadastrados.find((a) => a.id === blockedId);
+                        const nomeExibicao = artistaObj?.nome || `Usuário #${blockedId}`;
+                        const fotoExibicao = artistaObj?.fotoPerfil ? getMediaUrl(artistaObj.fotoPerfil) : "";
+
+                        return (
+                          <div
+                            key={blockedId}
+                            className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0 last:pb-0"
+                          >
+                            <div className="flex items-center gap-3">
+                              {fotoExibicao ? (
+                                <img
+                                  src={fotoExibicao}
+                                  alt={nomeExibicao}
+                                  className="w-10 h-10 rounded-full object-cover border border-black/5"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">
+                                  {nomeExibicao.charAt(0)}
+                                </div>
+                              )}
+
+                              <div>
+                                <span className="font-bold text-sm text-artDark block">
+                                  {nomeExibicao}
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                  Status: Bloqueado
+                                </span>
+                              </div>
                             </div>
 
-                            <span className="font-bold text-sm">{user}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const novos = bloqueados.filter((id) => id !== blockedId);
+                                setBloqueados(novos);
+                                localStorage.setItem("artfolio_blocked_users", JSON.stringify(novos));
+                                mostrarAviso(`${nomeExibicao} foi desbloqueado com sucesso!`, "success");
+                              }}
+                              className="bg-red-50 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-full text-xs font-bold transition-all active:scale-95 w-fit"
+                            >
+                              Desbloquear
+                            </button>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleAcaoFutura(
-                                `O desbloqueio real de ${user} será integrado ao backend.`
-                              )
-                            }
-                            className="bg-red-50 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-full text-xs font-bold transition-all active:scale-95"
-                          >
-                            Desbloquear futuramente
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

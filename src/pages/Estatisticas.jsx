@@ -1,453 +1,265 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { Link } from "react-router-dom";
-
-const planoAtual = "PRO"; // Simulação de plano atual do usuário - pode ser "FREE", "PREMIUM" ou "PRO"
-
-const planos = {
-  FREE: {
-    nome: "Free",
-    descricao: "Acesso básico ao portfólio e recursos iniciais.",
-    liberaAvancado: false,
-  },
-  PREMIUM: {
-    nome: "Premium",
-    descricao: "Libera estatísticas intermediárias e mais recursos comerciais.",
-    liberaAvancado: true,
-  },
-  PRO: {
-    nome: "Pro",
-    descricao: "Libera estatísticas completas, destaque e análise avançada.",
-    liberaAvancado: true,
-  },
-};
-
-const estatisticasResumo = [
-  {
-    titulo: "Visualizações",
-    valor: "2.7k",
-    detalhe: "+18% este mês",
-    icone: "fa-regular fa-eye",
-  },
-  {
-    titulo: "Curtidas",
-    valor: "156",
-    detalhe: "+32 novas",
-    icone: "fa-regular fa-heart",
-  },
-  {
-    titulo: "Seguidores",
-    valor: "1.2k",
-    detalhe: "+84 novos",
-    icone: "fa-solid fa-users",
-  },
-  {
-    titulo: "Encomendas",
-    valor: "12",
-    detalhe: "R$ 3.8k estimado",
-    icone: "fa-solid fa-handshake",
-  },
-];
-
-const obrasMaisVistas = [
-  {
-    id: 1,
-    titulo: "Abstração em Tons de Púrpura",
-    categoria: "Pintura Digital",
-    views: "1.2k",
-    curtidas: 42,
-    crescimento: "+18%",
-    imagem:
-      "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800&auto=format&fit=crop",
-  },
-  {
-    id: 2,
-    titulo: "Ecos da Metrópole",
-    categoria: "3D Art",
-    views: "980",
-    curtidas: 87,
-    crescimento: "+24%",
-    imagem:
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800",
-  },
-  {
-    id: 3,
-    titulo: "Fragmentos de Vidro",
-    categoria: "Arte Conceitual",
-    views: "740",
-    curtidas: 64,
-    crescimento: "+11%",
-    imagem:
-      "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=800",
-  },
-];
-
-const meses = [
-  { mes: "Jan", valor: "h-24" },
-  { mes: "Fev", valor: "h-32" },
-  { mes: "Mar", valor: "h-20" },
-  { mes: "Abr", valor: "h-40" },
-  { mes: "Mai", valor: "h-28" },
-  { mes: "Jun", valor: "h-48" },
-];
+import { useAuth } from "../contexts/AuthContext";
+import { obrasService, usuarioService, getMediaUrl } from "../services/api";
 
 export default function Estatisticas() {
-  const [periodo, setPeriodo] = useState("30 dias");
-  const [noticeMessage, setNoticeMessage] = useState("");
+  const { user, isGuest } = useAuth();
+  const navigate = useNavigate();
 
-  const plano = planos[planoAtual];
-  const estatisticasLiberadas = plano.liberaAvancado;
+  const [perfil, setPerfil] = useState(null);
+  const [obras, setObras] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const mostrarAviso = (mensagem) => {
-    setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4000);
-  };
+  useEffect(() => {
+    if (isGuest) {
+      navigate("/feed");
+      return;
+    }
 
-  const handleUpgrade = () => {
-    mostrarAviso(
-      "A alteração real de plano será integrada futuramente ao backend e ao sistema de assinaturas."
+    const carregarMetricas = async () => {
+      try {
+        if (user?.id) {
+          const [perfilRes, obrasRes] = await Promise.all([
+            usuarioService.obterPerfil(user.id),
+            obrasService.listarObras({ usuario_id: user.id }),
+          ]);
+          setPerfil(perfilRes);
+          setObras(Array.isArray(obrasRes) ? obrasRes : []);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar estatísticas:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarMetricas();
+  }, [user, isGuest]);
+
+  if (loading) {
+    return (
+      <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased font-sans">
+        <Sidebar />
+        <main className="ml-16 min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-3"></i>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+              Carregando painel de estatísticas...
+            </p>
+          </div>
+        </main>
+      </div>
     );
-  };
+  }
 
-  const handlePeriodo = (novoPeriodo) => {
-    setPeriodo(novoPeriodo);
-    mostrarAviso(
-      "O filtro real por período será aplicado futuramente com dados vindos do backend."
-    );
-  };
+  // Cálculos agregados reais
+  const totalVisualizacoes = obras.reduce((acc, o) => acc + (o.visualizacoes || 0), 0);
+  const totalCurtidas = obras.reduce((acc, o) => acc + (o.totalCurtidas || 0), 0);
+  const totalComentarios = obras.reduce((acc, o) => acc + (o.totalComentarios || 0), 0);
+  const totalSalvos = obras.reduce((acc, o) => acc + (o.totalSalvos || 0), 0);
+  const totalSeguidores = perfil?.seguidoresCount || perfil?.seguidores || 0;
+  const totalObras = obras.length;
+
+  // Obras mais vistas ordenadas
+  const obrasPopulares = [...obras].sort((a, b) => (b.visualizacoes || 0) - (a.visualizacoes || 0)).slice(0, 5);
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
+    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased font-sans">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <Sidebar />
 
       <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
         <div className="max-w-6xl mx-auto">
-          <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
-                Desempenho do artista
+              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+                Painel Privado do Criador
               </span>
-
-              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
-                Estatísticas<span className="italic text-artOrange">.</span>
+              <h1 className="font-editorial text-4xl sm:text-5xl italic leading-none">
+                Métricas & Estatísticas
               </h1>
-
-              <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
-                Acompanhe o crescimento do perfil, visualizações das obras,
-                curtidas, seguidores e interações do portfólio quando o backend
-                estiver integrado.
+              <p className="text-sm text-gray-500 mt-2 font-light">
+                Acompanhe o alcance e o engajamento real das suas obras na comunidade.
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              {!estatisticasLiberadas && (
-                <button
-                  type="button"
-                  onClick={handleUpgrade}
-                  className="bg-artPurple text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:shadow-lg transition-all text-center"
-                >
-                  <i className="fa-solid fa-crown mr-2"></i>
-                  Upgrade futuro
-                </button>
-              )}
+            <Link
+              to="/perfil"
+              className="bg-white border border-black/5 text-artDark px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center w-fit"
+            >
+              ← Ver Meu Perfil
+            </Link>
+          </div>
 
-              <Link
-                to="/perfil"
-                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-              >
-                <i className="fa-solid fa-user mr-2"></i>
-                Ver Perfil
-              </Link>
+          {/* Grid de Cards de Estatísticas Reais */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {/* Visualizações Totais */}
+            <div className="bg-white rounded-[2rem] border border-black/5 p-5 shadow-sm text-center">
+              <div className="w-10 h-10 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center text-lg mx-auto mb-2">
+                <i className="fa-solid fa-eye"></i>
+              </div>
+              <span className="font-editorial text-3xl italic font-black text-artDark block">
+                {totalVisualizacoes}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                Visualizações
+              </span>
+            </div>
+
+            {/* Curtidas Totais */}
+            <div className="bg-white rounded-[2rem] border border-black/5 p-5 shadow-sm text-center">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center text-lg mx-auto mb-2">
+                <i className="fa-solid fa-heart"></i>
+              </div>
+              <span className="font-editorial text-3xl italic font-black text-artDark block">
+                {totalCurtidas}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                Curtidas
+              </span>
+            </div>
+
+            {/* Comentários Totais */}
+            <div className="bg-white rounded-[2rem] border border-black/5 p-5 shadow-sm text-center">
+              <div className="w-10 h-10 rounded-2xl bg-artBlue/10 text-artBlue flex items-center justify-center text-lg mx-auto mb-2">
+                <i className="fa-solid fa-comments"></i>
+              </div>
+              <span className="font-editorial text-3xl italic font-black text-artDark block">
+                {totalComentarios}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                Comentários
+              </span>
+            </div>
+
+            {/* Obras Salvas / Favoritadas */}
+            <div className="bg-white rounded-[2rem] border border-black/5 p-5 shadow-sm text-center">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center text-lg mx-auto mb-2">
+                <i className="fa-solid fa-bookmark"></i>
+              </div>
+              <span className="font-editorial text-3xl italic font-black text-artDark block">
+                {totalSalvos}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                Salvos
+              </span>
+            </div>
+
+            {/* Seguidores */}
+            <div className="bg-white rounded-[2rem] border border-black/5 p-5 shadow-sm text-center">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2">
+                <i className="fa-solid fa-users"></i>
+              </div>
+              <span className="font-editorial text-3xl italic font-black text-artDark block">
+                {totalSeguidores}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                Seguidores
+              </span>
+            </div>
+
+            {/* Obras Publicadas */}
+            <div className="bg-white rounded-[2rem] border border-black/5 p-5 shadow-sm text-center">
+              <div className="w-10 h-10 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center text-lg mx-auto mb-2">
+                <i className="fa-solid fa-palette"></i>
+              </div>
+              <span className="font-editorial text-3xl italic font-black text-artDark block">
+                {totalObras}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                Obras Ativas
+              </span>
+            </div>
+          </div>
+
+          {/* Obras Mais Populares */}
+          <div className="bg-white rounded-[2.5rem] border border-black/5 p-6 sm:p-8 shadow-sm">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+                  Desempenho por Obra
+                </span>
+                <h2 className="font-editorial text-3xl italic font-bold">
+                  Obras em Destaque
+                </h2>
+              </div>
 
               <Link
                 to="/meu-portfolio"
-                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 text-center"
+                className="text-xs font-bold text-artOrange hover:underline"
               >
-                Gerenciar Obras
+                Ver Todas as Obras →
               </Link>
             </div>
-          </header>
 
-          {noticeMessage && (
-            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold">
-              <i className="fa-solid fa-circle-info mr-2"></i>
-              {noticeMessage}
-            </div>
-          )}
-
-          <section className="bg-white border border-black/5 rounded-[2rem] p-5 mb-8 flex flex-col lg:flex-row gap-5 lg:items-center justify-between">
-            <div className="flex gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
-                <i className="fa-solid fa-crown"></i>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                  Plano atual
-                </span>
-
-                <h2 className="font-editorial text-3xl italic">
-                  Artfolio {plano.nome}
-                </h2>
-
-                <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-                  {plano.descricao}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {["7 dias", "30 dias", "6 meses"].map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => handlePeriodo(item)}
-                  className={`px-4 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-                    periodo === item
-                      ? "bg-artDark text-white"
-                      : "bg-[#F9F8F6] text-gray-400 hover:bg-artDark hover:text-white"
-                  }`}
+            {obrasPopulares.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <i className="fa-solid fa-chart-simple text-4xl mb-3 text-gray-200"></i>
+                <p className="text-sm">Você ainda não tem obras publicadas para gerar métricas.</p>
+                <Link
+                  to="/criar-obra"
+                  className="inline-block mt-4 bg-artDark text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange transition-all"
                 >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {estatisticasResumo.map((item) => (
-              <div
-                key={item.titulo}
-                className="bg-white rounded-[1.7rem] p-5 border border-black/5 relative overflow-hidden"
-              >
-                <div className="w-10 h-10 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center mb-4">
-                  <i className={item.icone}></i>
-                </div>
-
-                <p className="text-2xl font-black">{item.valor}</p>
-
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                  {item.titulo}
-                </span>
-
-                <p className="text-xs text-artPurple font-bold mt-2">
-                  {item.detalhe}
-                </p>
-
-                <span className="absolute top-4 right-4 bg-artOrange/10 text-artOrange px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                  Prévia
-                </span>
+                  Publicar Primeira Obra
+                </Link>
               </div>
-            ))}
-          </section>
-
-          {!estatisticasLiberadas && (
-            <section className="bg-artPurple/5 border border-artPurple/10 rounded-[2rem] p-6 mb-8 flex flex-col md:flex-row gap-5 md:items-center justify-between">
-              <div className="flex gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
-                  <i className="fa-solid fa-lock"></i>
-                </div>
-
-                <div>
-                  <h2 className="font-editorial text-3xl italic">
-                    Estatísticas avançadas bloqueadas
-                  </h2>
-
-                  <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
-                    No plano Free, o artista terá acesso limitado. Estatísticas
-                    avançadas, crescimento mensal, obras com melhor desempenho e
-                    análise comercial serão liberadas conforme o plano.
-                  </p>
-                </div>
-              </div>
-
-              <Link
-                to="/planos"
-                className="bg-artDark text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all text-center"
-              >
-                Ver planos
-              </Link>
-            </section>
-          )}
-
-          <div className="relative">
-            {!estatisticasLiberadas && (
-              <div className="absolute inset-0 z-20 bg-[#F9F8F6]/60 backdrop-blur-md rounded-[2.5rem] flex flex-col items-center justify-center p-8 text-center border border-black/5 min-h-[520px]">
-                <div className="w-16 h-16 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center text-2xl mb-4">
-                  <i className="fa-solid fa-crown"></i>
-                </div>
-
-                <h2 className="font-editorial text-3xl lg:text-4xl italic mb-3 leading-none">
-                  Desbloqueie análises completas
-                </h2>
-
-                <p className="text-gray-500 text-sm max-w-lg mb-6 leading-relaxed font-light">
-                  Esta área representa os recursos avançados de estatísticas do
-                  Artfolio. Os dados reais serão calculados futuramente pelo
-                  backend com base nas visualizações, curtidas, seguidores e
-                  encomendas registradas no PostgreSQL.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={handleUpgrade}
-                  className="bg-artDark text-white px-8 py-4 rounded-full text-xs font-bold hover:bg-artPurple hover:shadow-xl hover:shadow-artPurple/20 transition-all active:scale-95"
-                >
-                  Solicitar upgrade futuramente
-                </button>
-              </div>
-            )}
-
-            <div
-              className={`transition-all duration-500 ${
-                !estatisticasLiberadas
-                  ? "pointer-events-none select-none opacity-20 blur-[2px]"
-                  : ""
-              }`}
-            >
-              <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                <aside className="lg:col-span-4 space-y-5">
-                  <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
-                    <div className="mb-6">
-                      <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
-                        Crescimento
+            ) : (
+              <div className="space-y-4">
+                {obrasPopulares.map((obra, index) => (
+                  <Link
+                    key={obra.id}
+                    to={`/obra/${obra.id}`}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-[#F9F8F6] rounded-2xl border border-black/5 hover:bg-white hover:shadow-md transition-all group"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <span className="text-lg font-black text-gray-300 w-6 text-center">
+                        #{index + 1}
                       </span>
 
-                      <h2 className="font-editorial text-3xl italic">
-                        Visualizações mensais
-                      </h2>
-
-                      <p className="text-xs text-gray-400 mt-2">
-                        Dados demonstrativos da interface. No backend, os
-                        valores serão calculados por período.
-                      </p>
-                    </div>
-
-                    <div className="h-56 flex items-end justify-between gap-3">
-                      {meses.map((item) => (
-                        <div
-                          key={item.mes}
-                          className="flex flex-col items-center justify-end gap-2 flex-1"
-                        >
-                          <div
-                            className={`${item.valor} w-full rounded-t-2xl bg-artPurple/80 hover:bg-artOrange transition-colors`}
-                          ></div>
-
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                            {item.mes}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-artDark text-white rounded-[2rem] p-5 relative overflow-hidden">
-                    <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                      Insight futuro
-                    </span>
-
-                    <h3 className="font-editorial text-2xl italic leading-tight">
-                      Análises automáticas serão geradas pelo backend.
-                    </h3>
-
-                    <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                      Futuramente, o sistema poderá indicar quais obras possuem
-                      mais visualizações, melhor taxa de interação e maior
-                      potencial de encomendas.
-                    </p>
-
-                    <Link
-                      to="/criar-obra"
-                      className="inline-block mt-5 bg-white text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple hover:text-white transition-all"
-                    >
-                      Nova publicação
-                    </Link>
-
-                    <i className="fa-solid fa-chart-line absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
-                  </div>
-                </aside>
-
-                <section className="lg:col-span-8">
-                  <div className="bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                      <div>
-                        <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-1">
-                          Obras em destaque
-                        </span>
-
-                        <h2 className="font-editorial text-3xl italic">
-                          Melhor desempenho
-                        </h2>
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-black/5">
+                        <img
+                          src={getMediaUrl(obra.arquivoUrl)}
+                          alt={obra.legenda || "Obra"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          mostrarAviso(
-                            "O filtro real de desempenho será integrado futuramente ao backend."
-                          )
-                        }
-                        className="bg-[#F9F8F6] px-5 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all"
-                      >
-                        Período: {periodo}
-                      </button>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm text-artDark group-hover:text-artPurple transition-colors truncate">
+                          {obra.legenda || `Obra #${obra.id}`}
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {obra.categoria?.nomeCategoria || (obra.categorias?.[0]?.nomeCategoria) || "Arte"} • {obra.dataPostagem ? new Date(obra.dataPostagem).toLocaleDateString("pt-BR") : ""}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="space-y-4">
-                      {obrasMaisVistas.map((obra, index) => (
-                        <article
-                          key={obra.id}
-                          className="group bg-[#F9F8F6] rounded-[1.7rem] p-4 border border-black/5 flex flex-col md:flex-row md:items-center gap-4 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
-                        >
-                          <div className="w-12 h-12 rounded-2xl bg-artDark text-white flex items-center justify-center font-black shrink-0">
-                            {index + 1}
-                          </div>
+                    <div className="flex items-center gap-5 shrink-0 text-xs font-bold text-gray-500 sm:justify-end">
+                      <span className="flex items-center gap-1.5" title="Visualizações">
+                        <i className="fa-solid fa-eye text-artPurple"></i>
+                        {obra.visualizacoes || 0}
+                      </span>
 
-                          <Link
-                            to={`/obra/${obra.id}`}
-                            className="w-full md:w-36 h-32 md:h-24 rounded-[1.3rem] overflow-hidden bg-gray-100 shrink-0"
-                          >
-                            <img
-                              src={obra.imagem}
-                              alt={obra.titulo}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            />
-                          </Link>
+                      <span className="flex items-center gap-1.5" title="Curtidas">
+                        <i className="fa-solid fa-heart text-red-500"></i>
+                        {obra.totalCurtidas || 0}
+                      </span>
 
-                          <div className="flex-1">
-                            <span className="text-artPurple text-[10px] font-black uppercase tracking-widest">
-                              {obra.categoria}
-                            </span>
+                      <span className="flex items-center gap-1.5" title="Comentários">
+                        <i className="fa-solid fa-comment text-artBlue"></i>
+                        {obra.totalComentarios || 0}
+                      </span>
 
-                            <h3 className="font-bold text-lg leading-tight mt-1">
-                              {obra.titulo}
-                            </h3>
-
-                            <div className="flex flex-wrap items-center gap-5 text-xs text-gray-400 font-bold mt-3">
-                              <span>
-                                <i className="fa-regular fa-eye mr-1"></i>
-                                {obra.views} views
-                              </span>
-
-                              <span>
-                                <i className="fa-regular fa-heart mr-1"></i>
-                                {obra.curtidas} curtidas
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="bg-artPurple/10 text-artPurple px-4 py-2 rounded-full text-xs font-black text-center">
-                            {obra.crescimento}
-                          </div>
-                        </article>
-                      ))}
+                      <i className="fa-solid fa-arrow-right text-gray-300 group-hover:text-artDark transition-colors"></i>
                     </div>
-                  </div>
-                </section>
-              </section>
-            </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

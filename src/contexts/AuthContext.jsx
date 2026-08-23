@@ -4,30 +4,22 @@ import { useNavigate } from "react-router-dom";
 /**
  * AuthContext — Contexto global de autenticação do Artfolio.
  *
- * Centraliza o estado de autenticação para toda a aplicação:
- * - user: dados do usuário autenticado (id, nome, email, tipo_conta, etc.)
- * - isAuthenticated: boolean derivado de !!user
+ * Centraliza o estado de autenticação e visitante para toda a aplicação:
+ * - user: dados do usuário autenticado ou visitante temporário
+ * - isAuthenticated: boolean (true apenas para usuários reais cadastrados)
+ * - isGuest: boolean (true quando navegando como Convidado/Visitante)
  * - loading: true enquanto a sessão está sendo verificada ao iniciar o app
  * - login(email, senha, lembrarAcesso): realiza login e armazena token
  * - logout(mensagem?): limpa sessão e redireciona para /login
+ * - enterAsGuest(): ativa o modo Visitante sem persistência no banco
+ * - exitGuest(): encerra o modo Visitante
  * - refreshUser(): re-busca dados do usuário via /auth/me
- *
- * ESTRATÉGIA DE ARMAZENAMENTO (Lembrar acesso):
- * - Quando "Lembrar acesso" está MARCADO: token vai para localStorage
- *   → Persiste entre sessões do navegador (sobrevive fechar/abrir)
- * - Quando "Lembrar acesso" está DESMARCADO: token vai para sessionStorage
- *   → É apagado automaticamente ao fechar a aba/navegador
- * - Um flag "artfolio_remember" em localStorage indica qual storage contém o token
  */
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const AuthContext = createContext(null);
 
-/**
- * Hook para acessar o contexto de autenticação em qualquer componente.
- * Uso: const { user, isAuthenticated, loading, login, logout } = useAuth();
- */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
@@ -36,27 +28,17 @@ export function useAuth() {
   return context;
 }
 
-/**
- * Funções auxiliares de armazenamento de token.
- * Isoladas aqui para manter a lógica de storage em um único lugar.
- */
 function getStoredToken() {
-  // Verifica o flag para saber onde procurar o token
   const remember = localStorage.getItem("artfolio_remember");
-
   if (remember === "true") {
     return localStorage.getItem("artfolio_token");
   }
 
-  // Se não marcou "lembrar", busca no sessionStorage
-  // (também verifica localStorage caso o flag não exista mas o token antigo sim — migração)
   const sessionToken = sessionStorage.getItem("artfolio_token");
   if (sessionToken) return sessionToken;
 
-  // Fallback: migração de token antigo do localStorage (de antes desta implementação)
   const legacyToken = localStorage.getItem("token");
   if (legacyToken) {
-    // Migra para o novo formato com "lembrar acesso" ativo (comportamento anterior)
     localStorage.setItem("artfolio_token", legacyToken);
     localStorage.setItem("artfolio_remember", "true");
     localStorage.removeItem("token");
@@ -71,23 +53,33 @@ function storeToken(token, remember) {
   if (remember) {
     localStorage.setItem("artfolio_token", token);
     localStorage.setItem("artfolio_remember", "true");
-    // Limpar do sessionStorage caso exista
     sessionStorage.removeItem("artfolio_token");
   } else {
     sessionStorage.setItem("artfolio_token", token);
     localStorage.setItem("artfolio_remember", "false");
-    // Limpar do localStorage caso exista
     localStorage.removeItem("artfolio_token");
   }
+  localStorage.removeItem("artfolio_guest");
 }
 
 function clearAllAuthStorage() {
   localStorage.removeItem("artfolio_token");
   localStorage.removeItem("artfolio_remember");
   sessionStorage.removeItem("artfolio_token");
-  // Limpar dados legados também
+  localStorage.removeItem("artfolio_guest");
   localStorage.removeItem("token");
   localStorage.removeItem("usuario");
+}
+
+function createGuestUser() {
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  return {
+    id: null,
+    nome: `Convidado_${randomNum}`,
+    tipo_conta: "visitante",
+    tipo_usuario: "PF",
+    isGuest: true,
+  };
 }
 
 export function AuthProvider({ children }) {
@@ -96,12 +88,9 @@ export function AuthProvider({ children }) {
   const [sessionMessage, setSessionMessage] = useState("");
   const navigate = useNavigate();
 
-  const isAuthenticated = !!user;
+  const isGuest = Boolean(user?.isGuest);
+  const isAuthenticated = Boolean(user && !user.isGuest);
 
-  /**
-   * Busca dados do usuário autenticado via GET /auth/me.
-   * Retorna os dados do usuário ou null se falhar.
-   */
   const fetchCurrentUser = useCallback(async (token) => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -112,7 +101,6 @@ export function AuthProvider({ children }) {
       });
 
       if (!response.ok) {
-        // Token inválido ou expirado
         return null;
       }
 
@@ -122,26 +110,25 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  /**
-   * Restauração de sessão ao iniciar a aplicação.
-   * Verifica se existe um token armazenado e se ele ainda é válido.
-   */
   useEffect(() => {
     const restaurarSessao = async () => {
       const token = getStoredToken();
 
-      if (!token) {
-        setLoading(false);
-        return;
+      if (token) {
+        const userData = await fetchCurrentUser(token);
+        if (userData) {
+          setUser({ ...userData, isGuest: false });
+          setLoading(false);
+          return;
+        } else {
+          clearAllAuthStorage();
+        }
       }
 
-      const userData = await fetchCurrentUser(token);
-
-      if (userData) {
-        setUser(userData);
-      } else {
-        // Token inválido/expirado — limpa tudo
-        clearAllAuthStorage();
+      // Se não há token, verifica se estava em modo visitante
+      const isGuestStored = localStorage.getItem("artfolio_guest");
+      if (isGuestStored === "true") {
+        setUser(createGuestUser());
       }
 
       setLoading(false);
@@ -150,11 +137,6 @@ export function AuthProvider({ children }) {
     restaurarSessao();
   }, [fetchCurrentUser]);
 
-  /**
-   * Escuta evento customizado 'auth:expired' disparado pelo api.js
-   * quando qualquer requisição retorna 401.
-   * Realiza logout automático com mensagem amigável.
-   */
   useEffect(() => {
     const handleAuthExpired = () => {
       clearAllAuthStorage();
@@ -167,12 +149,6 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("auth:expired", handleAuthExpired);
   }, [navigate]);
 
-  /**
-   * Realiza login do usuário.
-   * @param {string} email
-   * @param {string} senha
-   * @param {boolean} lembrarAcesso - Se true, usa localStorage; senão sessionStorage
-   */
   const login = useCallback(async (email, senha, lembrarAcesso = false) => {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
@@ -196,30 +172,59 @@ export function AuthProvider({ children }) {
       throw new Error("Resposta de login inválida — token não recebido.");
     }
 
-    // Armazena o token no storage correto baseado em "lembrar acesso"
     storeToken(data.access_token, lembrarAcesso);
 
-    // Define os dados do usuário no state
     if (data.usuario) {
-      setUser(data.usuario);
+      setUser({ ...data.usuario, isGuest: false });
     } else {
-      // Fallback: busca dados do usuário via /auth/me
       const userData = await fetchCurrentUser(data.access_token);
       if (userData) {
-        setUser(userData);
+        setUser({ ...userData, isGuest: false });
       }
     }
 
-    // Limpa mensagem de sessão expirada se houver
     setSessionMessage("");
-
     return data;
   }, [fetchCurrentUser]);
 
-  /**
-   * Realiza logout do usuário.
-   * Limpa token, dados do user e redireciona para /login.
-   */
+  const loginGoogle = useCallback(async (idToken) => {
+    const response = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: idToken }),
+    });
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Erro ao processar resposta do servidor.");
+    }
+
+    if (!response.ok) {
+      const errorMsg = data?.detail || data?.message || "Erro ao realizar autenticação pelo Google.";
+      throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+    }
+
+    if (!data.access_token) {
+      throw new Error("Resposta de login inválida — token não recebido.");
+    }
+
+    storeToken(data.access_token, true);
+
+    if (data.usuario) {
+      setUser({ ...data.usuario, isGuest: false });
+    } else {
+      const userData = await fetchCurrentUser(data.access_token);
+      if (userData) {
+        setUser({ ...userData, isGuest: false });
+      }
+    }
+
+    setSessionMessage("");
+    return data;
+  }, [fetchCurrentUser]);
+
   const logout = useCallback((mensagem = "") => {
     clearAllAuthStorage();
     setUser(null);
@@ -229,27 +234,41 @@ export function AuthProvider({ children }) {
     navigate("/login", { replace: true });
   }, [navigate]);
 
-  /**
-   * Re-busca os dados do usuário autenticado (útil após editar perfil).
-   */
+  const enterAsGuest = useCallback(() => {
+    clearAllAuthStorage();
+    localStorage.setItem("artfolio_guest", "true");
+    const guest = createGuestUser();
+    setUser(guest);
+    return guest;
+  }, []);
+
+  const exitGuest = useCallback(() => {
+    localStorage.removeItem("artfolio_guest");
+    setUser(null);
+  }, []);
+
   const refreshUser = useCallback(async () => {
     const token = getStoredToken();
     if (!token) return;
 
     const userData = await fetchCurrentUser(token);
     if (userData) {
-      setUser(userData);
+      setUser({ ...userData, isGuest: false });
     }
   }, [fetchCurrentUser]);
 
   const value = {
     user,
     isAuthenticated,
+    isGuest,
     loading,
     sessionMessage,
     setSessionMessage,
     login,
+    loginGoogle,
     logout,
+    enterAsGuest,
+    exitGuest,
     refreshUser,
   };
 
@@ -260,8 +279,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-/**
- * Exporta getStoredToken para uso pelo api.js (envio de token nas requisições).
- * Outros componentes devem usar useAuth() para acessar dados do usuário.
- */
 export { getStoredToken };

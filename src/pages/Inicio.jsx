@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import ModalConversao from "../components/ModalConversao";
 
 const obrasDestaque = [
   {
@@ -33,49 +35,53 @@ const obrasDestaque = [
 
 const perfis = [
   {
-    titulo: "Visitante",
-    descricao:
-      "Pode conhecer a plataforma, explorar obras públicas e visualizar perfis artísticos.",
-    icone: "fa-solid fa-eye",
-    cor: "text-artBlue",
-    fundo: "bg-artBlue/10",
-  },
-  {
-    titulo: "Cliente",
-    descricao:
-      "Pode salvar obras, conversar com artistas, solicitar encomendas e acompanhar interações.",
-    icone: "fa-solid fa-user",
-    cor: "text-artPurple",
-    fundo: "bg-artPurple/10",
-  },
-  {
     titulo: "Artista",
+    subtitulo: "Criador & Profissional",
     descricao:
-      "Pode criar portfólio, publicar obras, receber encomendas e acompanhar estatísticas.",
+      "Conta completa para publicar obras, montar portfólio profissional com certificados, receber solicitações e interagir na comunidade.",
     icone: "fa-solid fa-palette",
     cor: "text-artOrange",
     fundo: "bg-artOrange/10",
+    borda: "border-artOrange/20",
+    cta: "Criar Conta de Artista",
+    to: "/cadastro",
+  },
+  {
+    titulo: "Visitante",
+    subtitulo: "Apreciador & Guest",
+    descricao:
+      "Acesso livre para conhecer a plataforma, explorar o feed de obras aprovadas e visualizar perfis artísticos sem necessidade de cadastro.",
+    icone: "fa-solid fa-eye",
+    cor: "text-artBlue",
+    fundo: "bg-artBlue/10",
+    borda: "border-artBlue/20",
+    cta: "Entrar como Visitante",
+    to: "/feed",
+    isGuestAction: true,
   },
 ];
 
 export default function Inicio() {
-  const [noticeMessage, setNoticeMessage] = useState("");
+  const navigate = useNavigate();
+  const { enterAsGuest } = useAuth();
+  const [modalAberto, setModalAberto] = useState(false);
+  const [acaoTentada, setAcaoTentada] = useState("interagir");
 
-  const mostrarAviso = (mensagem) => {
-    setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4000);
+  const handleEntrarComoVisitante = () => {
+    enterAsGuest();
+    navigate("/feed");
   };
 
-  const handleAcaoFutura = () => {
-    mostrarAviso(
-      "Essa interação será integrada futuramente ao login e ao backend."
-    );
+  const handleInteracaoRestrita = (acao) => {
+    setAcaoTentada(acao);
+    setModalAberto(true);
   };
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
+    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans flex flex-col justify-between">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
+      {/* Header com Navegação Focada: "Como funciona" e "Modos de Acesso" */}
       <header className="relative z-10 px-5 lg:px-10 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <Link
@@ -85,7 +91,7 @@ export default function Inicio() {
             Artfolio
           </Link>
 
-          <nav className="hidden md:flex items-center gap-6 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <nav className="hidden md:flex items-center gap-8 text-[10px] font-bold uppercase tracking-widest text-gray-400">
             <a
               href="#como-funciona"
               className="hover:text-artDark transition-colors"
@@ -94,51 +100,50 @@ export default function Inicio() {
             </a>
 
             <a href="#perfis" className="hover:text-artDark transition-colors">
-              Perfis
+              Modos de Acesso
             </a>
-
-            <a href="#obras" className="hover:text-artDark transition-colors">
-              Obras
-            </a>
-
-            <Link to="/planos" className="hover:text-artDark transition-colors">
-              Planos
-            </Link>
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Botão Visitante em tom azul com ícone de olhinho */}
+            <button
+              type="button"
+              onClick={handleEntrarComoVisitante}
+              className="hidden sm:inline-flex items-center gap-2 bg-artBlue/10 text-artBlue border border-artBlue/20 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all shadow-sm"
+            >
+              <i className="fa-solid fa-eye text-xs"></i>
+              Visitante
+            </button>
+
+            {/* Botão Entrar em tom branco com ícone de login */}
             <Link
               to="/login"
-              className="bg-white border border-black/5 px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all"
+              className="bg-white border border-black/10 text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all flex items-center gap-2 shadow-sm"
             >
+              <i className="fa-solid fa-right-to-bracket text-xs"></i>
               Entrar
             </Link>
 
+            {/* Botão Criar Conta em tom alaranjado com ícone de palhetinha */}
             <Link
               to="/cadastro"
-              className="bg-artDark text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all shadow-lg shadow-black/10"
+              className="bg-artOrange text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artDark transition-all shadow-lg shadow-artOrange/20 flex items-center gap-2"
             >
+              <i className="fa-solid fa-palette text-xs"></i>
               Criar Conta
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 min-h-screen">
-        {noticeMessage && (
-          <section className="px-5 lg:px-10 mb-4">
-            <div className="max-w-6xl mx-auto bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 text-xs font-bold">
-              <i className="fa-solid fa-circle-info mr-2"></i>
-              {noticeMessage}
-            </div>
-          </section>
-        )}
-
-        <section className="px-5 lg:px-10 py-8">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+      {/* Main Content */}
+      <main className="relative z-10 flex-1">
+        {/* Hero Section */}
+        <section id="como-funciona" className="px-5 lg:px-10 py-8 lg:py-12">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7">
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-3 block">
-                Plataforma artística digital
+                Plataforma Artística Digital
               </span>
 
               <h1 className="font-editorial text-5xl lg:text-7xl leading-none mb-5">
@@ -147,104 +152,66 @@ export default function Inicio() {
               </h1>
 
               <p className="text-gray-500 text-sm lg:text-base leading-relaxed max-w-2xl font-light">
-                O Artfolio conecta artistas, clientes e admiradores em uma
-                plataforma feita para publicar obras, montar portfólios,
-                conversar, solicitar encomendas e valorizar talentos criativos.
+                O Artfolio conecta artistas e admiradores em um ecossistema autêntico feito para publicar obras, montar portfólios profissionais, conversar e valorizar talentos criativos.
               </p>
 
-              <p className="text-xs text-gray-400 mt-3 max-w-2xl leading-relaxed">
-                A plataforma não intermedia pagamentos entre comprador e artista.
-                O contato e a negociação acontecem diretamente entre as partes.
-              </p>
-
-              <div className="flex flex-wrap gap-3 mt-6">
+              <div className="flex flex-wrap gap-3 mt-8">
                 <Link
                   to="/cadastro"
-                  className="bg-artDark text-white px-6 py-3.5 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10"
+                  className="bg-artDark text-white px-7 py-4 rounded-full text-sm font-bold hover:bg-artOrange transition-all shadow-xl shadow-black/10 flex items-center gap-2"
                 >
-                  Criar meu portfólio
+                  <i className="fa-solid fa-palette text-xs"></i>
+                  Criar conta de Artista
                 </Link>
 
-                <Link
-                  to="/login"
-                  className="bg-white border border-black/5 px-6 py-3.5 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all"
+                <button
+                  type="button"
+                  onClick={handleEntrarComoVisitante}
+                  className="bg-white border border-artBlue/30 text-artBlue px-6 py-4 rounded-full text-sm font-bold hover:bg-artBlue hover:text-white transition-all shadow-md shadow-artBlue/5 flex items-center gap-2"
                 >
-                  Já tenho conta
-                </Link>
-
-                <Link
-                  to="/feed"
-                  className="bg-white border border-black/5 px-6 py-3.5 rounded-full text-sm font-bold text-artPurple hover:bg-artPurple hover:text-white transition-all"
-                >
-                  Explorar como visitante
-                </Link>
+                  <i className="fa-solid fa-eye text-xs"></i>
+                  Entrar como Visitante
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-8 max-w-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-10 max-w-lg">
                 <div className="bg-white rounded-[1.5rem] p-4 border border-black/5">
-                  <p className="text-2xl font-black">120+</p>
+                  <p className="text-2xl font-black text-artOrange">120+</p>
                   <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
                     Artistas
                   </span>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Prévia visual
+                    PF e PJ
                   </p>
                 </div>
 
                 <div className="bg-white rounded-[1.5rem] p-4 border border-black/5">
-                  <p className="text-2xl font-black">500+</p>
+                  <p className="text-2xl font-black text-artPurple">500+</p>
                   <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
                     Obras
                   </span>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Aprovadas
+                    Curadoria ativa
                   </p>
                 </div>
 
                 <div className="bg-white rounded-[1.5rem] p-4 border border-black/5">
-                  <p className="text-2xl font-black">3</p>
+                  <p className="text-2xl font-black text-artBlue">LGPD</p>
                   <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
-                    Planos
+                    Privacidade
                   </span>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Free, Premium e Pro
+                    Minimização de dados
                   </p>
-                </div>
-              </div>
-
-              <div className="mt-6 bg-white/70 border border-black/5 rounded-[1.7rem] p-4 max-w-2xl">
-                <h3 className="text-xs font-bold uppercase tracking-widest mb-2">
-                  Fluxo principal do artista
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm text-gray-500">
-                  <div>
-                    <strong className="text-artDark">1. Criar conta</strong>
-                    <p className="mt-1">O artista se cadastra na plataforma.</p>
-                  </div>
-
-                  <div>
-                    <strong className="text-artDark">2. Publicar obra</strong>
-                    <p className="mt-1">A obra é enviada para análise.</p>
-                  </div>
-
-                  <div>
-                    <strong className="text-artDark">3. Moderação</strong>
-                    <p className="mt-1">A obra entra em quarentena.</p>
-                  </div>
-
-                  <div>
-                    <strong className="text-artDark">4. Feed público</strong>
-                    <p className="mt-1">Só aparece após aprovação.</p>
-                  </div>
                 </div>
               </div>
             </div>
 
+            {/* Destaque Visual Hero — Ao clicar motiva login/visitante em vez de ativar visitante direto */}
             <div className="lg:col-span-5">
               <div className="relative">
                 <div className="bg-white rounded-[2.5rem] p-4 border border-black/5 shadow-2xl shadow-black/10 rotate-2 hover:rotate-0 transition-transform duration-500">
-                  <div className="rounded-[2rem] overflow-hidden h-[340px] lg:h-[450px]">
+                  <div className="rounded-[2rem] overflow-hidden h-[340px] lg:h-[430px]">
                     <img
                       src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1000&auto=format&fit=crop"
                       alt="Arte em destaque"
@@ -259,7 +226,7 @@ export default function Inicio() {
                       </span>
 
                       <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                        Aprovada
+                        Curadoria
                       </span>
                     </div>
 
@@ -280,12 +247,14 @@ export default function Inicio() {
                         <span className="text-xs font-bold">Marina Silva</span>
                       </div>
 
-                      <Link
-                        to="/obra/1"
-                        className="w-9 h-9 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center"
+                      <button
+                        type="button"
+                        onClick={() => handleInteracaoRestrita("acessar a obra de Marina Silva")}
+                        className="w-9 h-9 rounded-full bg-artDark text-white hover:bg-artOrange transition-all flex items-center justify-center"
+                        title="Ver detalhes"
                       >
                         <i className="fa-solid fa-arrow-right text-xs"></i>
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -301,223 +270,128 @@ export default function Inicio() {
           </div>
         </section>
 
-        <section id="como-funciona" className="px-5 lg:px-10 pb-8">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div className="bg-white rounded-[2rem] p-6 border border-black/5">
-              <div className="w-11 h-11 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center mb-5">
-                <i className="fa-solid fa-user-plus"></i>
-              </div>
-
-              <h3 className="font-bold text-xl mb-2">Crie sua conta</h3>
-
-              <p className="text-sm text-gray-500 leading-relaxed">
-                O usuário cria uma conta e escolhe como pretende usar a
-                plataforma: cliente, artista ou outro perfil permitido.
-              </p>
-            </div>
-
-            <div className="bg-white rounded-[2rem] p-6 border border-black/5">
-              <div className="w-11 h-11 rounded-2xl bg-artBlue/10 text-artBlue flex items-center justify-center mb-5">
-                <i className="fa-solid fa-shield-halved"></i>
-              </div>
-
-              <h3 className="font-bold text-xl mb-2">Moderação antes do feed</h3>
-
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Obras publicadas passam por análise. Apenas conteúdos aprovados
-                aparecem no feed e no perfil público.
-              </p>
-            </div>
-
-            <div className="bg-white rounded-[2rem] p-6 border border-black/5">
-              <div className="w-11 h-11 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center mb-5">
-                <i className="fa-solid fa-comments"></i>
-              </div>
-
-              <h3 className="font-bold text-xl mb-2">Converse e encomende</h3>
-
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Clientes podem conversar com artistas e solicitar encomendas. A
-                negociação acontece diretamente entre eles.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section id="perfis" className="px-5 lg:px-10 pb-8">
-          <div className="max-w-6xl mx-auto bg-white rounded-[2.5rem] border border-black/5 p-5 lg:p-6">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+        {/* Seção Modos de Acesso: Artista vs Visitante */}
+        <section id="perfis" className="px-5 lg:px-10 py-10">
+          <div className="max-w-6xl mx-auto bg-white rounded-[2.5rem] border border-black/5 p-6 lg:p-10 shadow-xl shadow-black/5">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
               <div>
                 <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
-                  Tipos de usuários
+                  Modos de Experiência
                 </span>
 
                 <h2 className="font-editorial text-3xl lg:text-4xl italic">
-                  Cada perfil tem uma experiência.
+                  Escolha como deseja explorar o Artfolio.
                 </h2>
               </div>
 
-              <Link
-                to="/cadastro"
-                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all text-center"
-              >
-                Criar conta
-              </Link>
+              <span className="text-xs text-gray-400 font-light max-w-xs">
+                Acesso flexível para criadores e para quem apenas deseja apreciar boas produções artísticas.
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {perfis.map((perfil) => (
                 <article
                   key={perfil.titulo}
-                  className="bg-[#F9F8F6] rounded-[1.7rem] p-5 border border-black/5"
+                  className={`bg-[#F9F8F6] rounded-[2rem] p-6 lg:p-8 border ${perfil.borda} flex flex-col justify-between hover:shadow-lg transition-all`}
                 >
-                  <div
-                    className={`w-11 h-11 rounded-2xl ${perfil.fundo} ${perfil.cor} flex items-center justify-center mb-5`}
-                  >
-                    <i className={perfil.icone}></i>
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div
+                        className={`w-14 h-14 rounded-2xl ${perfil.fundo} ${perfil.cor} flex items-center justify-center text-2xl`}
+                      >
+                        <i className={perfil.icone}></i>
+                      </div>
+
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-white px-3 py-1 rounded-full border border-black/5">
+                        {perfil.subtitulo}
+                      </span>
+                    </div>
+
+                    <h3 className="font-editorial text-3xl font-bold text-artDark mb-2">
+                      {perfil.titulo}
+                    </h3>
+
+                    <p className="text-sm text-gray-500 leading-relaxed font-light mb-6">
+                      {perfil.descricao}
+                    </p>
                   </div>
 
-                  <h3 className="font-bold text-xl mb-2">{perfil.titulo}</h3>
-
-                  <p className="text-sm text-gray-500 leading-relaxed">
-                    {perfil.descricao}
-                  </p>
+                  {perfil.isGuestAction ? (
+                    <button
+                      type="button"
+                      onClick={handleEntrarComoVisitante}
+                      className="w-full bg-artBlue text-white py-3.5 rounded-full text-xs font-bold hover:bg-artDark transition-all shadow-md shadow-artBlue/10 flex items-center justify-center gap-2"
+                    >
+                      <i className="fa-solid fa-eye text-xs"></i>
+                      {perfil.cta}
+                    </button>
+                  ) : (
+                    <Link
+                      to={perfil.to}
+                      className="w-full bg-artOrange text-white py-3.5 rounded-full text-xs font-bold hover:bg-artDark transition-all shadow-md shadow-artOrange/10 text-center flex items-center justify-center gap-2"
+                    >
+                      <i className="fa-solid fa-palette text-xs"></i>
+                      {perfil.cta}
+                    </Link>
+                  )}
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="obras" className="px-5 lg:px-10 pb-10">
-          <div className="max-w-6xl mx-auto bg-white rounded-[2.5rem] border border-black/5 p-5 lg:p-6">
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
-              <div>
-                <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-1">
-                  Curadoria recente
+        {/* Seção Galeria Aberta — Chamada limpa para o feed sem cards fixos de obras */}
+        <section className="px-5 lg:px-10 pb-12">
+          <div className="max-w-6xl mx-auto bg-artDark text-white rounded-[2.5rem] p-8 lg:p-12 relative overflow-hidden shadow-2xl shadow-black/10">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="max-w-2xl">
+                <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
+                  Galeria Aberta
                 </span>
 
-                <h2 className="font-editorial text-3xl lg:text-4xl italic">
-                  Obras aprovadas em destaque.
+                <h2 className="font-editorial text-4xl lg:text-5xl leading-tight mb-3">
+                  Descubra produções artísticas <span className="italic text-artOrange">autênticas.</span>
                 </h2>
 
-                <p className="text-sm text-gray-500 mt-2 max-w-2xl">
-                  A landing exibe apenas uma prévia visual. No sistema real, as
-                  obras virão do backend após aprovação da moderação.
+                <p className="text-sm text-gray-400 font-light leading-relaxed">
+                  Conheça centenas de produções de pintura digital, modelagem 3D, arte têxtil, ilustração e muito mais no nosso feed curado.
                 </p>
               </div>
 
-              <Link
-                to="/feed"
-                className="bg-[#F9F8F6] px-5 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all text-center"
+              <button
+                type="button"
+                onClick={() => handleInteracaoRestrita("explorar o feed completo de obras")}
+                className="bg-artOrange text-white px-8 py-4 rounded-full text-xs font-bold hover:bg-white hover:text-artDark transition-all shadow-xl shadow-artOrange/20 shrink-0 flex items-center justify-center gap-2 active:scale-95"
               >
-                Ver Feed
-              </Link>
+                Explorar Feed Completo
+                <i className="fa-solid fa-arrow-right text-xs"></i>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {obrasDestaque.map((obra) => (
-                <article
-                  key={obra.titulo}
-                  className="group bg-[#F9F8F6] rounded-[1.7rem] overflow-hidden border border-black/5 hover:bg-white hover:shadow-xl hover:shadow-black/5 transition-all"
-                >
-                  <Link to={`/obra/${obra.id}`} className="block h-52 overflow-hidden">
-                    <img
-                      src={obra.imagem}
-                      alt={obra.titulo}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  </Link>
-
-                  <div className="p-5">
-                    <div className="flex flex-wrap gap-2 items-center mb-2">
-                      <span className="text-artPurple text-[10px] font-black uppercase tracking-widest">
-                        {obra.categoria}
-                      </span>
-
-                      <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                        {obra.status}
-                      </span>
-                    </div>
-
-                    <h3 className="font-editorial text-2xl italic leading-none mt-1 mb-4">
-                      {obra.titulo}
-                    </h3>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-bold text-gray-500">
-                        {obra.artista}
-                      </span>
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleAcaoFutura}
-                          className="w-9 h-9 rounded-full bg-white border border-black/5 text-gray-400 hover:text-artOrange hover:bg-artOrange/10 transition-colors"
-                        >
-                          <i className="fa-regular fa-heart"></i>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleAcaoFutura}
-                          className="w-9 h-9 rounded-full bg-white border border-black/5 text-gray-400 hover:text-artBlue hover:bg-artBlue/10 transition-colors"
-                        >
-                          <i className="fa-regular fa-bookmark"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="px-5 lg:px-10 pb-10">
-          <div className="max-w-6xl mx-auto bg-artDark text-white rounded-[2.5rem] p-7 lg:p-8 relative overflow-hidden">
-            <div className="relative z-10 max-w-2xl">
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                Comece agora
-              </span>
-
-              <h2 className="font-editorial text-4xl lg:text-5xl italic leading-none mb-4">
-                Transforme sua arte em presença digital.
-              </h2>
-
-              <p className="text-sm text-gray-400 leading-relaxed">
-                Crie seu portfólio, publique suas obras, passe pelo processo de
-                moderação e participe de uma comunidade feita para valorizar
-                artistas independentes.
-              </p>
-
-              <div className="flex flex-wrap gap-3 mt-6">
-                <Link
-                  to="/cadastro"
-                  className="bg-white text-artDark px-6 py-3.5 rounded-full text-sm font-bold hover:bg-artPurple hover:text-white transition-all"
-                >
-                  Criar Conta
-                </Link>
-
-                <Link
-                  to="/login"
-                  className="border border-white/20 px-6 py-3.5 rounded-full text-sm font-bold hover:bg-white hover:text-artDark transition-all"
-                >
-                  Fazer Login
-                </Link>
-
-                <Link
-                  to="/planos"
-                  className="border border-white/20 px-6 py-3.5 rounded-full text-sm font-bold hover:bg-white hover:text-artDark transition-all"
-                >
-                  Conhecer Planos
-                </Link>
-              </div>
-            </div>
-
-            <i className="fa-solid fa-wand-magic-sparkles absolute -right-8 -bottom-12 text-[11rem] text-white/5 rotate-12"></i>
+            <i className="fa-solid fa-compass absolute -right-8 -bottom-8 text-[12rem] text-white/5 rotate-12 pointer-events-none"></i>
           </div>
         </section>
       </main>
+
+      {/* Footer Discreto com Link para os Termos */}
+      <footer className="relative z-10 border-t border-black/5 bg-white/50 backdrop-blur-sm py-6 px-5 lg:px-10">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+          <p>© {new Date().getFullYear()} Artfolio. Todos os direitos reservados.</p>
+          <div className="flex items-center gap-6">
+            <Link to="/termos" target="_blank" rel="noopener noreferrer" className="hover:text-artDark transition-colors underline">
+              Termos de Uso e Política de Privacidade
+            </Link>
+          </div>
+        </div>
+      </footer>
+
+      {/* Modal de Conversão ao tentar interagir */}
+      <ModalConversao
+        isOpen={modalAberto}
+        onClose={() => setModalAberto(false)}
+        acao={acaoTentada}
+      />
     </div>
   );
 }

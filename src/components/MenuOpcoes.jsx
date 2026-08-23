@@ -7,6 +7,7 @@ export default function MenuOpcoes({
   onSalvar,
   isSalvo = false,
   onDenunciar,
+  onCompartilhar,
   onCopiarLinkSuccess,
 }) {
   const [aberto, setAberto] = useState(false);
@@ -14,12 +15,14 @@ export default function MenuOpcoes({
   const handleCopiarLink = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    navigator.clipboard.writeText(window.location.origin + detallesLink);
+    const linkParaCopiar = detalhesLink && detalhesLink !== "#"
+      ? (detalhesLink.startsWith("http") ? detalhesLink : window.location.origin + detalhesLink)
+      : window.location.href;
+
+    navigator.clipboard.writeText(linkParaCopiar);
     setAberto(false);
     if (onCopiarLinkSuccess) {
-      onCopiarLinkSuccess("Link da obra copiado para a área de transferência!");
-    } else {
-      alert("Link copiado!");
+      onCopiarLinkSuccess(`Link do ${tipo === "perfil" ? "perfil" : "obra"} copiado com sucesso!`);
     }
   };
 
@@ -39,8 +42,9 @@ export default function MenuOpcoes({
       </button>
 
       {aberto && (
-        <div className="absolute right-0 top-11 w-52 bg-white rounded-[1.3rem] border border-black/5 shadow-2xl shadow-black/10 p-2 z-50">
-          {detalhesLink && detalhesLink !== "#" && (
+        <div className="absolute right-0 top-11 w-56 bg-white rounded-[1.3rem] border border-black/5 shadow-2xl shadow-black/10 p-2 z-50 animate-fadeIn">
+          {/* Exibe "Ver detalhes" apenas para obras, não para perfis */}
+          {tipo === "obra" && detalhesLink && detalhesLink !== "#" && (
             <Link
               to={detalhesLink}
               onClick={() => setAberto(false)}
@@ -62,7 +66,7 @@ export default function MenuOpcoes({
               }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold hover:bg-[#F9F8F6] transition-colors text-left"
             >
-              <i className={`${isSalvo ? "fa-solid text-artPurple" : "fa-regular text-artPurple"} fa-bookmark w-4`}></i>
+              <i className={`${isSalvo ? "fa-solid text-amber-500" : "fa-regular text-gray-400"} fa-bookmark w-4`}></i>
               {isSalvo ? "Obra salva" : "Salvar obra"}
             </button>
           )}
@@ -75,6 +79,22 @@ export default function MenuOpcoes({
             <i className="fa-solid fa-link text-gray-400 w-4"></i>
             Copiar link
           </button>
+
+          {onCompartilhar && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setAberto(false);
+                onCompartilhar();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold hover:bg-[#F9F8F6] transition-colors text-left text-artPurple"
+            >
+              <i className="fa-solid fa-share-nodes w-4"></i>
+              Compartilhar perfil
+            </button>
+          )}
 
           <div className="h-px bg-black/5 my-2"></div>
 

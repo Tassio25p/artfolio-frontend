@@ -205,41 +205,46 @@ export default function Plans() {
               </div>
             </div>
 
-            <div className="lg:col-span-5 bg-artDark text-white rounded-[2rem] p-5 lg:p-6 relative overflow-hidden">
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                Pensando no backend
+            <div className="lg:col-span-5 bg-gradient-to-br from-artDark via-purple-950 to-indigo-950 text-white rounded-[2rem] p-6 lg:p-8 relative overflow-hidden shadow-xl border border-artPurple/20">
+              <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
+                Evolução Artística & Alcance
               </span>
 
-              <h2 className="font-editorial text-3xl italic leading-tight">
-                Plano não é o mesmo que papel de usuário.
+              <h2 className="font-editorial text-3xl sm:text-4xl italic leading-tight">
+                Potencialize a visibilidade do seu talento.
               </h2>
 
-              <p className="text-sm text-gray-400 mt-3 leading-relaxed">
-                O papel define se a pessoa é cliente, artista, moderador ou
-                administrador. O plano define quais recursos comerciais o artista
-                pode usar. Essas duas informações serão controladas separadamente
-                pelo backend.
+              <p className="text-sm text-gray-300 mt-3 leading-relaxed font-light">
+                Cada nível de plano foi desenhado para acompanhar a sua jornada, desde as primeiras publicações até a consolidação profissional na comunidade artística.
               </p>
 
-              <div className="mt-5 space-y-3 text-sm">
-                <div className="flex items-center gap-3">
-                  <i className="fa-solid fa-lock text-artPurple"></i>
-                  Recursos bloqueados mostram aviso de upgrade
+              <div className="mt-6 space-y-3.5 text-xs font-semibold">
+                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
+                  <div className="w-8 h-8 rounded-lg bg-artPurple/20 text-artPurple flex items-center justify-center">
+                    <i className="fa-solid fa-palette text-sm"></i>
+                  </div>
+                  <span>Exposição ilimitada de criações e coleções autorais</span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <i className="fa-solid fa-crown text-artOrange"></i>
-                  Recursos Premium e Pro exigem assinatura ativa
+                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
+                  <div className="w-8 h-8 rounded-lg bg-artOrange/20 text-artOrange flex items-center justify-center">
+                    <i className="fa-solid fa-crown text-sm"></i>
+                  </div>
+                  <span>Selo oficial de Artista Verificado no perfil público</span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <i className="fa-solid fa-user-check text-artBlue"></i>
-                  Sessão identifica o usuário logado
+                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
+                  <div className="w-8 h-8 rounded-lg bg-artBlue/20 text-artBlue flex items-center justify-center">
+                    <i className="fa-solid fa-chart-line text-sm"></i>
+                  </div>
+                  <span>Painel de métricas, visualizações e tendências em tempo real</span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <i className="fa-solid fa-database text-artGreen"></i>
-                  PostgreSQL guarda plano, assinatura e validade
+                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <i className="fa-solid fa-gem text-sm"></i>
+                  </div>
+                  <span>Destaque prioritário no feed de descobertas e buscas</span>
                 </div>
               </div>
 

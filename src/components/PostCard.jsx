@@ -11,22 +11,26 @@ const colorClasses = {
   artDark: "bg-artDark",
 };
 
-export default function PostCard({
-  id = 1,
-  image,
-  avatar,
-  user,
-  title,
-  description,
-  tag,
-  likes = 0,
-  comments = 0,
-  curtidoPorMim = false,
-  color = "artPurple",
-}) {
+export default function PostCard(props) {
+  const post = props.post || {};
+  const id = props.id || post.id || 1;
+  const image = props.image || post.arquivoUrl || post.arquivo_url || "";
+  const avatar = props.avatar || post.usuario?.fotoPerfil || post.usuario?.avatar || "";
+  const user = props.user || post.usuario?.nome || "Artista";
+  const userId = props.userId || post.usuario?.id || post.idUsuario;
+  const title = props.title || post.legenda || `Obra #${id}`;
+  const description = props.description || post.descricao || "";
+  const tag = props.tag || (post.categorias && post.categorias[0]?.nomeCategoria) || post.categoria?.nomeCategoria || "";
+  const likes = props.likes ?? post.likes ?? post.totalCurtidas ?? 0;
+  const comments = props.comments ?? post.comentarios ?? post.totalComentarios ?? 0;
+  const curtidoPorMim = props.curtidoPorMim ?? post.curtido_por_mim ?? false;
+  const salvoPorMim = props.salvoPorMim ?? post.salvo_por_mim ?? false;
+  const color = props.color || "artPurple";
+
   const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
   const [likesCount, setLikesCount] = useState(Number(likes) || 0);
   const [isLiked, setIsLiked] = useState(Boolean(curtidoPorMim));
+  const [isSaved, setIsSaved] = useState(Boolean(salvoPorMim));
 
   const avatarColor = colorClasses[color] || "bg-artPurple";
 
@@ -49,9 +53,21 @@ export default function PostCard({
     }
   };
 
-  const handleActionClick = (e) => {
+  const handleSaveClick = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    try {
+      if (isSaved) {
+        await obrasService.removerSalvo(id);
+        setIsSaved(false);
+      } else {
+        await obrasService.salvarObra(id);
+        setIsSaved(true);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar:", err);
+    }
   };
 
   return (
@@ -65,8 +81,11 @@ export default function PostCard({
 
         <div className="relative overflow-hidden">
           <img
-            src={image}
-            alt={title}
+            src={getMediaUrl(image)}
+            alt={title || "Obra"}
+            onError={(e) => {
+              e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+            }}
             className="w-full h-auto group-hover:scale-110 transition-transform duration-700"
           />
 
@@ -80,6 +99,8 @@ export default function PostCard({
             <MenuOpcoes
               tipo="obra"
               detalhesLink={`/obra/${id}`}
+              isSalvo={isSaved}
+              onSalvar={handleSaveClick}
               onDenunciar={() => setModalDenunciaAberto(true)}
             />
           </div>
@@ -87,7 +108,10 @@ export default function PostCard({
 
         <div className="relative z-20 p-6">
           <div className="flex items-center space-x-3 mb-5">
-            <div className={`w-8 h-8 rounded-full ${avatarColor} overflow-hidden`}>
+            <Link
+              to={userId ? `/artista/${userId}` : "/feed"}
+              className={`w-8 h-8 rounded-full ${avatarColor} overflow-hidden block hover:opacity-85 transition-opacity`}
+            >
               {avatar ? (
                 <img
                   src={getMediaUrl(avatar)}
@@ -99,9 +123,14 @@ export default function PostCard({
                   {user?.charAt(0)?.toUpperCase() || "A"}
                 </div>
               )}
-            </div>
+            </Link>
 
-            <span className="text-xs font-bold tracking-tight">{user}</span>
+            <Link
+              to={userId ? `/artista/${userId}` : "/feed"}
+              className="text-xs font-bold tracking-tight hover:text-artPurple transition-colors truncate"
+            >
+              {user || "Artista"}
+            </Link>
           </div>
 
           <h4 className="font-editorial text-2xl italic leading-tight group-hover:text-artPurple transition-colors">
@@ -119,9 +148,10 @@ export default function PostCard({
               <button
                 type="button"
                 onClick={handleLikeClick}
-                className={`relative z-30 transition-colors flex items-center space-x-1 ${
+                className={`relative z-30 transition-colors flex items-center space-x-1.5 ${
                   isLiked ? "text-red-500" : "hover:text-artOrange"
                 }`}
+                title={isLiked ? "Remover curtida" : "Curtir obra"}
               >
                 <i className={isLiked ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
                 <span className="text-[10px] font-bold">{likesCount}</span>
@@ -129,7 +159,8 @@ export default function PostCard({
 
               <Link
                 to={`/obra/${id}`}
-                className="relative z-30 hover:text-artBlue transition-colors flex items-center space-x-1"
+                className="relative z-30 hover:text-artBlue transition-colors flex items-center space-x-1.5"
+                title="Comentários"
               >
                 <i className="fa-regular fa-comment"></i>
                 <span className="text-[10px] font-bold">{comments}</span>
@@ -138,11 +169,15 @@ export default function PostCard({
 
             <button
               type="button"
-              onClick={handleActionClick}
-              className="relative z-30 text-artDark hover:scale-110 transition-transform"
-              title="Salvar obra"
+              onClick={handleSaveClick}
+              className={`relative z-30 transition-all ${
+                isSaved
+                  ? "text-amber-500 scale-110"
+                  : "text-gray-400 hover:text-amber-500 hover:scale-110"
+              }`}
+              title={isSaved ? "Remover dos favoritos" : "Salvar nos favoritos"}
             >
-              <i className="fa-regular fa-bookmark"></i>
+              <i className={isSaved ? "fa-solid fa-bookmark text-amber-500" : "fa-regular fa-bookmark"}></i>
             </button>
           </div>
         </div>

@@ -3,49 +3,67 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
+import ModalConversao from "../components/ModalConversao";
+import LightboxModal from "../components/LightboxModal";
+import ModalConfirmarExclusao from "../components/ModalConfirmarExclusao";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, getMediaUrl } from "../services/api";
+import { getEstiloCategoria } from "../constants/categories";
 
-function DetalhesObra() {
+export default function DetalhesObra() {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // Estados principais da obra
   const [obraDetalhe, setObraDetalhe] = useState(null);
   const [comentarios, setComentarios] = useState([]);
   const [novoComentario, setNovoComentario] = useState("");
+
+  // Estados de engajamento
+  const [isSalvo, setIsSalvo] = useState(false);
+  const [isCurtido, setIsCurtido] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+
+  // Estados de Modais
+  const [modalZoomAberto, setModalZoomAberto] = useState(false);
+  const [modalExcluirAberto, setModalExcluirAberto] = useState(false);
   const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
   const [denunciaAtual, setDenunciaAtual] = useState({ tipo: "obra", alvo: "" });
+  const [modalConversaoAberto, setModalConversaoAberto] = useState(false);
+  const [acaoTentada, setAcaoTentada] = useState("interagir");
 
+  // Estados de feedback e carregamento
   const [noticeMessage, setNoticeMessage] = useState("");
   const [noticeType, setNoticeType] = useState("info");
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
 
-  const { user: currentUser, isAuthenticated } = useAuth();
-
-  const [isSalvo, setIsSalvo] = useState(false);
+  const { user: currentUser, isAuthenticated, isGuest } = useAuth();
 
   const carregarDadosObra = async () => {
     if (!id) return;
     try {
+      setLoading(true);
       const dadosObra = await obrasService.obterObraPorId(id);
       if (dadosObra && dadosObra.id) {
         setObraDetalhe(dadosObra);
+        setLikesCount(dadosObra.totalCurtidas || 0);
+        setIsCurtido(Boolean(dadosObra.curtido_por_mim));
+        setIsSalvo(Boolean(dadosObra.salvo_por_mim));
       }
 
-      // Carregar comentários reais
       const listaComentarios = await obrasService.listarComentarios(id);
       setComentarios(listaComentarios || []);
 
-      // Checar status de salvamento se autenticado
-      if (isAuthenticated) {
+      if (isAuthenticated && !isGuest) {
         try {
           const resSalvo = await obrasService.checarSalvo(id);
           if (resSalvo && typeof resSalvo.salvo === "boolean") {
             setIsSalvo(resSalvo.salvo);
           }
         } catch {
-          // Ignorar se não autenticado ou erro
+          // fallback silencioso
         }
       }
     } catch (err) {
@@ -68,22 +86,50 @@ function DetalhesObra() {
 
   const isOwner = currentUser?.id === obraDetalhe?.usuario?.id;
 
-  const handleToggleSave = async () => {
-    if (!isAuthenticated) {
-      mostrarAviso("Faça login para salvar esta obra.", "error");
+  const handleToggleLike = async () => {
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada("curtir esta obra");
+      setModalConversaoAberto(true);
       return;
     }
+
+    const novoStatusCurtido = !isCurtido;
+    setIsCurtido(novoStatusCurtido);
+    setLikesCount((prev) => (novoStatusCurtido ? prev + 1 : Math.max(0, prev - 1)));
+
     try {
-      if (isSalvo) {
-        await obrasService.removerSalvo(id);
-        setIsSalvo(false);
-        mostrarAviso("Obra removida dos salvos com sucesso.", "info");
+      if (novoStatusCurtido) {
+        await obrasService.curtir(id);
       } else {
-        await obrasService.salvarObra(id);
-        setIsSalvo(true);
-        mostrarAviso("Obra salva com sucesso!", "success");
+        await obrasService.descurtir(id);
       }
     } catch (err) {
+      setIsCurtido(!novoStatusCurtido);
+      setLikesCount((prev) => (novoStatusCurtido ? Math.max(0, prev - 1) : prev + 1));
+      mostrarAviso(err.message || "Erro ao alterar curtida.", "error");
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada("salvar esta obra nos seus favoritos");
+      setModalConversaoAberto(true);
+      return;
+    }
+
+    const novoStatusSalvo = !isSalvo;
+    setIsSalvo(novoStatusSalvo);
+
+    try {
+      if (novoStatusSalvo) {
+        await obrasService.salvarObra(id);
+        mostrarAviso("Obra salva nos favoritos!", "success");
+      } else {
+        await obrasService.removerSalvo(id);
+        mostrarAviso("Obra removida dos favoritos.", "info");
+      }
+    } catch (err) {
+      setIsSalvo(!novoStatusSalvo);
       mostrarAviso(err.message || "Erro ao alterar salvamento.", "error");
     }
   };
@@ -92,8 +138,9 @@ function DetalhesObra() {
     event.preventDefault();
     if (!novoComentario.trim()) return;
 
-    if (!isAuthenticated) {
-      mostrarAviso("Você precisa estar logado para comentar.", "error");
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada("comentar nesta publicação");
+      setModalConversaoAberto(true);
       return;
     }
 
@@ -102,7 +149,7 @@ function DetalhesObra() {
       const comentarioCriado = await obrasService.criarComentario(id, novoComentario.trim());
       setComentarios((prev) => [...prev, comentarioCriado]);
       setNovoComentario("");
-      mostrarAviso("Comentário adicionado com sucesso!", "success");
+      mostrarAviso("Comentário publicado!", "success");
     } catch (err) {
       mostrarAviso(err.message || "Erro ao adicionar comentário.", "error");
     } finally {
@@ -120,27 +167,51 @@ function DetalhesObra() {
     }
   };
 
+  const handleExcluirObraConfirmado = async () => {
+    setDeleting(true);
+    try {
+      await obrasService.deletarObra(id);
+      mostrarAviso("Obra excluída com sucesso! Redirecionando...", "success");
+      setTimeout(() => {
+        navigate("/meu-portfolio");
+      }, 1200);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao excluir a obra.", "error");
+      setDeleting(false);
+    }
+  };
+
+  const handleCompartilhar = () => {
+    navigator.clipboard.writeText(window.location.href);
+    mostrarAviso("Link da obra copiado para a área de transferência!", "success");
+  };
+
   const abrirDenuncia = (tipo, alvo) => {
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada("denunciar uma obra");
+      setModalConversaoAberto(true);
+      return;
+    }
     setDenunciaAtual({ tipo, alvo });
     setModalDenunciaAberto(true);
   };
 
   const noticeStyles = {
-    info: "bg-artOrange/10 text-artOrange border-artOrange/10",
-    success: "bg-green-50 text-green-600 border-green-200",
-    error: "bg-red-50 text-red-500 border-red-200",
+    info: "bg-orange-50 text-artOrange border-orange-200",
+    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    error: "bg-red-50 text-red-600 border-red-200",
   };
 
+  // Skeleton de Carregamento Compacto
   if (loading) {
     return (
       <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
         <Sidebar />
-        <main className="ml-16 min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
-            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
-              Carregando detalhes da obra...
-            </p>
+        <main className="ml-14 min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+          <div className="h-7 w-36 bg-gray-200 rounded-xl animate-pulse"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-7 h-[420px] bg-gray-200 rounded-2xl animate-pulse"></div>
+            <div className="lg:col-span-5 h-[380px] bg-gray-200 rounded-2xl animate-pulse"></div>
           </div>
         </main>
       </div>
@@ -151,10 +222,15 @@ function DetalhesObra() {
     return (
       <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
         <Sidebar />
-        <main className="ml-16 min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="font-editorial text-4xl italic mb-4">Obra não encontrada.</h2>
-            <Link to="/feed" className="bg-artDark text-white px-6 py-3 rounded-full text-sm font-bold">
+        <main className="ml-14 min-h-screen flex items-center justify-center p-6">
+          <div className="bg-white border border-gray-200 rounded-2xl p-8 max-w-md text-center shadow-xl">
+            <i className="fa-solid fa-triangle-exclamation text-3xl text-artOrange mb-3"></i>
+            <h2 className="text-xl font-bold text-artDark mb-1">Obra não encontrada</h2>
+            <p className="text-xs text-gray-500 mb-5">A publicação acessada não existe ou foi removida pelo autor.</p>
+            <Link
+              to="/feed"
+              className="inline-flex items-center justify-center bg-artDark text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-artOrange transition-all shadow-md"
+            >
               Voltar ao Feed
             </Link>
           </div>
@@ -163,83 +239,144 @@ function DetalhesObra() {
     );
   }
 
+  const categoriasLista =
+    obraDetalhe.categorias && obraDetalhe.categorias.length > 0
+      ? obraDetalhe.categorias
+      : obraDetalhe.categoria
+      ? [obraDetalhe.categoria]
+      : [];
+
   return (
-    <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen">
+    <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen pb-16">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]" />
 
       <Sidebar />
 
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-          <section className="lg:col-span-7">
-            <div className="bg-white rounded-[2rem] overflow-hidden border border-black/5 shadow-xl shadow-black/5 relative">
+      <main className="ml-14 min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+        
+        {/* TOPO: Navegação & Categorias */}
+        <div className="flex items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="bg-white border border-gray-200/80 text-gray-700 hover:text-artDark hover:border-gray-400 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
+            >
+              <i className="fa-solid fa-arrow-left text-[11px]"></i>
+              <span>{isOwner ? "Voltar às minhas obras" : "Voltar ao Feed"}</span>
+            </button>
+
+            {categoriasLista.length > 0 && (
+              <span className="text-xs text-gray-400 font-medium hidden sm:inline-block">
+                • <strong className="text-gray-600 font-bold ml-1">#{categoriasLista[0].nomeCategoria}</strong>
+              </span>
+            )}
+          </div>
+
+          {!isOwner && (
+            <MenuOpcoes
+              tipo="obra"
+              detalhesLink={`/obra/${obraDetalhe.id}`}
+              isSalvo={isSalvo}
+              onSalvar={handleToggleSave}
+              onDenunciar={() =>
+                abrirDenuncia("obra", obraDetalhe.legenda || `Obra #${obraDetalhe.id}`)
+              }
+              onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "success")}
+            />
+          )}
+        </div>
+
+        {/* Alerta de Notificação */}
+        {noticeMessage && (
+          <div className={`${noticeStyles[noticeType]} border rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 shadow-xs animate-fade-in`}>
+            <i className="fa-solid fa-circle-info text-sm"></i>
+            <span>{noticeMessage}</span>
+          </div>
+        )}
+
+        {/* ESTRUTURA PRINCIPAL EM 2 COLUNAS (COMPACTA) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* COLUNA ESQUERDA: Palco da Obra & Barra de Engajamento Abaixo */}
+          <div className="lg:col-span-7 flex flex-col space-y-3">
+            <div
+              onClick={() => setModalZoomAberto(true)}
+              className="bg-neutral-900 rounded-2xl overflow-hidden shadow-md relative group cursor-zoom-in min-h-[320px] max-h-[500px] flex items-center justify-center border border-black/10"
+            >
               <img
-                src={obraDetalhe.arquivoUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200"}
-                alt={obraDetalhe.legenda || "Obra"}
-                className="w-full h-[280px] sm:h-[380px] lg:h-[500px] object-cover"
+                src={getMediaUrl(obraDetalhe.arquivoUrl)}
+                alt={obraDetalhe.legenda || "Obra de arte"}
+                onError={(e) => {
+                  e.currentTarget.src =
+                    "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200";
+                }}
+                className="w-full h-full max-h-[500px] object-contain transition-transform duration-500 group-hover:scale-[1.01] mx-auto"
               />
 
-              <div className="absolute top-5 right-5">
-                {isOwner ? (
-                  <Link
-                    to={`/editar-obra/${obraDetalhe.id}`}
-                    className="w-11 h-11 rounded-full bg-white border border-black/5 flex items-center justify-center hover:bg-artDark hover:text-white transition-all shadow-lg"
-                    title="Editar obra"
-                  >
-                    <i className="fa-solid fa-pen text-sm"></i>
-                  </Link>
-                ) : (
-                  <MenuOpcoes
-                    tipo="obra"
-                    detalhesLink={`/obra/${obraDetalhe.id}`}
-                    isSalvo={isSalvo}
-                    onSalvar={handleToggleSave}
-                    onDenunciar={() =>
-                      abrirDenuncia("obra", obraDetalhe.legenda || `Obra #${obraDetalhe.id}`)
-                    }
-                    onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "success")}
-                  />
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="lg:col-span-5">
-            {noticeMessage && (
-              <div className={`${noticeStyles[noticeType]} border rounded-[1.3rem] px-5 py-3 mb-5 text-xs font-bold`}>
-                <i className="fa-solid fa-circle-info mr-2"></i>
-                {noticeMessage}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-3 mb-5">
-              <div className="flex flex-wrap items-center gap-2">
-                {obraDetalhe.categoria?.nomeCategoria && (
-                  <span className="text-artPurple font-bold tracking-widest uppercase text-[10px]">
-                    {obraDetalhe.categoria.nomeCategoria}
-                  </span>
-                )}
-
-                {isOwner && (
-                  <span className="bg-artOrange/10 text-artOrange px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                    Minha obra
-                  </span>
-                )}
+              {/* Tag Dica de Zoom */}
+              <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-semibold px-3 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 shadow-md">
+                <i className="fa-solid fa-expand text-[10px]"></i>
+                <span>Clique para ampliar</span>
               </div>
             </div>
 
-            <h1 className="font-editorial text-4xl sm:text-5xl leading-tight mb-4">
-              {obraDetalhe.legenda || `Obra #${obraDetalhe.id}`}
-            </h1>
+            {/* BARRA DE ENGAJAMENTO (TOTALMENTE ABAIXO DA IMAGEM, NO FLUXO NORMAL) */}
+            <div className="bg-white border border-gray-100 rounded-2xl px-5 py-3 flex items-center justify-between shadow-sm mt-1">
+              <div className="flex items-center gap-5 sm:gap-6">
+                {/* Botão Curtir */}
+                <button
+                  type="button"
+                  onClick={handleToggleLike}
+                  className={`flex items-center gap-2 text-xs font-bold transition-all ${
+                    isCurtido ? "text-red-500 scale-105" : "text-gray-600 hover:text-red-500"
+                  }`}
+                >
+                  <i className={isCurtido ? "fa-solid fa-heart text-sm text-red-500 animate-pulse" : "fa-regular fa-heart text-sm"}></i>
+                  <span>{likesCount} <span className="hidden sm:inline font-medium">curtidas</span></span>
+                </button>
 
-            {/* Autor */}
-            <div className="bg-white rounded-[1.7rem] p-4 border border-black/5 mb-5">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex items-center gap-3 flex-1">
+                {/* Botão Favoritar */}
+                <button
+                  type="button"
+                  onClick={handleToggleSave}
+                  className={`flex items-center gap-2 text-xs font-bold transition-all ${
+                    isSalvo ? "text-amber-500" : "text-gray-600 hover:text-amber-500"
+                  }`}
+                >
+                  <i className={isSalvo ? "fa-solid fa-bookmark text-sm text-amber-500" : "fa-regular fa-bookmark text-sm"}></i>
+                  <span>{isSalvo ? "Salvo" : "Salvar"}</span>
+                </button>
+
+                {/* Visualizações */}
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400">
+                  <i className="fa-regular fa-eye text-sm"></i>
+                  <span>{obraDetalhe.visualizacoes || 0} <span className="hidden sm:inline font-normal">views</span></span>
+                </div>
+              </div>
+
+              {/* Botão Compartilhar */}
+              <button
+                type="button"
+                onClick={handleCompartilhar}
+                className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-artDark flex items-center justify-center transition-colors text-xs border border-gray-100 shadow-xs"
+                title="Copiar link da obra"
+              >
+                <i className="fa-solid fa-share-nodes text-[11px]"></i>
+              </button>
+            </div>
+          </div>
+
+          {/* COLUNA DIREITA: PAINEL LATERAL UNIFICADO E COMPACTO (STICKY DESKTOP) */}
+          <div className="lg:col-span-5 sticky top-8 self-start space-y-4">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+              
+              {/* HEADER DO ARTISTA */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <Link
                     to={isOwner ? "/perfil" : `/artista/${obraDetalhe.usuario?.id}`}
-                    className="w-11 h-11 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-opacity"
-                    title={`Ver perfil de ${obraDetalhe.usuario?.nome || "Artista"}`}
+                    className="w-10 h-10 rounded-full bg-artPurple overflow-hidden shrink-0 border border-gray-100 shadow-xs hover:scale-105 transition-transform"
                   >
                     {obraDetalhe.usuario?.fotoPerfil ? (
                       <img
@@ -248,119 +385,172 @@ function DetalhesObra() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-artPurple flex items-center justify-center text-white font-bold">
+                      <div className="w-full h-full bg-artPurple flex items-center justify-center text-white font-bold text-sm">
                         {obraDetalhe.usuario?.nome?.charAt(0)?.toUpperCase() || "A"}
                       </div>
                     )}
                   </Link>
 
-                  <div>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
-                      {obraDetalhe.usuario?.tipo_conta || "Artista"}
-                    </p>
-
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-gray-400 font-semibold block uppercase tracking-wider">
+                      Artista / Autor
+                    </span>
                     <Link
                       to={isOwner ? "/perfil" : `/artista/${obraDetalhe.usuario?.id}`}
-                      className="font-bold text-base hover:text-artPurple transition-colors block"
+                      className="font-bold text-sm text-artDark hover:text-artOrange transition-colors block truncate"
                     >
-                      {obraDetalhe.usuario?.nome || "Artista"}
+                      {obraDetalhe.usuario?.nome || "Artista Desconhecido"}
                     </Link>
                   </div>
                 </div>
 
-                <Link
-                  to={isOwner ? "/perfil" : `/artista/${obraDetalhe.usuario?.id}`}
-                  className="px-4 py-2.5 rounded-full border border-black/10 text-[10px] font-bold uppercase tracking-widest hover:bg-artDark hover:text-white transition-all text-center"
-                >
-                  Ver Perfil
-                </Link>
+                {!isOwner ? (
+                  <Link
+                    to={`/artista/${obraDetalhe.usuario?.id}`}
+                    className="bg-artDark hover:bg-artOrange text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 whitespace-nowrap"
+                  >
+                    Ver Perfil
+                  </Link>
+                ) : (
+                  <span className="bg-orange-50 text-artOrange border border-orange-200/60 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">
+                    Proprietário
+                  </span>
+                )}
               </div>
+
+              <hr className="border-gray-100" />
+
+              {/* TÍTULO E DETALHES COMPACTOS DA OBRA */}
+              <div className="space-y-2">
+                <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-snug">
+                  {obraDetalhe.legenda || `Obra #${obraDetalhe.id}`}
+                </h1>
+
+                <p className="text-xs text-gray-400 font-medium">
+                  {obraDetalhe.dataPostagem
+                    ? `Publicado em ${new Date(obraDetalhe.dataPostagem).toLocaleDateString("pt-BR")}`
+                    : "Publicado recentemente"}
+                </p>
+
+                {obraDetalhe.legenda && (
+                  <p className="text-xs text-gray-600 leading-relaxed font-light whitespace-pre-line pt-1">
+                    {obraDetalhe.legenda}
+                  </p>
+                )}
+
+                {/* Categorias & Tags Compactas */}
+                {categoriasLista.length > 0 && (
+                  <div className="pt-2 flex flex-wrap gap-1.5">
+                    {categoriasLista.map((cat, i) => {
+                      const estilo = getEstiloCategoria(cat.nomeCategoria);
+                      return (
+                        <span
+                          key={cat.id || i}
+                          className={`${estilo.corTag} px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition-transform hover:scale-105`}
+                        >
+                          #{cat.nomeCategoria}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* LINHA DE AÇÕES DO PROPRIETÁRIO */}
+              {isOwner && (
+                <>
+                  <hr className="border-gray-100" />
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block">
+                      Ações da Publicação
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        to={`/editar-obra/${obraDetalhe.id}`}
+                        className="bg-gray-100 hover:bg-artDark text-artDark hover:text-white py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 border border-gray-200/60"
+                      >
+                        <i className="fa-solid fa-pen text-[10px]"></i>
+                        <span>Editar</span>
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => setModalExcluirAberto(true)}
+                        className="bg-red-50 hover:bg-red-500 text-red-500 hover:text-white py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 border border-red-200/60"
+                      >
+                        <i className="fa-solid fa-trash-can text-[10px]"></i>
+                        <span>Excluir</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
             </div>
-
-            <div className="bg-artPurple/5 rounded-[1.7rem] p-5 border border-artPurple/10 mb-5">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest mb-3">
-                Informações da obra
-              </h4>
-
-              <div className="space-y-2 text-sm text-gray-500">
-                <div className="flex justify-between gap-4">
-                  <span>Data de publicação</span>
-                  <strong className="text-artDark text-right">
-                    {obraDetalhe.dataPostagem ? new Date(obraDetalhe.dataPostagem).toLocaleDateString() : "—"}
-                  </strong>
-                </div>
-
-                <div className="flex justify-between gap-4">
-                  <span>Categoria</span>
-                  <strong className="text-artPurple text-right">
-                    {obraDetalhe.categoria?.nomeCategoria || "Digital"}
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            {isOwner ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Link
-                  to={`/editar-obra/${obraDetalhe.id}`}
-                  className="bg-artDark text-white py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 text-center"
-                >
-                  <i className="fa-solid fa-pen mr-2"></i>
-                  Editar Obra
-                </Link>
-
-                <Link
-                  to="/meu-portfolio"
-                  className="bg-white border border-black/5 py-4 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all text-center"
-                >
-                  <i className="fa-solid fa-layer-group mr-2"></i>
-                  Gerenciar
-                </Link>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Link
-                  to="/mensagens"
-                  className="bg-white border border-black/5 py-4 rounded-full text-sm font-bold hover:bg-artDark hover:text-white transition-all text-center"
-                >
-                  <i className="fa-solid fa-paper-plane mr-2"></i>
-                  Mensagem
-                </Link>
-
-                <Link
-                  to="/encomendas"
-                  className="bg-artOrange text-white py-4 rounded-full text-sm font-bold hover:bg-artDark transition-all text-center"
-                >
-                  <i className="fa-solid fa-bag-shopping mr-2"></i>
-                  Encomenda
-                </Link>
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* Seção de Comentários Reais */}
-        <section className="max-w-6xl mx-auto mt-8 bg-white rounded-[2rem] border border-black/5 p-4 sm:p-5 lg:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-            <h2 className="font-editorial text-3xl italic">Comentários</h2>
-
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              {comentarios.length} {comentarios.length === 1 ? "comentário" : "comentários"}
-            </span>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        </div>
+
+        {/* SEÇÃO INFERIOR: COMENTÁRIOS COMPACTOS (ALINHADOS COM O CONTAINER) */}
+        <section className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6 shadow-sm space-y-5 max-w-6xl mx-auto">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h2 className="text-base font-bold text-artDark">
+              Comentários ({comentarios.length})
+            </h2>
+          </div>
+
+          {/* Form de Envio de Comentário */}
+          <form onSubmit={handleComentarioSubmit} className="flex gap-2.5 items-center">
+            <div className="w-8 h-8 rounded-full bg-artPurple text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-xs overflow-hidden">
+              {currentUser?.fotoPerfil ? (
+                <img
+                  src={getMediaUrl(currentUser.fotoPerfil)}
+                  alt="Seu Perfil"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{currentUser?.nome ? currentUser.nome.charAt(0).toUpperCase() : "U"}</span>
+              )}
+            </div>
+
+            <div className="flex-1 flex gap-2">
+              <input
+                type="text"
+                value={novoComentario}
+                onChange={(e) => setNovoComentario(e.target.value)}
+                placeholder={isGuest ? "Faça login para comentar..." : "Escreva um comentário..."}
+                maxLength={500}
+                disabled={submittingComment}
+                className="flex-1 bg-gray-50 border border-gray-200 focus:border-artOrange focus:bg-white rounded-full px-4 py-2 text-xs text-artDark outline-none transition-all placeholder:text-gray-400"
+              />
+
+              <button
+                type="submit"
+                disabled={submittingComment || !novoComentario.trim()}
+                className="bg-artOrange hover:bg-orange-600 text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5"
+              >
+                {submittingComment ? (
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                ) : (
+                  <span>Comentar</span>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Lista de Comentários */}
+          <div className="space-y-3 pt-1">
             {comentarios.length === 0 ? (
-              <p className="text-sm text-gray-400 italic lg:col-span-2">
-                Nenhum comentário ainda. Seja o primeiro a comentar!
-              </p>
+              <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 border border-dashed border-gray-200">
+                <p className="text-xs font-medium">Nenhum comentário ainda. Seja o primeiro a comentar sobre esta arte!</p>
+              </div>
             ) : (
               comentarios.map((item) => (
-                <div key={item.id} className="flex gap-3 items-start">
+                <div key={item.id} className="flex gap-3 items-start bg-gray-50/70 border border-gray-100 rounded-xl p-3">
                   <Link
                     to={currentUser?.id === item.usuario?.id ? "/perfil" : `/artista/${item.usuario?.id}`}
-                    className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-opacity"
-                    title={`Ver perfil de ${item.usuario?.nome || "Usuário"}`}
+                    className="w-8 h-8 rounded-full bg-artPurple text-white flex items-center justify-center shrink-0 text-xs font-bold overflow-hidden hover:opacity-85 transition-opacity"
                   >
                     {item.usuario?.fotoPerfil ? (
                       <img
@@ -369,72 +559,64 @@ function DetalhesObra() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-artPurple text-white flex items-center justify-center text-xs font-bold">
-                        {item.usuario?.nome?.charAt(0)?.toUpperCase() || "U"}
-                      </div>
+                      <span>{item.usuario?.nome?.charAt(0)?.toUpperCase() || "U"}</span>
                     )}
                   </Link>
 
-                  <div className="flex-1 bg-[#F9F8F6] rounded-[1.3rem] p-4">
-                    <div className="flex justify-between gap-3 mb-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-2 mb-0.5">
                       <Link
                         to={currentUser?.id === item.usuario?.id ? "/perfil" : `/artista/${item.usuario?.id}`}
-                        className="text-sm font-bold hover:text-artPurple transition-colors"
+                        className="text-xs font-bold text-artDark hover:text-artOrange transition-colors truncate"
                       >
                         {item.usuario?.nome || "Usuário"}
                       </Link>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[9px] text-gray-400 font-bold">
-                          {item.dataCriacao ? new Date(item.dataCriacao).toLocaleDateString() : ""}
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          {item.dataCriacao ? new Date(item.dataCriacao).toLocaleDateString("pt-BR") : ""}
                         </span>
 
                         {(currentUser?.id === item.usuario?.id || currentUser?.tipo_conta === "admin" || currentUser?.tipo_conta === "moderador") && (
                           <button
                             type="button"
                             onClick={() => handleDeletarComentario(item.id)}
-                            className="text-gray-300 hover:text-red-500 transition-colors ml-2"
+                            className="text-gray-300 hover:text-red-500 transition-colors ml-1"
                             title="Excluir comentário"
                           >
-                            <i className="fa-solid fa-trash text-xs"></i>
+                            <i className="fa-solid fa-trash-can text-[11px]"></i>
                           </button>
                         )}
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600 leading-relaxed">{item.conteudo}</p>
+                    <p className="text-xs text-gray-700 leading-relaxed font-light break-words">
+                      {item.conteudo}
+                    </p>
                   </div>
                 </div>
               ))
             )}
           </div>
-
-          <form onSubmit={handleComentarioSubmit} className="flex gap-3">
-            <input
-              type="text"
-              value={novoComentario}
-              onChange={(event) => setNovoComentario(event.target.value)}
-              placeholder="Escreva um comentário..."
-              maxLength={500}
-              disabled={submittingComment}
-              className="flex-1 bg-[#F9F8F6] rounded-full px-5 py-3.5 outline-none focus:ring-2 ring-artPurple/20 text-sm min-w-0 disabled:opacity-50"
-            />
-
-            <button
-              type="submit"
-              disabled={submittingComment || !novoComentario.trim()}
-              className="w-11 h-11 rounded-full bg-artDark text-white hover:bg-artPurple transition-all shrink-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Enviar comentário"
-            >
-              {submittingComment ? (
-                <i className="fa-solid fa-spinner fa-spin text-xs"></i>
-              ) : (
-                <i className="fa-solid fa-arrow-up text-xs"></i>
-              )}
-            </button>
-          </form>
         </section>
+
       </main>
+
+      {/* MODAIS AUXILIARES */}
+      <LightboxModal
+        isOpen={modalZoomAberto}
+        onClose={() => setModalZoomAberto(false)}
+        imagemUrl={getMediaUrl(obraDetalhe?.arquivoUrl)}
+        titulo={obraDetalhe?.legenda}
+      />
+
+      <ModalConfirmarExclusao
+        isOpen={modalExcluirAberto}
+        onClose={() => setModalExcluirAberto(false)}
+        onConfirm={handleExcluirObraConfirmado}
+        loading={deleting}
+        tituloObra={obraDetalhe?.legenda}
+      />
 
       <ModalDenuncia
         aberto={modalDenunciaAberto}
@@ -445,8 +627,12 @@ function DetalhesObra() {
         onSucesso={(msg) => mostrarAviso(msg, "success")}
         onErro={(msg) => mostrarAviso(msg, "error")}
       />
+
+      <ModalConversao
+        isOpen={modalConversaoAberto}
+        onClose={() => setModalConversaoAberto(false)}
+        acao={acaoTentada}
+      />
     </div>
   );
 }
-
-export default DetalhesObra;

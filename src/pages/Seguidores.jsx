@@ -166,44 +166,20 @@ export default function Seguidores() {
 
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <aside className="lg:col-span-3 space-y-4">
-              <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                <h2 className="font-editorial text-2xl italic mb-4">
-                  Filtros
-                </h2>
-
-                <div className="space-y-2">
-                  {filtros.map((filtro) => (
-                    <button
-                      key={filtro.id}
-                      type="button"
-                      onClick={() => setFiltroAtual(filtro.id)}
-                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all ${
-                        filtroAtual === filtro.id
-                          ? "bg-artDark text-white shadow-md shadow-black/10"
-                          : "bg-[#F9F8F6] text-gray-400 hover:text-artDark hover:bg-[#eae7df]"
-                      }`}
-                    >
-                      {filtro.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-artDark text-white rounded-[1.7rem] p-5 relative overflow-hidden">
+              <div className="bg-artDark text-white rounded-[1.7rem] p-6 relative overflow-hidden shadow-xl">
                 <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Dica de conexão
+                  Dica de conexão ✨
                 </span>
 
-                <h3 className="font-editorial text-2xl italic leading-tight">
+                <h3 className="font-editorial text-2xl italic leading-tight mb-2">
                   Interaja com quem acompanha você.
                 </h3>
 
-                <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Responder mensagens, seguir de volta e comentar obras ajuda a
-                  criar uma comunidade mais forte.
+                <p className="text-xs text-gray-400 leading-relaxed font-light">
+                  Responder mensagens, seguir de volta e prestigiar produções cria laços genuínos na nossa comunidade artística.
                 </p>
 
-                <i className="fa-solid fa-users absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
+                <i className="fa-solid fa-heart absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
               </div>
             </aside>
 

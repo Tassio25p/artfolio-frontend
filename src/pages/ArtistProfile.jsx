@@ -4,92 +4,160 @@ import PortfolioCard from "../components/PortfolioCard";
 import Sidebar from "../components/Sidebar";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
+import ModalConversao from "../components/ModalConversao";
+import ModalPortfolioApresentacao from "../components/ModalPortfolioApresentacao";
+import ModalCompartilhar from "../components/ModalCompartilhar";
 import { useAuth } from "../contexts/AuthContext";
-import { authService, obrasService, usuarioService, getMediaUrl } from "../services/api";
-
-const filtros = ["Todas", "Digital", "Físico", "3D"];
+import { obrasService, usuarioService, getMediaUrl } from "../services/api";
 
 export default function ArtistProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
-  const [filtroAtual, setFiltroAtual] = useState("Todas");
+  const [modalConversaoAberto, setModalConversaoAberto] = useState(false);
+  const [modalPortfolioAberto, setModalPortfolioAberto] = useState(false);
+  const [modalCompartilharAberto, setModalCompartilharAberto] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState("");
+
+  const [acaoTentada, setAcaoTentada] = useState("interagir");
+  const [abaAtiva, setAbaAtiva] = useState("obras"); // "obras" | "favoritos"
   const [loading, setLoading] = useState(true);
 
   // Dados do perfil
   const [perfil, setPerfil] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
 
-  // Obras do artista
+  // Obras do artista e Obras salvas
   const [obrasPublicas, setObrasPublicas] = useState([]);
+  const [obrasSalvas, setObrasSalvas] = useState([]);
+  const [carregandoSalvas, setCarregandoSalvas] = useState(false);
 
-  const { user: authUser } = useAuth();
+  const { user: authUser, isGuest, isAuthenticated } = useAuth();
 
-  useEffect(() => {
-    const carregarPerfil = async () => {
+  const carregarPerfil = async () => {
+    try {
+      setLoading(true);
+      if (!id && isGuest) {
+        setLoading(false);
+        return;
+      }
+
+      const isProprioPerfil = !id || (authUser && String(id) === String(authUser.id));
+      const targetId = id || authUser?.id;
+
+      if (!targetId) {
+        setLoading(false);
+        return;
+      }
+
+      let dadosPerfil = null;
       try {
-        setLoading(true);
-        // Se não tem ID na URL, usa o ID do usuário logado
-        const targetId = id || authUser?.id;
-        if (!targetId) return;
+        dadosPerfil = await usuarioService.obterPerfil(targetId);
+      } catch {
+        if (isProprioPerfil && authUser) {
+          dadosPerfil = authUser;
+        } else {
+          dadosPerfil = {
+            id: targetId,
+            nome: `Artista #${targetId}`,
+            biografia: "",
+            email: "",
+            tipo_conta: "artista",
+            fotoPerfil: "",
+            instagram: "",
+            behance: "",
+            website: "",
+            portfolio: "",
+            trajetoria: "",
+            especializacoes: "",
+            certificados: "[]",
+            seguidoresCount: 0,
+            seguindoCount: 0,
+            obrasCount: 0,
+          };
+        }
+      }
 
-        // Buscar dados completos do perfil público via API
-        const dadosPerfil = await usuarioService.obterPerfil(targetId);
-        
-        setIsOwner(dadosPerfil.relacionamento?.isMe || (authUser && String(authUser.id) === String(dadosPerfil.id)));
+      const souDono = !isGuest && (isProprioPerfil || dadosPerfil?.relacionamento?.isMe || (authUser && String(authUser.id) === String(dadosPerfil?.id)));
+      setIsOwner(souDono);
 
-        setPerfil({
-          id: dadosPerfil.id,
-          nome: dadosPerfil.nome || "",
-          biografia: dadosPerfil.biografia || "",
-          email: dadosPerfil.email || "",
-          tipoConta: dadosPerfil.tipo_conta || "cliente",
-          avatar: dadosPerfil.fotoPerfil || "",
-          instagram: dadosPerfil.instagram || "",
-          behance: dadosPerfil.behance || "",
-          website: dadosPerfil.website || "",
-          portfolio: dadosPerfil.portfolio || "",
-          telefone: dadosPerfil.telefone || "",
-          seguidores: dadosPerfil.seguidoresCount || 0,
-          seguindo: dadosPerfil.seguindoCount || 0,
-          obras: dadosPerfil.obrasCount || 0,
-          visualizacoes: "0",
-          curtidas: 0,
-          encomendas: 0,
-          plano: "FREE",
-          categoria: dadosPerfil.tipo_conta === "artista" ? "Artista" : "Cliente",
-          categoriaResumo: dadosPerfil.tipo_conta === "artista" ? "Artista" : "Cliente",
-          relacionamento: dadosPerfil.relacionamento || {},
-        });
+      setPerfil({
+        id: dadosPerfil.id || targetId,
+        nome: dadosPerfil.nome || (isProprioPerfil ? authUser?.nome : `Artista #${targetId}`) || "Artista",
+        biografia: dadosPerfil.biografia || "",
+        email: dadosPerfil.email || (isProprioPerfil ? authUser?.email : "") || "",
+        tipoConta: dadosPerfil.tipo_conta || "artista",
+        avatar: dadosPerfil.fotoPerfil || (isProprioPerfil ? authUser?.fotoPerfil : "") || "",
+        instagram: dadosPerfil.instagram || (isProprioPerfil ? authUser?.instagram : "") || "",
+        behance: dadosPerfil.behance || (isProprioPerfil ? authUser?.behance : "") || "",
+        website: dadosPerfil.website || (isProprioPerfil ? authUser?.website : "") || "",
+        portfolio: dadosPerfil.portfolio || (isProprioPerfil ? authUser?.portfolio : "") || "",
+        trajetoria: dadosPerfil.trajetoria || "",
+        especializacoes: dadosPerfil.especializacoes || "",
+        certificados: dadosPerfil.certificados || "[]",
+        telefone: dadosPerfil.telefone || "",
+        seguidores: dadosPerfil.seguidoresCount || 0,
+        seguindo: dadosPerfil.seguindoCount || 0,
+        obras: dadosPerfil.obrasCount || 0,
+        relacionamento: dadosPerfil.relacionamento || {},
+      });
 
-        // Carregar obras do usuário
-        try {
-          const obras = await obrasService.listarObras({ usuario_id: targetId });
+      // Carregar obras do usuário
+      try {
+        const obras = await obrasService.listarObras({ usuario_id: targetId });
+        if (Array.isArray(obras) && obras.length > 0) {
           setObrasPublicas(
             obras.map((obra) => ({
               id: obra.id,
               image: obra.arquivoUrl || obra.arquivo_url || "",
-              category: obra.categoria?.nome || "Sem categoria",
+              category:
+                (obra.categorias && obra.categorias[0]?.nomeCategoria) ||
+                obra.categoria?.nomeCategoria ||
+                obra.categoria?.nome ||
+                "Arte",
               title: obra.legenda || "Sem título",
               color: "text-artOrange",
               tipo: "Digital",
             }))
           );
-        } catch {
-          // Sem obras ainda
+        } else {
+          setObrasPublicas([]);
         }
-      } catch (error) {
-        console.error("Erro ao carregar perfil:", error);
-      } finally {
-        setLoading(false);
+      } catch {
+        setObrasPublicas([]);
       }
-    };
 
+      // Se for o próprio perfil, carregar obras salvas para a aba Favoritos
+      if (souDono) {
+        setCarregandoSalvas(true);
+        try {
+          const salvas = await obrasService.listarSalvas();
+          setObrasSalvas(Array.isArray(salvas) ? salvas : []);
+        } catch {
+          setObrasSalvas([]);
+        } finally {
+          setCarregandoSalvas(false);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar perfil:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     carregarPerfil();
-  }, [id, authUser, navigate]);
+  }, [id, authUser, isGuest]);
 
   const handleToggleFollow = async () => {
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada("seguir este artista");
+      setModalConversaoAberto(true);
+      return;
+    }
+
     if (!perfil || !perfil.id) return;
     try {
       const estaSeguindo = perfil.relacionamento?.seguindo;
@@ -119,6 +187,72 @@ export default function ArtistProfile() {
     }
   };
 
+  const handleAcaoRestritaVisitante = (acao) => {
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada(acao);
+      setModalConversaoAberto(true);
+      return true;
+    }
+    return false;
+  };
+
+  const mostrarAviso = (msg) => {
+    setNoticeMessage(msg);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
+
+  // Se o visitante acessou /perfil (sem ID de artista)
+  if (isGuest && !id) {
+    return (
+      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
+        <Sidebar />
+        <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10 flex items-center justify-center">
+          <div className="max-w-md w-full bg-white rounded-[2.5rem] border border-black/5 p-8 text-center shadow-xl shadow-black/5 animate-scaleUp">
+            <div className="w-16 h-16 rounded-3xl bg-artBlue/10 text-artBlue flex items-center justify-center text-2xl mx-auto mb-6 shadow-md shadow-artBlue/10">
+              <i className="fa-solid fa-eye"></i>
+            </div>
+
+            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
+              Modo Visitante Ativo
+            </span>
+
+            <h2 className="font-editorial text-3xl font-bold leading-tight mb-3">
+              Você ainda não possui um <span className="italic text-artOrange">Perfil de Artista.</span>
+            </h2>
+
+            <p className="text-sm text-gray-500 leading-relaxed mb-6 font-light">
+              Navegando como <strong>{authUser?.nome || "Visitante"}</strong>, você pode explorar e buscar obras livremente. Para expor seu próprio portfólio, publicar criações e salvar favoritos, cadastre-se hoje mesmo!
+            </p>
+
+            <div className="space-y-3">
+              <Link
+                to="/cadastro"
+                className="w-full inline-flex items-center justify-center gap-2 bg-artDark text-white py-4 rounded-full text-sm font-bold hover:bg-artOrange transition-all shadow-xl shadow-black/10 active:scale-95"
+              >
+                <i className="fa-solid fa-palette text-xs"></i>
+                Criar Minha Conta de Artista
+              </Link>
+
+              <Link
+                to="/login"
+                className="w-full inline-flex items-center justify-center gap-2 bg-[#F9F8F6] text-artDark border border-black/5 py-3 rounded-full text-sm font-bold hover:bg-artPurple hover:text-white transition-all active:scale-95"
+              >
+                Fazer Login
+              </Link>
+
+              <Link
+                to="/feed"
+                className="inline-block text-xs font-bold text-gray-400 hover:text-artDark uppercase tracking-widest pt-2"
+              >
+                ← Voltar para o Feed
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (loading || !perfil) {
     return (
       <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
@@ -135,13 +269,9 @@ export default function ArtistProfile() {
     );
   }
 
-  const primeiroNome = perfil.nome.split(" ")[0];
-  const sobrenome = perfil.nome.split(" ").slice(1).join(" ");
-
-  const obrasFiltradas = obrasPublicas.filter((obra) => {
-    if (filtroAtual === "Todas") return true;
-    return obra.tipo === filtroAtual;
-  });
+  const nomeParts = (perfil.nome || "Artista").trim().split(" ");
+  const primeiroNome = nomeParts[0];
+  const sobrenome = nomeParts.slice(1).join(" ");
 
   return (
     <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
@@ -150,6 +280,14 @@ export default function ArtistProfile() {
       <Sidebar />
 
       <main className="ml-16 min-h-screen">
+        {/* Banner Alerta de Mensagem */}
+        {noticeMessage && (
+          <div className="fixed top-5 right-5 z-50 bg-artDark text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold animate-fadeIn">
+            <i className="fa-solid fa-check-circle text-artOrange mr-2"></i>
+            {noticeMessage}
+          </div>
+        )}
+
         <section className="bg-white border-b border-black/5 px-4 sm:px-6 lg:px-10 py-7">
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
@@ -180,16 +318,16 @@ export default function ArtistProfile() {
               <div className="lg:col-span-6 text-center lg:text-left">
                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 mb-2">
                   <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block">
-                    {perfil.tipoConta === "artista" ? "Artista Verificado" : "Perfil Artfolio"}
+                    Artista Verificado
                   </span>
 
                   <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                    Perfil Aprovado
+                    Portfólio Ativo
                   </span>
                 </div>
 
                 <h1 className="font-editorial text-4xl sm:text-5xl lg:text-5xl leading-none mb-3">
-                  {primeiroNome} <span className="italic">{sobrenome || "."}</span>
+                  {primeiroNome} {sobrenome && <span className="italic">{sobrenome}</span>}
                 </h1>
 
                 {perfil.biografia && (
@@ -200,7 +338,7 @@ export default function ArtistProfile() {
 
                 <div className="flex flex-wrap justify-center lg:justify-start gap-2 mt-4">
                   <span className="bg-artPurple/10 text-artPurple px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                    {perfil.categoria}
+                    {perfil.tipoConta || "Artista"}
                   </span>
 
                   <span className="bg-artBlue/10 text-artBlue px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest">
@@ -215,6 +353,7 @@ export default function ArtistProfile() {
                 </div>
               </div>
 
+              {/* Estatísticas e Ações */}
               <div className="lg:col-span-4">
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <Link
@@ -230,43 +369,29 @@ export default function ArtistProfile() {
                   </Link>
 
                   <Link
-                    to={isOwner ? "/meu-portfolio" : "/perfil"}
+                    to={`/seguindo${perfil?.id ? `?usuario_id=${perfil.id}` : ""}`}
                     className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all text-center lg:text-left"
                   >
                     <span className="text-artDark text-xl font-black block">
-                      {perfil.obras}
+                      {perfil.seguindo}
+                    </span>
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
+                      Seguindo
+                    </span>
+                  </Link>
+
+                  <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 text-center lg:text-left">
+                    <span className="text-artDark text-xl font-black block">
+                      {obrasPublicas.length || perfil.obras}
                     </span>
                     <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
                       Obras
                     </span>
-                  </Link>
-
-                  {isOwner ? (
-                    <Link
-                      to="/planos"
-                      className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all text-center lg:text-left"
-                    >
-                      <span className="text-artDark text-xl font-black block uppercase">
-                        {perfil.plano}
-                      </span>
-                      <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
-                        Plano
-                      </span>
-                    </Link>
-                  ) : (
-                    <div className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 text-center lg:text-left">
-                      <span className="text-artDark text-xl font-black block">
-                        {perfil.categoriaResumo}
-                      </span>
-                      <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
-                        Categoria
-                      </span>
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 {isOwner ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:flex lg:flex-wrap gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2">
                     <Link
                       to="/editar-perfil"
                       className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all text-center"
@@ -276,72 +401,66 @@ export default function ArtistProfile() {
                     </Link>
 
                     <Link
-                      to="/meu-portfolio"
-                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-                    >
-                      <i className="fa-solid fa-layer-group mr-2"></i>
-                      Gerenciar
-                    </Link>
-
-                    <Link
                       to="/criar-obra"
-                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                      className="bg-gradient-to-r from-artPurple via-indigo-600 to-artBlue text-white px-4 py-2.5 rounded-full text-xs font-bold hover:opacity-95 transition-all text-center shadow-md shadow-artPurple/20 flex items-center justify-center gap-1.5"
                     >
-                      <i className="fa-solid fa-plus mr-2"></i>
+                      <i className="fa-solid fa-plus text-xs"></i>
                       Nova Obra
                     </Link>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
                     {perfil.relacionamento?.seguindo ? (
                       <button
                         type="button"
                         onClick={handleToggleFollow}
-                        className="bg-artDark/10 text-artDark border border-black/10 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                        className="flex-1 bg-artDark/10 text-artDark border border-black/10 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
                       >
                         <i className="fa-solid fa-user-check mr-2"></i>
                         Seguindo
-                      </button>
-                    ) : perfil.relacionamento?.segueDeVolta ? (
-                      <button
-                        type="button"
-                        onClick={handleToggleFollow}
-                        className="bg-artOrange text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artDark transition-all flex items-center justify-center shadow-md shadow-artOrange/20"
-                      >
-                        <i className="fa-solid fa-user-plus mr-2"></i>
-                        Seguir de volta
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={handleToggleFollow}
-                        className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all flex items-center justify-center"
+                        className="flex-1 bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange transition-all flex items-center justify-center"
                       >
                         <i className="fa-solid fa-user-plus mr-2"></i>
                         Seguir
                       </button>
                     )}
 
-                    <Link
-                      to="/mensagens"
-                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
-                    >
-                      <i className="fa-solid fa-paper-plane mr-2"></i>
-                      Mensagem
-                    </Link>
-
-                    <Link
-                      to="/encomendas"
-                      className="bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange hover:text-white transition-all text-center"
-                    >
-                      <i className="fa-solid fa-bag-shopping mr-2"></i>
-                      Solicitar Encomenda
-                    </Link>
+                    {isGuest ? (
+                      <button
+                        type="button"
+                        onClick={() => handleAcaoRestritaVisitante("enviar mensagens para este artista")}
+                        className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                      >
+                        <i className="fa-solid fa-paper-plane mr-2"></i>
+                        Mensagem
+                      </button>
+                    ) : (
+                      <Link
+                        to="/mensagens"
+                        className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                      >
+                        <i className="fa-solid fa-paper-plane mr-2"></i>
+                        Mensagem
+                      </Link>
+                    )}
 
                     <MenuOpcoes
                       tipo="perfil"
-                      detalhesLink="/perfil"
-                      onDenunciar={() => setModalDenunciaAberto(true)}
+                      detalhesLink={`/artista/${perfil.id}`}
+                      onDenunciar={() => {
+                        if (isGuest) {
+                          handleAcaoRestritaVisitante("denunciar um perfil");
+                        } else {
+                          setModalDenunciaAberto(true);
+                        }
+                      }}
+                      onCompartilhar={() => setModalCompartilharAberto(true)}
+                      onCopiarLinkSuccess={mostrarAviso}
                     />
                   </div>
                 )}
@@ -350,274 +469,253 @@ export default function ArtistProfile() {
           </div>
         </section>
 
-        <section className="px-4 sm:px-6 lg:px-10 py-6 bg-[#F9F8F6]">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <aside className="lg:col-span-3 space-y-5">
-              <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                <h3 className="font-editorial text-2xl italic mb-4">Sobre</h3>
+        {/* Links e Botão de Portfólio & Apresentação */}
+        <section className="bg-white border-b border-black/5 px-4 sm:px-6 lg:px-10 py-4">
+          <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4 text-xs font-semibold text-gray-500">
+            {perfil.instagram && (
+              <a
+                href={`https://instagram.com/${perfil.instagram.replace('@', '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-artOrange transition-colors bg-[#F9F8F6] border border-black/5 px-4 py-2 rounded-full"
+              >
+                <i className="fa-brands fa-instagram text-sm text-artOrange"></i>
+                <span>@{perfil.instagram.replace('@', '')}</span>
+              </a>
+            )}
 
-                <div className="space-y-3 text-sm">
-                  {perfil.email && (
-                    <div className="flex items-center gap-3 text-gray-500 break-all">
-                      <i className="fa-solid fa-envelope text-artDark w-4 shrink-0"></i>
-                      {perfil.email}
-                    </div>
-                  )}
+            {perfil.behance && (
+              <a
+                href={perfil.behance.startsWith("http") ? perfil.behance : `https://behance.net/${perfil.behance}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-artBlue transition-colors bg-[#F9F8F6] border border-black/5 px-4 py-2 rounded-full"
+              >
+                <i className="fa-brands fa-behance text-sm text-artBlue"></i>
+                <span>Behance</span>
+              </a>
+            )}
 
-                  {perfil.telefone && (
-                    <div className="flex items-center gap-3 text-gray-500">
-                      <i className="fa-solid fa-phone text-artBlue w-4 shrink-0"></i>
-                      {perfil.telefone}
-                    </div>
-                  )}
+            {perfil.website && (
+              <a
+                href={perfil.website.startsWith("http") ? perfil.website : `https://${perfil.website}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-artDark transition-colors bg-[#F9F8F6] border border-black/5 px-4 py-2 rounded-full"
+              >
+                <i className="fa-solid fa-globe text-sm text-artPurple"></i>
+                <span>Website</span>
+              </a>
+            )}
 
-                  {perfil.instagram && (
-                    <a
-                      href={`https://instagram.com/${perfil.instagram}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 text-gray-500 hover:text-artPurple transition-colors"
-                    >
-                      <i className="fa-brands fa-instagram text-artPurple w-4 shrink-0"></i>
-                      @{perfil.instagram}
-                    </a>
-                  )}
+            {/* Botão de Portfólio / Certificados */}
+            <button
+              type="button"
+              onClick={() => setModalPortfolioAberto(true)}
+              className="flex items-center gap-2 bg-artOrange/10 text-artOrange border border-artOrange/20 px-4 py-2 rounded-full font-bold hover:bg-artOrange hover:text-white transition-all shadow-sm ml-auto sm:ml-0"
+            >
+              <i className="fa-solid fa-file-contract text-sm"></i>
+              <span>Portfólio & Certificados ({isOwner ? "Editar" : "Ver"})</span>
+            </button>
+          </div>
+        </section>
 
-                  {perfil.behance && (
-                    <a
-                      href={`https://behance.net/${perfil.behance}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 text-gray-500 hover:text-artBlue transition-colors"
-                    >
-                      <i className="fa-brands fa-behance text-artBlue w-4 shrink-0"></i>
-                      {perfil.behance}
-                    </a>
-                  )}
+        {/* Abas do Perfil: Obras Publicadas vs Favoritos/Salvos */}
+        <section className="px-4 sm:px-6 lg:px-10 pt-8 pb-4">
+          <div className="max-w-6xl mx-auto flex items-center gap-3 border-b border-black/5 pb-3">
+            <button
+              type="button"
+              onClick={() => setAbaAtiva("obras")}
+              className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
+                abaAtiva === "obras"
+                  ? "bg-artDark text-white shadow-md"
+                  : "bg-white text-gray-500 border border-black/5 hover:bg-gray-50"
+              }`}
+            >
+              <i className="fa-solid fa-palette"></i>
+              <span>Obras ({obrasPublicas.length})</span>
+            </button>
 
-                  {perfil.website && (
-                    <a
-                      href={perfil.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 text-gray-500 hover:text-artOrange transition-colors break-all"
-                    >
-                      <i className="fa-solid fa-link text-artOrange w-4 shrink-0"></i>
-                      {perfil.website}
-                    </a>
-                  )}
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setAbaAtiva("favoritos")}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
+                  abaAtiva === "favoritos"
+                    ? "bg-amber-500 text-white shadow-md shadow-amber-500/20"
+                    : "bg-white text-gray-500 border border-black/5 hover:bg-gray-50 hover:text-amber-500"
+                }`}
+              >
+                <i className="fa-solid fa-bookmark"></i>
+                <span>Favoritos / Salvos ({obrasSalvas.length})</span>
+              </button>
+            )}
+          </div>
+        </section>
 
-                  {perfil.portfolio && (
-                    <a
-                      href={perfil.portfolio}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 text-gray-500 hover:text-artOrange transition-colors break-all"
-                    >
-                      <i className="fa-solid fa-briefcase text-artOrange w-4 shrink-0"></i>
-                      {perfil.portfolio}
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {isOwner ? (
-                <div className="bg-artDark rounded-[1.7rem] p-5 text-white relative overflow-hidden">
-                  <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
-                    Plano {perfil.plano}
-                  </span>
-
-                  <h3 className="font-editorial text-2xl italic leading-tight">
-                    {perfil.plano === "PRO"
-                      ? "Perfil com prioridade no feed."
-                      : "Perfil básico gratuito."}
-                  </h3>
-
-                  <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                    Faça upgrade para destacar seu portfólio e acessar recursos extras.
-                  </p>
-
-                  <Link
-                    to="/planos"
-                    className="inline-block mt-4 bg-white text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple hover:text-white transition-all relative z-10"
-                  >
-                    Ver Plano
-                  </Link>
-
-                  <i className="fa-solid fa-crown absolute -right-4 -bottom-5 text-[5rem] text-white/5 rotate-12"></i>
-                </div>
-              ) : (
-                <div className="bg-artDark rounded-[1.7rem] p-5 text-white relative overflow-hidden">
-                  <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
-                    Encomendas
-                  </span>
-
-                  <h3 className="font-editorial text-2xl italic leading-tight">
-                    Disponível para artes personalizadas.
-                  </h3>
-
-                  <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                    Entre em contato com o artista para conversar sobre uma obra,
-                    orçamento ou projeto personalizado.
-                  </p>
-
-                  <Link
-                    to="/encomendas"
-                    className="inline-block mt-4 bg-white text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange hover:text-white transition-all relative z-10"
-                  >
-                    Solicitar Encomenda
-                  </Link>
-
-                  <i className="fa-solid fa-palette absolute -right-4 -bottom-5 text-[5rem] text-white/5 rotate-12"></i>
-                </div>
-              )}
-
-              <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                <h3 className="font-editorial text-2xl italic mb-4">
-                  Destaques
-                </h3>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Visualizações</span>
-                    <strong>{perfil.visualizacoes}</strong>
-                  </div>
-
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Curtidas</span>
-                    <strong>{perfil.curtidas}</strong>
-                  </div>
-
-                  {isOwner ? (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Encomendas</span>
-                      <strong>{perfil.encomendas}</strong>
-                    </div>
-                  ) : (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Obras públicas</span>
-                      <strong>{obrasPublicas.length}</strong>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-[1.7rem] p-5 border border-black/5">
-                <h3 className="font-editorial text-2xl italic mb-4">
-                  Conexões
-                </h3>
-
-                <div className="space-y-3">
-                  <Link
-                    to="/seguidores"
-                    className="flex items-center justify-between bg-[#F9F8F6] rounded-[1.2rem] px-4 py-3 hover:bg-artDark hover:text-white transition-all"
-                  >
-                    <span className="text-sm font-bold">
-                      <i className="fa-solid fa-users mr-2"></i>
-                      Seguidores
-                    </span>
-                    <span className="text-xs font-black">
-                      {perfil.seguidores}
-                    </span>
-                  </Link>
-
-                  <Link
-                    to="/seguindo"
-                    className="flex items-center justify-between bg-[#F9F8F6] rounded-[1.2rem] px-4 py-3 hover:bg-artDark hover:text-white transition-all"
-                  >
-                    <span className="text-sm font-bold">
-                      <i className="fa-solid fa-user-check mr-2"></i>
-                      Seguindo
-                    </span>
-                    <span className="text-xs font-black">
-                      {perfil.seguindo}
-                    </span>
-                  </Link>
-                </div>
-              </div>
-            </aside>
-
-            <section className="lg:col-span-9">
-              <div className="bg-white rounded-[2rem] border border-black/5 p-4 sm:p-5 lg:p-6">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+        {/* Conteúdo da Aba Ativa */}
+        <section className="px-4 sm:px-6 lg:px-10 pb-12">
+          <div className="max-w-6xl mx-auto">
+            {abaAtiva === "obras" ? (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                   <div>
-                    <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-1">
-                      Galeria Pública
+                    <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Galeria de Obras
                     </span>
-
-                    <h3 className="font-editorial text-3xl italic">
-                      Portfólio Profissional
-                    </h3>
+                    <h2 className="font-editorial text-3xl italic">
+                      Produções de {primeiroNome}
+                    </h2>
                   </div>
 
-                  <div className="flex gap-4 overflow-x-auto pb-2 text-[10px] font-bold uppercase tracking-widest">
-                    {filtros.map((filtro) => (
-                      <button
-                        key={filtro}
-                        type="button"
-                        onClick={() => setFiltroAtual(filtro)}
-                        className={`whitespace-nowrap border-b-2 pb-1 transition-colors ${
-                          filtroAtual === filtro
-                            ? "text-artDark border-artDark"
-                            : "text-gray-400 border-transparent hover:text-artDark"
-                        }`}
-                      >
-                        {filtro}
-                      </button>
-                    ))}
-                  </div>
+                  <span className="text-xs font-bold text-gray-400">
+                    {obrasPublicas.length} {obrasPublicas.length === 1 ? "obra publicada" : "obras publicadas"}
+                  </span>
                 </div>
 
-                {obrasFiltradas.length === 0 ? (
-                  <div className="bg-[#F9F8F6] rounded-[1.7rem] p-8 border border-black/5 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-white mx-auto flex items-center justify-center text-gray-300 mb-4">
-                      <i className="fa-regular fa-folder-open text-xl"></i>
-                    </div>
-
-                    <h4 className="font-bold text-lg">
-                      Nenhuma obra encontrada
-                    </h4>
-
-                    <p className="text-sm text-gray-500 mt-2">
+                {obrasPublicas.length === 0 ? (
+                  <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center shadow-sm">
+                    <i className="fa-solid fa-palette text-4xl text-gray-200 mb-4"></i>
+                    <h3 className="font-editorial text-3xl italic mb-2">Nenhuma obra cadastrada ainda.</h3>
+                    <p className="text-sm text-gray-400">
                       {isOwner
-                        ? "Você ainda não publicou nenhuma obra. Comece criando sua primeira!"
-                        : "Não há obras públicas neste filtro no momento."}
+                        ? "Comece publicando suas primeiras criações para montar seu portfólio!"
+                        : "Este artista ainda não publicou obras."}
                     </p>
-
                     {isOwner && (
                       <Link
                         to="/criar-obra"
-                        className="inline-flex items-center mt-4 bg-artDark text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all"
+                        className="inline-block mt-5 bg-artDark text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-artOrange transition-all shadow-md"
                       >
-                        <i className="fa-solid fa-plus mr-2"></i>
-                        Criar Obra
+                        Publicar Primeira Obra
                       </Link>
                     )}
                   </div>
                 ) : (
-                  <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5">
-                    {obrasFiltradas.map((obra) => (
-                      <PortfolioCard
-                        key={obra.id}
-                        image={obra.image}
-                        category={obra.category}
-                        title={obra.title}
-                        color={obra.color}
-                      />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {obrasPublicas.map((obra) => (
+                      <PortfolioCard key={obra.id} obra={obra} />
                     ))}
                   </div>
                 )}
               </div>
-            </section>
+            ) : (
+              /* Aba de Favoritos / Obras Salvas */
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <span className="text-amber-500 font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Coleção Pessoal
+                    </span>
+                    <h2 className="font-editorial text-3xl italic">
+                      Minhas Obras Favoritadas
+                    </h2>
+                  </div>
+
+                  <span className="text-xs font-bold text-gray-400">
+                    {obrasSalvas.length} {obrasSalvas.length === 1 ? "favorito" : "favoritos"}
+                  </span>
+                </div>
+
+                {carregandoSalvas ? (
+                  <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center">
+                    <i className="fa-solid fa-spinner fa-spin text-3xl text-amber-500 mb-3"></i>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                      Carregando obras salvas...
+                    </p>
+                  </div>
+                ) : obrasSalvas.length === 0 ? (
+                  <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center shadow-sm">
+                    <i className="fa-solid fa-bookmark text-4xl text-gray-200 mb-4"></i>
+                    <h3 className="font-editorial text-3xl italic mb-2">Nenhuma obra salva nos favoritos.</h3>
+                    <p className="text-sm text-gray-400 max-w-md mx-auto leading-relaxed">
+                      Navegue pelo Feed e clique no ícone de favorito amarelo para salvar suas referências artísticas aqui.
+                    </p>
+                    <Link
+                      to="/feed"
+                      className="inline-block mt-5 bg-artDark text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-amber-500 transition-all shadow-md"
+                    >
+                      Explorar Feed
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {obrasSalvas.map((obra) => (
+                      <Link
+                        key={obra.id}
+                        to={`/obra/${obra.id}`}
+                        className="group bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all flex flex-col"
+                      >
+                        <div className="relative h-56 bg-gray-100 overflow-hidden">
+                          <img
+                            src={getMediaUrl(obra.arquivoUrl)}
+                            alt={obra.legenda || "Obra Salva"}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <div className="absolute top-3 right-3 bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md">
+                            <i className="fa-solid fa-bookmark text-xs"></i>
+                          </div>
+                        </div>
+
+                        <div className="p-5 flex-1 flex flex-col justify-between">
+                          <div>
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-artPurple block mb-1">
+                              {obra.categoria?.nomeCategoria || "Arte"}
+                            </span>
+                            <h3 className="font-editorial text-xl italic group-hover:text-amber-500 transition-colors line-clamp-1">
+                              {obra.legenda || `Obra #${obra.id}`}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Por <strong>{obra.usuario?.nome || "Artista"}</strong>
+                            </p>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between text-xs text-gray-400 font-bold">
+                            <span>Ver Detalhes</span>
+                            <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform text-artDark"></i>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
       </main>
 
+      {/* Modal de Apresentação / Edição de Portfólio & Certificados */}
+      <ModalPortfolioApresentacao
+        isOpen={modalPortfolioAberto}
+        onClose={() => setModalPortfolioAberto(false)}
+        perfil={perfil}
+        isOwner={isOwner}
+        onAtualizarPerfil={carregarPerfil}
+      />
+
+      {/* Modal de Compartilhamento de Perfil */}
+      <ModalCompartilhar
+        isOpen={modalCompartilharAberto}
+        onClose={() => setModalCompartilharAberto(false)}
+        titulo={perfil?.nome}
+        onCopiarSucesso={mostrarAviso}
+      />
+
+      {/* Modal de Denúncia */}
       <ModalDenuncia
         aberto={modalDenunciaAberto}
         onFechar={() => setModalDenunciaAberto(false)}
-        tipo="perfil"
-        alvo={perfil.nome}
+        alvo={`Perfil de ${perfil?.nome || "Artista"}`}
+        onSucesso={(msg) => mostrarAviso(msg)}
+        onErro={(msg) => mostrarAviso(msg)}
+      />
+
+      {/* Modal de Conversão ao tentar interagir como visitante */}
+      <ModalConversao
+        isOpen={modalConversaoAberto}
+        onClose={() => setModalConversaoAberto(false)}
+        acao={acaoTentada}
       />
     </div>
   );

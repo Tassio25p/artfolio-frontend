@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
-import { notificacaoService, getToken } from "../services/api";
+import { notificacaoService, mensagemService, getToken } from "../services/api";
 
 const NotificationContext = createContext();
 
@@ -51,6 +51,8 @@ export function NotificationProvider({ children }) {
   const prevCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
   const intervalRef = useRef(null);
+  const lastMessageIdsRef = useRef(new Set());
+  const initialMessagesLoadedRef = useRef(false);
 
   // Ocultar toast manualmente
   const hideToast = useCallback(() => {
@@ -65,6 +67,44 @@ export function NotificationProvider({ children }) {
     }, 5000);
   }, []);
 
+  // Verificar mensagens de chat recebidas em tempo real (sem salvar na tabela notificacao)
+  const checkIncomingMessages = useCallback(async () => {
+    if (!getToken() || !isAuthenticated || !user?.id) return;
+    try {
+      const convs = await mensagemService.listarConversas();
+      if (!Array.isArray(convs)) return;
+
+      let hasNewMessage = false;
+
+      convs.forEach((conv) => {
+        const destNome = conv.destinatario?.nome || "Alguém";
+        const ultima = conv.ultimaMensagem;
+        if (ultima && !ultima.enviado_por_mim && ultima.idRemetente !== user.id) {
+          if (initialMessagesLoadedRef.current && !lastMessageIdsRef.current.has(ultima.id)) {
+            hasNewMessage = true;
+            const isInChat = window.location.pathname.startsWith("/mensagens");
+            if (!isInChat) {
+              triggerToast(
+                `${destNome} enviou uma mensagem`,
+                ultima.conteudo || "Enviou um anexo.",
+                "/mensagens"
+              );
+            }
+          }
+          lastMessageIdsRef.current.add(ultima.id);
+        }
+      });
+
+      if (hasNewMessage) {
+        tocarSomNotificacao();
+      }
+
+      initialMessagesLoadedRef.current = true;
+    } catch (err) {
+      console.debug("Erro ao verificar mensagens de chat recebidas:", err);
+    }
+  }, [isAuthenticated, user?.id, triggerToast]);
+
   // Buscar contagem atualizada de não lidas do backend
   const fetchUnreadCount = useCallback(async () => {
     if (!getToken() || !isAuthenticated) return;
@@ -74,11 +114,10 @@ export function NotificationProvider({ children }) {
       if (res && typeof res.quantidade === "number") {
         const newCount = res.quantidade;
 
-        // Verificar se chegou uma NOVA notificação durante a sessão ativa
+        // Verificar se chegou uma NOVA notificação de seguidores etc. durante a sessão ativa
         if (!isInitialLoadRef.current && newCount > prevCountRef.current) {
           tocarSomNotificacao();
 
-          // Buscar dados da última notificação para o Toast
           try {
             const listRes = await notificacaoService.listar();
             if (listRes && Array.isArray(listRes.items) && listRes.items.length > 0) {
@@ -154,7 +193,6 @@ export function NotificationProvider({ children }) {
   // Gerenciar Polling automático e Reset de Sessão ao trocar de usuário / logout
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
-      // Logout ou Usuário Desautenticado -> Limpar tudo
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -162,23 +200,29 @@ export function NotificationProvider({ children }) {
       setUnreadCount(0);
       prevCountRef.current = 0;
       isInitialLoadRef.current = true;
+      initialMessagesLoadedRef.current = false;
+      lastMessageIdsRef.current = new Set();
       hideToast();
       return;
     }
 
-    // Usuário Autenticado -> Resetar flag de carga inicial para a nova conta e fazer fetch imediato
     isInitialLoadRef.current = true;
+    initialMessagesLoadedRef.current = false;
+    lastMessageIdsRef.current = new Set();
     prevCountRef.current = 0;
-    fetchUnreadCount();
 
-    // Configurar Polling inteligente a cada 8 segundos
+    fetchUnreadCount();
+    checkIncomingMessages();
+
+    // Polling a cada 4 segundos
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
 
     intervalRef.current = setInterval(() => {
       fetchUnreadCount();
-    }, 8000);
+      checkIncomingMessages();
+    }, 4000);
 
     return () => {
       if (intervalRef.current) {
@@ -186,7 +230,7 @@ export function NotificationProvider({ children }) {
         intervalRef.current = null;
       }
     };
-  }, [isAuthenticated, user?.id, fetchUnreadCount, hideToast]);
+  }, [isAuthenticated, user?.id, fetchUnreadCount, checkIncomingMessages, hideToast]);
 
   return (
     <NotificationContext.Provider

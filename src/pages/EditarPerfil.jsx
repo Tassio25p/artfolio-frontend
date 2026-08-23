@@ -290,6 +290,7 @@ function EditarPerfil() {
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
+                        onClick={(e) => { e.target.value = null; }}
                         onChange={handleFileChange}
                         disabled={uploadingPhoto}
                         className="hidden"
@@ -410,77 +411,23 @@ function EditarPerfil() {
 
               <div className="bg-white rounded-[2rem] border border-black/5 p-5 sm:p-6">
                 <h2 className="font-editorial text-3xl italic mb-6">
-                  Links e contato
+                  Redes sociais e contato
                 </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 gap-5">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Instagram
+                      Instagram <span className="text-artOrange font-normal">(ex: @seuusuario)</span>
                     </label>
 
                     <div className="relative">
-                      <i className="fa-brands fa-instagram absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                      <i className="fa-brands fa-instagram absolute left-5 top-1/2 -translate-y-1/2 text-artOrange"></i>
 
                       <input
                         type="text"
                         value={instagram}
                         onChange={(event) => setInstagram(event.target.value)}
                         placeholder="usuario ou https://instagram.com/usuario"
-                        className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Behance
-                    </label>
-
-                    <div className="relative">
-                      <i className="fa-brands fa-behance absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
-
-                      <input
-                        type="text"
-                        value={behance}
-                        onChange={(event) => setBehance(event.target.value)}
-                        placeholder="usuario ou https://behance.net/usuario"
-                        className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Portfólio
-                    </label>
-
-                    <div className="relative">
-                      <i className="fa-solid fa-briefcase absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
-
-                      <input
-                        type="text"
-                        value={portfolio}
-                        onChange={(event) => setPortfolio(event.target.value)}
-                        placeholder="https://meuportfolio.com"
-                        className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Website
-                    </label>
-
-                    <div className="relative">
-                      <i className="fa-solid fa-link absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
-
-                      <input
-                        type="text"
-                        value={website}
-                        onChange={(event) => setWebsite(event.target.value)}
-                        placeholder="https://meusite.com.br"
                         className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       />
                     </div>

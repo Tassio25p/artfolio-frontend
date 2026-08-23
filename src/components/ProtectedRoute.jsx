@@ -2,22 +2,14 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 /**
- * ProtectedRoute — Componente que protege rotas que exigem autenticação.
+ * ProtectedRoute — Protege rotas que exigem autenticação ou permite acesso de Visitante (Guest).
  *
- * Comportamento:
- * 1. Se ainda está verificando a sessão (loading) → exibe spinner de carregamento
- * 2. Se não está autenticado → redireciona para /login, salvando a rota atual
- *    em location.state.from para redirecionamento pós-login
- * 3. Se está autenticado → renderiza os children normalmente
- *
- * Uso:
- *   <Route path="/feed" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+ * @param {boolean} allowGuest - Se true, permite que usuários em modo visitante (isGuest) acessem a página.
  */
-export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+export default function ProtectedRoute({ children, allowGuest = false }) {
+  const { isAuthenticated, isGuest, loading } = useAuth();
   const location = useLocation();
 
-  // Estado de carregamento — evita flash da tela de login
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F9F8F6] flex items-center justify-center">
@@ -27,18 +19,18 @@ export default function ProtectedRoute({ children }) {
             <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-artPurple animate-spin"></div>
           </div>
           <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">
-            Verificando sessão...
+            Carregando...
           </p>
         </div>
       </div>
     );
   }
 
-  // Não autenticado — redireciona para /login com a rota tentada
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  // Permitido se estiver autenticado como artista OU se a rota permite visitante e o usuário é visitante
+  if (isAuthenticated || (allowGuest && isGuest)) {
+    return children;
   }
 
-  // Autenticado — renderiza a página protegida
-  return children;
+  // Não autenticado / Não permitido para visitante
+  return <Navigate to="/login" state={{ from: location }} replace />;
 }
