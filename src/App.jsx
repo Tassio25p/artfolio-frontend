@@ -1,5 +1,6 @@
 import { Routes, Route, Link } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
 import { ToastProvider } from "./contexts/ToastContext";
 
 import Inicio from "./pages/Inicio";
@@ -31,48 +32,43 @@ function App() {
   return (
     <ToastProvider>
       <Routes>
-        {/* Rotas públicas */}
+        {/* Rotas completamente públicas (fora do AppLayout / sem Sidebar) */}
         <Route path="/" element={<Inicio />} />
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Cadastro />} />
         <Route path="/recuperar-senha" element={<RecuperarSenha />} />
         <Route path="/termos" element={<TermosUso />} />
 
-        {/* Área pública/visitante ou autenticada */}
-        <Route path="/feed" element={<ProtectedRoute allowGuest={true}><Home /></ProtectedRoute>} />
-        <Route path="/buscar" element={<ProtectedRoute allowGuest={true}><Buscar /></ProtectedRoute>} />
-        <Route path="/obra/:id" element={<DetalhesObra />} />
-        <Route path="/artista/:id" element={<ProtectedRoute allowGuest={true}><ArtistProfile /></ProtectedRoute>} />
-
-        {/* Onboarding exclusivo do Artista recém-cadastrado */}
+        {/* Onboarding exclusivo do Artista recém-cadastrado (fora do layout) */}
         <Route path="/onboarding" element={<ProtectedRoute><OnboardingPerfil /></ProtectedRoute>} />
 
-        {/* Rotas protegidas — Exclusivas para Artistas/Usuários cadastrados */}
-        <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
-        <Route path="/mensagens" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-        <Route path="/notificacoes" element={<ProtectedRoute><Notificacoes /></ProtectedRoute>} />
-        <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+        {/* Rotas agrupadas sob o AppLayout (compartilham a Sidebar persistente) */}
+        <Route element={<AppLayout />}>
+          {/* Rotas híbridas (Visitante / Autenticado) */}
+          <Route path="/feed" element={<ProtectedRoute allowGuest={true}><Home /></ProtectedRoute>} />
+          <Route path="/buscar" element={<ProtectedRoute allowGuest={true}><Buscar /></ProtectedRoute>} />
+          <Route path="/obra/:id" element={<DetalhesObra />} />
+          <Route path="/artista/:id" element={<ProtectedRoute allowGuest={true}><ArtistProfile /></ProtectedRoute>} />
+          <Route path="/perfil" element={<ProtectedRoute allowGuest={true}><ArtistProfile /></ProtectedRoute>} />
 
-        {/* Obras — rotas protegidas */}
-        <Route path="/criar-obra" element={<ProtectedRoute><CriarObra /></ProtectedRoute>} />
-        <Route path="/editar-obra/:id" element={<ProtectedRoute><EditarObras /></ProtectedRoute>} />
+          {/* Rotas restritas (Apenas Autenticados) */}
+          <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
+          <Route path="/mensagens" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+          <Route path="/notificacoes" element={<ProtectedRoute><Notificacoes /></ProtectedRoute>} />
+          <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+          <Route path="/criar-obra" element={<ProtectedRoute><CriarObra /></ProtectedRoute>} />
+          <Route path="/editar-obra/:id" element={<ProtectedRoute><EditarObras /></ProtectedRoute>} />
+          <Route path="/editar-perfil" element={<ProtectedRoute><EditarPerfil /></ProtectedRoute>} />
+          <Route path="/meu-portfolio" element={<ProtectedRoute><MeuPortfolio /></ProtectedRoute>} />
+          <Route path="/seguidores" element={<ProtectedRoute><Seguidores /></ProtectedRoute>} />
+          <Route path="/seguindo" element={<ProtectedRoute><Seguindo /></ProtectedRoute>} />
+          <Route path="/salvos" element={<ProtectedRoute><Salvos /></ProtectedRoute>} />
+          <Route path="/encomendas" element={<ProtectedRoute><Encomendas /></ProtectedRoute>} />
+          <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+        </Route>
 
-        {/* Perfil e portfólio — rotas protegidas */}
-        <Route path="/perfil" element={<ProtectedRoute allowGuest={true}><ArtistProfile /></ProtectedRoute>} />
-        <Route path="/editar-perfil" element={<ProtectedRoute><EditarPerfil /></ProtectedRoute>} />
-        <Route path="/meu-portfolio" element={<ProtectedRoute><MeuPortfolio /></ProtectedRoute>} />
-        <Route path="/seguidores" element={<ProtectedRoute><Seguidores /></ProtectedRoute>} />
-        <Route path="/seguindo" element={<ProtectedRoute><Seguindo /></ProtectedRoute>} />
-
-        {/* Recursos do usuário — rotas protegidas */}
-        <Route path="/salvos" element={<ProtectedRoute><Salvos /></ProtectedRoute>} />
-        <Route path="/encomendas" element={<ProtectedRoute><Encomendas /></ProtectedRoute>} />
-        <Route path="/estatisticas" element={<ProtectedRoute><Estatisticas /></ProtectedRoute>} />
-
-        {/* Administração — rota protegida */}
-        <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-
-        {/* Rota inexistente */}
+        {/* Rota de fallback para páginas não encontradas (fora do layout) */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Routes>
     </ToastProvider>

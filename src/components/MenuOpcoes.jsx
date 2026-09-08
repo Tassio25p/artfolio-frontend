@@ -6,6 +6,8 @@ export default function MenuOpcoes({
   detalhesLink = "#",
   onSalvar,
   isSalvo = false,
+  onBloquear,
+  isBloqueado = false,
   onDenunciar,
   onCompartilhar,
   onCopiarLinkSuccess,
@@ -97,6 +99,22 @@ export default function MenuOpcoes({
           )}
 
           <div className="h-px bg-black/5 my-2"></div>
+
+          {onBloquear && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setAberto(false);
+                onBloquear();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold hover:bg-orange-50 text-artOrange transition-colors text-left"
+            >
+              <i className="fa-solid fa-user-slash w-4"></i>
+              {isBloqueado ? "Desbloquear usuário" : "Bloquear usuário"}
+            </button>
+          )}
 
           <button
             type="button"

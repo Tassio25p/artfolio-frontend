@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import Sidebar from "../components/Sidebar";
 import { Link } from "react-router-dom";
 
 const encomendasRecebidas = [
@@ -150,13 +149,8 @@ export default function Encomendas() {
   };
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto">
+    <div className="w-full p-4 sm:p-6 lg:p-10">
+      <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
@@ -408,7 +402,6 @@ export default function Encomendas() {
             </section>
           </section>
         </div>
-      </main>
 
       {isModalOpen && selectedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">

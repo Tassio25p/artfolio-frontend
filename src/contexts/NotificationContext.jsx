@@ -1,299 +1,377 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
-import { notificacaoService, mensagemService, getToken } from "../services/api";
+import { notificacaoService, getToken, getMediaUrl } from "../services/api";
 
-const NotificationContext = createContext();
+const NotificationContext = createContext(null);
 
-// Função utilitária para tocar um som sutil de notificação via Web Audio API
-function tocarSomNotificacao() {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-
-    const ctx = new AudioCtx();
-
-    // Primeiro tom (D5 - 587.33 Hz)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
-    gain1.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.3);
-
-    // Segundo tom mais agudo (A5 - 880 Hz)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
-    gain2.gain.setValueAtTime(0.15, ctx.currentTime + 0.12);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(ctx.currentTime + 0.12);
-    osc2.stop(ctx.currentTime + 0.5);
-  } catch (err) {
-    console.debug("Áudio desativado ou não suportado:", err);
-  }
-}
-
-export function NotificationProvider({ children }) {
+export const NotificationProvider = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [toast, setToast] = useState({ visible: false, title: "", message: "", link: "/notificacoes" });
-
-  const prevCountRef = useRef(0);
-  const isInitialLoadRef = useRef(true);
-  const intervalRef = useRef(null);
-  const lastMessageIdsRef = useRef(new Set());
-  const initialMessagesLoadedRef = useRef(false);
-
-  // Ocultar toast manualmente
-  const hideToast = useCallback(() => {
-    setToast((prev) => ({ ...prev, visible: false }));
-  }, []);
-
-  // Exibir Toast com auto-dismiss após 5 segundos
-  const triggerToast = useCallback((title, message, link = "/notificacoes") => {
-    setToast({ visible: true, title, message, link });
-    setTimeout(() => {
-      setToast((prev) => ({ ...prev, visible: false }));
-    }, 5000);
-  }, []);
-
-  // Verificar mensagens de chat recebidas em tempo real (sem salvar na tabela notificacao)
-  const checkIncomingMessages = useCallback(async () => {
-    if (!getToken() || !isAuthenticated || !user?.id) return;
+  // 1. Modo Silencioso com persistência no localStorage
+  const [silenciado, setSilenciado] = useState(() => {
     try {
-      const convs = await mensagemService.listarConversas();
-      if (!Array.isArray(convs)) return;
+      return localStorage.getItem("artfolio_silenciar_notificacoes") === "true";
+    } catch {
+      return false;
+    }
+  });
 
-      let hasNewMessage = false;
+  const toggleSilenciar = useCallback(() => {
+    setSilenciado((prev) => {
+      const novoValor = !prev;
+      try {
+        localStorage.setItem("artfolio_silenciar_notificacoes", String(novoValor));
+      } catch (err) {
+        console.error("[NotificationContext] Erro ao salvar preferencia:", err);
+      }
+      return novoValor;
+    });
+  }, []);
 
-      convs.forEach((conv) => {
-        const destNome = conv.destinatario?.nome || "Alguém";
-        const ultima = conv.ultimaMensagem;
-        if (ultima && !ultima.enviado_por_mim && ultima.idRemetente !== user.id) {
-          if (initialMessagesLoadedRef.current && !lastMessageIdsRef.current.has(ultima.id)) {
-            hasNewMessage = true;
-            const isInChat = window.location.pathname.startsWith("/mensagens");
-            if (!isInChat) {
-              triggerToast(
-                `${destNome} enviou uma mensagem`,
-                ultima.conteudo || "Enviou um anexo.",
-                "/mensagens"
-              );
-            }
-          }
-          lastMessageIdsRef.current.add(ultima.id);
-        }
+  // 2. Histórico interno de notificações e contador de não lidas
+  const [notificacoes, setNotificacoes] = useState([]);
+  const [naoLidasCount, setNaoLidasCount] = useState(0);
+
+  // 3. Pilha de Toasts Compactos (máximo 2 visíveis simultâneos com suporte a agrupamento)
+  const [toasts, setToasts] = useState([]);
+
+  const removerToast = useCallback((toastId) => {
+    setToasts((prev) => prev.filter((t) => t.id !== toastId));
+  }, []);
+  const removeToast = removerToast;
+
+  const triggerToast = useCallback(
+    (titulo, mensagem, link, avatar, grupoKey = null) => {
+      if (silenciado) return;
+
+      const id = grupoKey || `toast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const novoToast = { id, titulo, mensagem, link, avatar };
+
+      setToasts((prev) => {
+        // Se for a mesma conversa/grupo, substitui o anterior atualizando o texto
+        const filtrados = prev.filter((t) => t.id !== id);
+        return [...filtrados, novoToast].slice(-2);
       });
 
-      if (hasNewMessage) {
-        tocarSomNotificacao();
+      setTimeout(() => {
+        removerToast(id);
+      }, 4000);
+    },
+    [silenciado, removerToast]
+  );
+
+  const tocarSomNotificacao = useCallback(() => {
+    if (silenciado) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.35);
+        return;
       }
-
-      initialMessagesLoadedRef.current = true;
-    } catch (err) {
-      console.debug("Erro ao verificar mensagens de chat recebidas:", err);
+    } catch {
+      // Falha de inicialização de áudio (navegador com autoplay restrito)
     }
-  }, [isAuthenticated, user?.id, triggerToast]);
 
-  // Buscar contagem atualizada de não lidas do backend
-  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const audio = new Audio("/notification.mp3");
+      audio.volume = 0.4;
+      audio.play().catch(() => {});
+    } catch {
+      // Arquivo de áudio não disponível ou bloqueado
+    }
+  }, [silenciado]);
+
+  // Carregar contagem e lista inicial de notificações via REST
+  const carregarDadosIniciais = useCallback(async () => {
     if (!getToken() || !isAuthenticated) return;
-
     try {
-      const res = await notificacaoService.contarNaoLidas();
-      if (res && typeof res.quantidade === "number") {
-        const newCount = res.quantidade;
+      const [countRes, listRes] = await Promise.allSettled([
+        notificacaoService.contarNaoLidas(),
+        notificacaoService.listar(),
+      ]);
 
-        // Verificar se chegou uma NOVA notificação de seguidores etc. durante a sessão ativa
-        if (!isInitialLoadRef.current && newCount > prevCountRef.current) {
-          tocarSomNotificacao();
+      if (countRes.status === "fulfilled" && countRes.value && typeof countRes.value.quantidade === "number") {
+        setNaoLidasCount(countRes.value.quantidade);
+      }
 
-          try {
-            const listRes = await notificacaoService.listar();
-            if (listRes && Array.isArray(listRes.items) && listRes.items.length > 0) {
-              const latest = listRes.items[0];
-              const link = latest.tipo === "FOLLOW" && (latest.idRemetente || latest.remetente?.id)
-                ? `/artista/${latest.idRemetente || latest.remetente?.id}`
-                : latest.idPostagem
-                ? `/obra/${latest.idPostagem}`
-                : "/notificacoes";
-
-              triggerToast(
-                latest.titulo || "Nova notificação",
-                latest.mensagem || "Você possui uma nova notificação.",
-                link
-              );
-            } else {
-              triggerToast(
-                "Nova notificação",
-                "Você recebeu uma nova notificação no Artfolio.",
-                "/notificacoes"
-              );
-            }
-          } catch {
-            triggerToast(
-              "Nova notificação",
-              "Você recebeu uma nova notificação no Artfolio.",
-              "/notificacoes"
-            );
-          }
+      if (listRes.status === "fulfilled" && listRes.value) {
+        if (Array.isArray(listRes.value.items)) {
+          setNotificacoes(listRes.value.items);
+        } else if (Array.isArray(listRes.value)) {
+          setNotificacoes(listRes.value);
         }
-
-        prevCountRef.current = newCount;
-        setUnreadCount(newCount);
-        isInitialLoadRef.current = false;
       }
     } catch (err) {
-      console.debug("Erro ao consultar contagem de notificações não lidas:", err);
+      console.debug("[NotificationContext] Erro ao carregar dados iniciais:", err);
     }
-  }, [isAuthenticated, triggerToast]);
+  }, [isAuthenticated]);
 
-  // Forçar atualização manual da contagem de não lidas
-  const refreshUnreadCount = useCallback(async () => {
-    await fetchUnreadCount();
-  }, [fetchUnreadCount]);
-
-  // Marcar uma notificação como lida e atualizar contagem
-  const markAsRead = useCallback(async (notificacaoId) => {
-    try {
-      await notificacaoService.marcarComoLida(notificacaoId);
-      setUnreadCount((prev) => {
-        const updated = Math.max(0, prev - 1);
-        prevCountRef.current = updated;
-        return updated;
-      });
-      await fetchUnreadCount();
-    } catch (err) {
-      console.error("Erro ao marcar notificação como lida:", err);
-    }
-  }, [fetchUnreadCount]);
-
-  // Marcar todas as notificações como lidas
-  const markAllAsRead = useCallback(async () => {
-    try {
-      await notificacaoService.marcarTodasComoLidas();
-      setUnreadCount(0);
-      prevCountRef.current = 0;
-      await fetchUnreadCount();
-    } catch (err) {
-      console.error("Erro ao marcar todas notificações como lidas:", err);
-    }
-  }, [fetchUnreadCount]);
-
-  // Gerenciar Polling automático e Reset de Sessão ao trocar de usuário / logout
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      setUnreadCount(0);
-      prevCountRef.current = 0;
-      isInitialLoadRef.current = true;
-      initialMessagesLoadedRef.current = false;
-      lastMessageIdsRef.current = new Set();
-      hideToast();
+      queueMicrotask(() => {
+        setNotificacoes([]);
+        setNaoLidasCount(0);
+        setToasts([]);
+      });
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregarDadosIniciais();
+  }, [isAuthenticated, user?.id, carregarDadosIniciais]);
 
-    isInitialLoadRef.current = true;
-    initialMessagesLoadedRef.current = false;
-    lastMessageIdsRef.current = new Set();
-    prevCountRef.current = 0;
-
-    fetchUnreadCount();
-    checkIncomingMessages();
-
-    // Polling a cada 4 segundos
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+  const marcarTodasComoLidas = useCallback(async () => {
+    try {
+      await notificacaoService.marcarTodasComoLidas();
+    } catch (err) {
+      console.debug("[NotificationContext] Erro ao marcar todas como lidas:", err);
     }
+    setNaoLidasCount(0);
+    setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
+  }, []);
 
-    intervalRef.current = setInterval(() => {
-      fetchUnreadCount();
-      checkIncomingMessages();
-    }, 4000);
+  const markAsRead = useCallback(async (notificacaoId) => {
+    try {
+      if (!String(notificacaoId).startsWith("local-")) {
+        await notificacaoService.marcarComoLida(notificacaoId);
+      }
+    } catch (err) {
+      console.debug("[NotificationContext] Erro ao marcar como lida:", err);
+    }
+    setNaoLidasCount((prev) => Math.max(0, prev - 1));
+    setNotificacoes((prev) =>
+      prev.map((n) => (n.id === notificacaoId ? { ...n, lida: true } : n))
+    );
+  }, []);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+  // 4. Conexão WebSocket Persistente
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsHost =
+      window.location.port === "5173" || window.location.port === "3000"
+        ? "127.0.0.1:8000"
+        : window.location.host;
+    const socket = new WebSocket(`${protocol}//${wsHost}/ws/notificacoes/${user.id}`);
+
+    const pingInterval = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send("ping");
+      }
+    }, 25000);
+
+    const handleEnviarSocket = (e) => {
+      const payload = e.detail;
+      if (payload && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(payload));
       }
     };
-  }, [isAuthenticated, user?.id, fetchUnreadCount, checkIncomingMessages, hideToast]);
+    window.addEventListener("artfolio_enviar_socket", handleEnviarSocket);
+
+    socket.onmessage = (event) => {
+      if (!event.data || event.data === "pong") return;
+
+      try {
+        const data = JSON.parse(event.data);
+
+        // Disparo incondicional do barramento global para manter contadores reativos no Feed e PostCard
+        window.dispatchEvent(new CustomEvent("artfolio_sync", { detail: data }));
+
+        // Filtro 1: Ações disparadas pelo próprio usuário logado
+        const autorAcaoId = data.idRemetente || data.remetente?.id || data.remetente_id;
+        if (autorAcaoId && user?.id && Number(autorAcaoId) === Number(user.id)) {
+          return;
+        }
+
+        // Filtro 2: Eventos puramente de sincronização ou desengajamento
+        const tiposSilenciosos = [
+          "DESCURTIDA",
+          "UNLIKE",
+          "UNFOLLOW",
+          "DEIXOU_DE_SEGUIR",
+          "SYNC",
+          "DIGITANDO",
+          "TYPING",
+          "MENSAGENS_LIDAS",
+          "MENSAGEM_EDITADA",
+          "MENSAGEM_EXCLUIDA"
+        ];
+        if (data.silencioso === true || tiposSilenciosos.includes(data.tipo?.toUpperCase())) {
+          return;
+        }
+
+        // Filtro 3: Se for mensagem de chat e o usuário já está com a conversa aberta na tela
+        const conversaIdMsg = String(data.conversa_id || data.idConversa || data.conversaId || "");
+        if (
+          conversaIdMsg &&
+          window.__artfolio_active_chat_id &&
+          String(window.__artfolio_active_chat_id) === conversaIdMsg
+        ) {
+          return;
+        }
+
+        // Atualização dos dados do sininho
+        setNaoLidasCount((prev) => (typeof data.naoLidasCount === "number" ? data.naoLidasCount : prev + 1));
+        setNotificacoes((prev) => {
+          const id = data.id || `ws-${Date.now()}`;
+          return [{ ...data, id }, ...prev.filter((n) => n.id !== id)];
+        });
+
+        // Disparo de Toast e Áudio (apenas se não estiver silenciado)
+        if (!silenciado) {
+          tocarSomNotificacao();
+
+          let linkRedirecionamento = "/notificacoes";
+          if (conversaIdMsg) {
+            linkRedirecionamento = `/mensagens?conversa=${conversaIdMsg}`;
+          } else if ((data.tipo === "FOLLOW" || data.tipo === "SEGUIDOR") && (data.idRemetente || data.remetente?.id)) {
+            linkRedirecionamento = `/artista/${data.idRemetente || data.remetente?.id}`;
+          } else if (data.postagem_id || data.idPostagem || data.id_postagem) {
+            linkRedirecionamento = `/obra/${data.postagem_id || data.idPostagem || data.id_postagem}`;
+          }
+
+          triggerToast(
+            data.titulo || (data.remetente?.nome ? `Mensagem de ${data.remetente.nome}` : "Nova notificação"),
+            data.conteudo || data.mensagem || "Nova interação recebida",
+            linkRedirecionamento,
+            data.remetente?.fotoPerfil,
+            conversaIdMsg ? `chat-${conversaIdMsg}` : null
+          );
+        }
+      } catch (parseErr) {
+        console.warn("[WebSocket] Mensagem inválida:", parseErr);
+      }
+    };
+
+    return () => {
+      clearInterval(pingInterval);
+      window.removeEventListener("artfolio_enviar_socket", handleEnviarSocket);
+      socket.close();
+    };
+  }, [user?.id, silenciado, tocarSomNotificacao, triggerToast]);
 
   return (
     <NotificationContext.Provider
       value={{
-        unreadCount,
-        refreshUnreadCount,
+        notificacoes,
+        naoLidasCount,
+        unreadCount: naoLidasCount,
+        marcarTodasComoLidas,
+        markAllAsRead: marcarTodasComoLidas,
         markAsRead,
-        markAllAsRead,
-        toast,
-        hideToast,
+        refreshUnreadCount: carregarDadosIniciais,
+        removeToast,
+        removerToast,
         triggerToast,
+        toasts,
+        toast: toasts[0] || null,
+        silenciado,
+        toggleSilenciar,
       }}
     >
       {children}
 
-      {/* Componente Toast de Notificação em Tempo Real */}
-      {toast.visible && (
-        <div className="fixed top-5 right-5 z-[9999] max-w-sm w-full animate-bounce-short">
-          <div className="bg-artDark text-white p-4 rounded-[1.5rem] shadow-2xl border border-white/10 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-artPurple text-white flex items-center justify-center shrink-0">
-              <i className="fa-solid fa-bell text-base animate-wiggle"></i>
+      <style>{`
+        @keyframes toastSlideIn {
+          0% { transform: translateX(110%); opacity: 0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+        .animate-toast-slide {
+          animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+
+      {/* Pilha de Toasts Compactos em Formato Pill (Canto Superior Direito) */}
+      <aside
+        aria-live="polite"
+        className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none select-none"
+      >
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            onClick={() => {
+              if (t.link) {
+                navigate(t.link);
+              }
+              removerToast(t.id);
+            }}
+            className="pointer-events-auto cursor-pointer animate-toast-slide bg-neutral-950/90 hover:bg-neutral-900 backdrop-blur-md text-white px-3.5 py-2.5 rounded-xl shadow-xl border border-neutral-800/80 flex items-center gap-3 transition-all duration-200 group"
+          >
+            {t.avatar ? (
+              <img
+                src={getMediaUrl(t.avatar)}
+                alt="Avatar"
+                className="w-8 h-8 rounded-full object-cover border border-neutral-700 shrink-0"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  if (e.currentTarget.nextElementSibling) {
+                    e.currentTarget.nextElementSibling.style.display = "flex";
+                  }
+                }}
+              />
+            ) : null}
+
+            <div
+              className={`w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-xs font-bold shrink-0 ${
+                t.avatar ? "hidden" : "flex"
+              }`}
+            >
+              ✦
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="font-bold text-xs text-artOrange truncate uppercase tracking-widest">
-                  {toast.title}
-                </h4>
-                <button
-                  type="button"
-                  onClick={hideToast}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <i className="fa-solid fa-xmark text-xs"></i>
-                </button>
-              </div>
-
-              <p className="text-xs text-gray-200 mt-1 line-clamp-2 leading-relaxed font-light">
-                {toast.message}
+              <p className="text-[11px] font-semibold text-neutral-100 truncate group-hover:text-amber-400 transition-colors">
+                {t.titulo}
               </p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  hideToast();
-                  if (toast.link) navigate(toast.link);
-                }}
-                className="mt-2 text-[10px] font-bold uppercase tracking-widest text-artPurple hover:text-white transition-colors inline-flex items-center gap-1"
-              >
-                Ver detalhes <i className="fa-solid fa-arrow-right text-[8px]"></i>
-              </button>
+              <p className="text-[11px] text-neutral-400 truncate leading-tight">
+                {t.mensagem}
+              </p>
             </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removerToast(t.id);
+              }}
+              className="text-neutral-500 hover:text-white p-1 rounded-md transition-colors shrink-0 cursor-pointer"
+              title="Dispensar"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        </div>
-      )}
+        ))}
+      </aside>
     </NotificationContext.Provider>
   );
-}
+};
 
-export function useNotifications() {
+// eslint-disable-next-line react-refresh/only-export-components
+export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
-    throw new Error("useNotifications deve ser usado dentro de um NotificationProvider");
+    throw new Error("useNotification deve ser utilizado dentro de um NotificationProvider");
   }
   return context;
-}
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useNotifications = useNotification;

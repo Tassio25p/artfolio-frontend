@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
+import PostCard from "../components/PostCard";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
 import { useAuth } from "../contexts/AuthContext";
@@ -93,13 +93,8 @@ export default function Salvos() {
   };
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]" />
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto">
+    <div className="w-full p-4 sm:p-6 lg:p-10">
+      <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
@@ -304,7 +299,6 @@ export default function Salvos() {
             </section>
           </section>
         </div>
-      </main>
 
       <ModalDenuncia
         aberto={modalDenunciaAberto}

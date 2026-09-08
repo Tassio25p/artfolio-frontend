@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { authService, usuarioService, getMediaUrl } from "../services/api";
@@ -182,28 +181,20 @@ function EditarPerfil() {
 
   if (loading) {
     return (
-      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
-        <Sidebar />
-        <main className="ml-16 min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
-            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
-              Carregando perfil...
-            </p>
-          </div>
-        </main>
+      <div className="w-full text-artDark antialiased min-h-screen font-sans flex items-center justify-center">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+          <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
+            Carregando perfil...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]" />
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto">
+    <div className="w-full p-4 sm:p-6 lg:p-10">
+      <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
@@ -517,8 +508,7 @@ function EditarPerfil() {
             </section>
           </form>
         </div>
-      </main>
-    </div>
+      </div>
   );
 }
 

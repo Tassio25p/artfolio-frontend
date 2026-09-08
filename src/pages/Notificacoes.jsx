@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { notificacaoService, getMediaUrl } from "../services/api";
@@ -76,9 +75,7 @@ export default function Notificacoes() {
     }
   };
 
-  useEffect(() => {
-    carregarNotificacoes();
-  }, [navigate]);
+  const { markAsRead, markAllAsRead, silenciado, toggleSilenciar } = useNotifications();
 
   const mostrarAviso = (mensagem, tipo = "info") => {
     setNoticeMessage(mensagem);
@@ -86,7 +83,11 @@ export default function Notificacoes() {
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const { markAsRead, markAllAsRead } = useNotifications();
+  useEffect(() => {
+    carregarNotificacoes();
+    // Limpar o badge e marcar como lidas ao visualizar a central de notificações
+    markAllAsRead().catch(() => {});
+  }, [navigate, markAllAsRead]);
 
   const handleMarcarComoLida = async (id) => {
     try {
@@ -206,28 +207,20 @@ export default function Notificacoes() {
 
   if (loading) {
     return (
-      <div className="bg-[#F9F8F6] text-artDark min-h-screen font-sans">
-        <Sidebar />
-        <main className="ml-16 min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
-            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
-              Carregando notificações...
-            </p>
-          </div>
-        </main>
+      <div className="w-full min-h-screen font-sans flex items-center justify-center">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+          <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
+            Carregando notificações...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto">
+    <div className="w-full p-4 sm:p-6 lg:p-10">
+      <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
@@ -245,6 +238,25 @@ export default function Notificacoes() {
             </div>
 
             <div className="flex flex-wrap gap-2.5">
+              {/* Botão de Alternância do Modo Silencioso */}
+              <button
+                type="button"
+                onClick={toggleSilenciar}
+                className={`px-5 py-3 rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 border ${
+                  silenciado
+                    ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 shadow-xs"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+                title={
+                  silenciado
+                    ? "Notificações silenciadas (clique para reativar sons e popups)"
+                    : "Silenciar sons e popups flutuantes"
+                }
+              >
+                <i className={`fa-solid ${silenciado ? "fa-bell-slash text-amber-600" : "fa-bell text-gray-500"}`}></i>
+                <span>{silenciado ? "Silenciado" : "Silenciar"}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleMarcarTodasComoLidas}
@@ -410,8 +422,7 @@ export default function Notificacoes() {
             </section>
           </section>
         </div>
-      </main>
-    </div>
+      </div>
   );
 }
 

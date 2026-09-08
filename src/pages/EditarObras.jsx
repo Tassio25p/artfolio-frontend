@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
 import ModalConfirmarExclusao from "../components/ModalConfirmarExclusao";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, getMediaUrl } from "../services/api";
@@ -96,7 +95,6 @@ export default function EditarObra() {
   const handleToggleCategoria = (catNome) => {
     setCategoriasSelecionadas((prev) => {
       if (prev.includes(catNome)) {
-        if (prev.length === 1) return prev; // Mantém ao menos uma categoria
         return prev.filter((c) => c !== catNome);
       } else {
         return [...prev, catNome];
@@ -191,15 +189,14 @@ export default function EditarObra() {
   // Skeleton de Carregamento Inicial
   if (loadingInitial) {
     return (
-      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
-        <Sidebar />
-        <main className="ml-14 min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+      <div className="w-full text-artDark antialiased font-sans">
+        <div className="w-full min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
           <div className="h-8 w-48 bg-gray-200 rounded-xl animate-pulse"></div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-5 h-[450px] bg-gray-200 rounded-2xl animate-pulse"></div>
             <div className="lg:col-span-7 h-[450px] bg-gray-200 rounded-2xl animate-pulse"></div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -207,9 +204,8 @@ export default function EditarObra() {
   // Bloqueio de Acesso para Usuário não Proprietário
   if (isNotOwner) {
     return (
-      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
-        <Sidebar />
-        <main className="ml-14 min-h-screen flex items-center justify-center p-6">
+      <div className="w-full text-artDark antialiased font-sans">
+        <div className="w-full min-h-screen flex items-center justify-center p-6">
           <div className="bg-white border border-gray-200 rounded-2xl p-8 max-w-md text-center shadow-xl space-y-4">
             <i className="fa-solid fa-lock text-4xl text-red-500"></i>
             <h2 className="text-xl font-bold text-artDark">Acesso Restrito</h2>
@@ -223,18 +219,13 @@ export default function EditarObra() {
               Voltar para a Obra
             </Link>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark antialiased overflow-x-hidden font-sans min-h-screen pb-16">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]" />
-
-      <Sidebar />
-
-      <main className="ml-14 min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="w-full p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 pb-16">
         
         {/* Cabeçalho da Página */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
@@ -478,8 +469,6 @@ export default function EditarObra() {
           </div>
 
         </form>
-
-      </main>
 
       {/* Modal de Confirmação de Exclusão */}
       <ModalConfirmarExclusao

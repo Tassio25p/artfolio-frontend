@@ -1,17 +1,15 @@
 import React from "react";
-import Sidebar from "../components/Sidebar";
 import ModalUploadObra from "../components/ModalUploadObra";
 
 export default function CriarObra() {
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased font-sans">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+    <div className="w-full min-h-screen p-4 sm:p-6 lg:p-10 flex items-center justify-center relative">
+      {/* Painéis de Luz Difusa Arquitetural (Inspirado em Galerias de Arte Contemporânea) */}
+      <div className="fixed top-12 right-24 w-96 h-96 bg-artPurple/10 rounded-full blur-3xl pointer-events-none -z-10"></div>
+      <div className="fixed bottom-12 left-32 w-96 h-96 bg-artOrange/10 rounded-full blur-3xl pointer-events-none -z-10"></div>
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[36rem] h-[36rem] bg-artBlue/5 rounded-full blur-3xl pointer-events-none -z-10"></div>
 
-      <Sidebar />
-
-      <main className="ml-14 min-h-screen p-4 sm:p-6 lg:p-10 flex items-center justify-center">
-        <ModalUploadObra isPage={true} />
-      </main>
+      <ModalUploadObra isPage={true} />
     </div>
   );
 }

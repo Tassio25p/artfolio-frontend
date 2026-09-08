@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import PortfolioCard from "../components/PortfolioCard";
-import Sidebar from "../components/Sidebar";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
 import ModalConversao from "../components/ModalConversao";
@@ -26,6 +25,7 @@ export default function ArtistProfile() {
 
   // Dados do perfil
   const [perfil, setPerfil] = useState(null);
+  const [seguidoresCount, setSeguidoresCount] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
 
   // Obras do artista e Obras salvas
@@ -100,8 +100,13 @@ export default function ArtistProfile() {
         seguidores: dadosPerfil.seguidoresCount || 0,
         seguindo: dadosPerfil.seguindoCount || 0,
         obras: dadosPerfil.obrasCount || 0,
+        plano: dadosPerfil.plano || "Free",
+        mostrarMolduraLed: dadosPerfil.mostrar_moldura_led !== false,
+        mensagemCta: dadosPerfil.mensagem_cta || "",
         relacionamento: dadosPerfil.relacionamento || {},
       });
+
+      setSeguidoresCount(Number(dadosPerfil.seguidoresCount || dadosPerfil.seguidores || 0));
 
       // Carregar obras do usuário
       try {
@@ -109,16 +114,14 @@ export default function ArtistProfile() {
         if (Array.isArray(obras) && obras.length > 0) {
           setObrasPublicas(
             obras.map((obra) => ({
+              ...obra,
               id: obra.id,
-              image: obra.arquivoUrl || obra.arquivo_url || "",
-              category:
-                (obra.categorias && obra.categorias[0]?.nomeCategoria) ||
-                obra.categoria?.nomeCategoria ||
-                obra.categoria?.nome ||
-                "Arte",
-              title: obra.legenda || "Sem título",
-              color: "text-artOrange",
-              tipo: "Digital",
+              titulo: obra.legenda || "Sem título",
+              imagemUrl: obra.arquivoUrl,
+              destaque_boost: obra.destaque_boost || false,
+              total_curtidas: obra.total_curtidas || 0,
+              total_comentarios: obra.total_comentarios || 0,
+              dataPostagem: obra.dataPostagem,
             }))
           );
         } else {
@@ -128,28 +131,51 @@ export default function ArtistProfile() {
         setObrasPublicas([]);
       }
 
-      // Se for o próprio perfil, carregar obras salvas para a aba Favoritos
       if (souDono) {
-        setCarregandoSalvas(true);
-        try {
-          const salvas = await obrasService.listarSalvas();
-          setObrasSalvas(Array.isArray(salvas) ? salvas : []);
-        } catch {
-          setObrasSalvas([]);
-        } finally {
-          setCarregandoSalvas(false);
-        }
+        carregarObrasSalvas();
       }
-    } catch (error) {
-      console.error("Erro ao carregar perfil:", error);
+    } catch (err) {
+      console.error("Erro ao carregar perfil:", err);
+      mostrarAviso("Erro ao carregar dados do perfil.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const carregarObrasSalvas = async () => {
+    setCarregandoSalvas(true);
+    try {
+      const salvas = await obrasService.listarSalvas();
+      setObrasSalvas(Array.isArray(salvas) ? salvas : []);
+    } catch {
+      setObrasSalvas([]);
+    } finally {
+      setCarregandoSalvas(false);
     }
   };
 
   useEffect(() => {
     carregarPerfil();
   }, [id, authUser, isGuest]);
+
+  // Sincronização reativa em tempo real de seguidores via WebSocket
+  useEffect(() => {
+    const handleSync = (e) => {
+      const dados = e.detail;
+      if (!dados) return;
+
+      const artistaId = id || perfil?.id || authUser?.id;
+      if (dados.tipo === "SEGUIDOR" && Number(dados.seguido_id) === Number(artistaId)) {
+        if (typeof dados.total_seguidores === "number") {
+          setSeguidoresCount(dados.total_seguidores);
+          setPerfil((prev) => (prev ? { ...prev, seguidores: dados.total_seguidores } : prev));
+        }
+      }
+    };
+
+    window.addEventListener("artfolio_sync", handleSync);
+    return () => window.removeEventListener("artfolio_sync", handleSync);
+  }, [id, perfil?.id, authUser?.id]);
 
   const handleToggleFollow = async () => {
     if (isGuest || !isAuthenticated) {
@@ -160,30 +186,41 @@ export default function ArtistProfile() {
 
     if (!perfil || !perfil.id) return;
     try {
-      const estaSeguindo = perfil.relacionamento?.seguindo;
-      if (estaSeguindo) {
-        await usuarioService.deixarDeSeguir(perfil.id);
-        setPerfil((prev) => ({
-          ...prev,
-          seguidores: Math.max(0, (prev.seguidores || 1) - 1),
-          relacionamento: {
-            ...prev.relacionamento,
-            seguindo: false,
-          },
-        }));
+      const estaSeguindo = Boolean(perfil.relacionamento?.seguindo);
+      const res = estaSeguindo
+        ? await usuarioService.deixarDeSeguir(perfil.id)
+        : await usuarioService.seguir(perfil.id);
+
+      const novoTotal =
+        typeof res?.total_seguidores === "number"
+          ? res.total_seguidores
+          : estaSeguindo
+          ? Math.max(0, (seguidoresCount || perfil.seguidores || 1) - 1)
+          : (seguidoresCount || perfil.seguidores || 0) + 1;
+
+      const novoSeguindo =
+        typeof res?.seguindo === "boolean"
+          ? res.seguindo
+          : !estaSeguindo;
+
+      setSeguidoresCount(novoTotal);
+      setPerfil((prev) => ({
+        ...prev,
+        seguidores: novoTotal,
+        relacionamento: {
+          ...prev.relacionamento,
+          seguindo: novoSeguindo,
+        },
+      }));
+
+      if (novoSeguindo) {
+        mostrarAviso(`Você começou a seguir ${perfil.nome || "o artista"}!`);
       } else {
-        await usuarioService.seguir(perfil.id);
-        setPerfil((prev) => ({
-          ...prev,
-          seguidores: (prev.seguidores || 0) + 1,
-          relacionamento: {
-            ...prev.relacionamento,
-            seguindo: true,
-          },
-        }));
+        mostrarAviso(`Você deixou de seguir ${perfil.nome || "o artista"}.`);
       }
     } catch (err) {
       console.error("Erro ao alterar relacionamento de seguir:", err);
+      mostrarAviso(err.message || "Erro ao alterar seguidor.");
     }
   };
 
@@ -201,12 +238,55 @@ export default function ArtistProfile() {
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
+  const [blockedUsers, setBlockedUsers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("artfolio_blocked_users")) || [];
+    } catch {
+      return [];
+    }
+  });
+
+  const isBlocked = perfil?.id ? blockedUsers.includes(perfil.id) : false;
+
+  const handleToggleBlockUser = () => {
+    if (isGuest || !isAuthenticated) {
+      handleAcaoRestritaVisitante("bloquear este usuário");
+      return;
+    }
+    if (!perfil?.id) return;
+    let novos;
+    if (isBlocked) {
+      novos = blockedUsers.filter((blockedId) => blockedId !== perfil.id);
+      mostrarAviso(`${perfil.nome} foi desbloqueado com sucesso.`);
+    } else {
+      novos = [...blockedUsers, perfil.id];
+      mostrarAviso(`${perfil.nome} foi bloqueado com sucesso.`);
+    }
+    setBlockedUsers(novos);
+    localStorage.setItem("artfolio_blocked_users", JSON.stringify(novos));
+  };
+
+  const handleAbrirChatCTA = () => {
+    if (isGuest || !isAuthenticated) {
+      handleAcaoRestritaVisitante("pedir orçamento a este artista");
+      return;
+    }
+    const remetenteNome = authUser?.nome || "Cliente";
+    const msgImutavel = `Olá! Me chamo ${remetenteNome}, gostaria de solicitar um orçamento para o seu trabalho. Obrigado!`;
+    navigate(
+      `/mensagens?artistaId=${perfil.id}&destNome=${encodeURIComponent(
+        perfil.nome || "Artista"
+      )}&destFoto=${encodeURIComponent(perfil.avatar || "")}&msg=${encodeURIComponent(
+        msgImutavel
+      )}`
+    );
+  };
+
   // Se o visitante acessou /perfil (sem ID de artista)
   if (isGuest && !id) {
     return (
-      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
-        <Sidebar />
-        <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10 flex items-center justify-center">
+      <div className="w-full text-artDark antialiased min-h-screen font-sans">
+        <div className="w-full min-h-screen p-4 sm:p-6 lg:p-10 flex items-center justify-center">
           <div className="max-w-md w-full bg-white rounded-[2.5rem] border border-black/5 p-8 text-center shadow-xl shadow-black/5 animate-scaleUp">
             <div className="w-16 h-16 rounded-3xl bg-artBlue/10 text-artBlue flex items-center justify-center text-2xl mx-auto mb-6 shadow-md shadow-artBlue/10">
               <i className="fa-solid fa-eye"></i>
@@ -248,23 +328,20 @@ export default function ArtistProfile() {
               </Link>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   if (loading || !perfil) {
     return (
-      <div className="bg-[#F9F8F6] text-artDark antialiased min-h-screen font-sans">
-        <Sidebar />
-        <main className="ml-16 min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
-            <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
-              Carregando perfil...
-            </p>
-          </div>
-        </main>
+      <div className="w-full text-artDark antialiased min-h-screen font-sans flex items-center justify-center">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+          <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
+            Carregando perfil...
+          </p>
+        </div>
       </div>
     );
   }
@@ -274,13 +351,8 @@ export default function ArtistProfile() {
   const sobrenome = nomeParts.slice(1).join(" ");
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen">
-        {/* Banner Alerta de Mensagem */}
+    <div className="w-full">
+      {/* Banner Alerta de Mensagem */}
         {noticeMessage && (
           <div className="fixed top-5 right-5 z-50 bg-artDark text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold animate-fadeIn">
             <i className="fa-solid fa-check-circle text-artOrange mr-2"></i>
@@ -293,7 +365,31 @@ export default function ArtistProfile() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
               <div className="lg:col-span-2 flex justify-center lg:justify-start">
                 <div className="relative group w-fit">
-                  <div className="w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-[2rem] overflow-hidden border-4 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform duration-500 bg-gray-100">
+                  {/* Aura Difusa LED Neon Vibrante Espalhada ao Redor do Perfil */}
+                  {perfil.mostrarMolduraLed && (
+                    <div
+                      className={`absolute -inset-2.5 sm:-inset-3 rounded-[2.5rem] blur-xl opacity-80 animate-pulse -z-10 transition-all duration-700 pointer-events-none ${
+                        (perfil.plano || "").toLowerCase() === "boost"
+                          ? "bg-gradient-to-tr from-[#FF793F] via-amber-400 to-[#FF793F]"
+                          : (perfil.plano || "").toLowerCase() === "pro"
+                          ? "bg-gradient-to-tr from-[#6C5CE7] via-fuchsia-500 to-[#0984E3]"
+                          : "bg-gradient-to-tr from-[#00B894] via-emerald-300 to-[#00B894]"
+                      }`}
+                    />
+                  )}
+
+                  {/* Moldura LED Neon Intensa e Brilhante Baseada no Plano */}
+                  <div
+                    className={`w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-[2rem] overflow-hidden border-4 border-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 bg-gray-100 relative ${
+                      perfil.mostrarMolduraLed
+                        ? (perfil.plano || "").toLowerCase() === "boost"
+                          ? "ring-4 ring-[#FF793F] shadow-[0_0_25px_#FF793F,0_0_50px_rgba(255,121,63,0.8),0_0_75px_rgba(255,121,63,0.4)]"
+                          : (perfil.plano || "").toLowerCase() === "pro"
+                          ? "ring-4 ring-[#6C5CE7] shadow-[0_0_25px_#6C5CE7,0_0_50px_rgba(108,92,231,0.8),0_0_75px_rgba(108,92,231,0.4)]"
+                          : "ring-4 ring-[#00B894] shadow-[0_0_25px_#00B894,0_0_50px_rgba(0,184,148,0.8),0_0_75px_rgba(0,184,148,0.4)]"
+                        : ""
+                    }`}
+                  >
                     {perfil.avatar ? (
                       <img
                         src={getMediaUrl(perfil.avatar)}
@@ -326,9 +422,35 @@ export default function ArtistProfile() {
                   </span>
                 </div>
 
-                <h1 className="font-editorial text-4xl sm:text-5xl lg:text-5xl leading-none mb-3">
-                  {primeiroNome} {sobrenome && <span className="italic">{sobrenome}</span>}
-                </h1>
+                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-3">
+                  <h1 className="font-editorial text-4xl sm:text-5xl lg:text-5xl leading-none">
+                    {primeiroNome} {sobrenome && <span className="italic">{sobrenome}</span>}
+                  </h1>
+
+                  {/* Subtítulo / Tag Sólida do Plano ao lado do Nome (Sincronizado com o toggle da moldura LED) */}
+                  {perfil.mostrarMolduraLed && (
+                    <>
+                      {(perfil.plano || "").toLowerCase() === "boost" && (
+                        <span className="bg-artOrange text-white text-[11px] font-bold uppercase tracking-widest px-3.5 py-1 rounded-full shadow-md shadow-artOrange/30 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                          Boost
+                        </span>
+                      )}
+                      {(perfil.plano || "").toLowerCase() === "pro" && (
+                        <span className="bg-artPurple text-white text-[11px] font-bold uppercase tracking-widest px-3.5 py-1 rounded-full shadow-md shadow-artPurple/30 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                          Pro
+                        </span>
+                      )}
+                      {((perfil.plano || "").toLowerCase() === "free" || !perfil.plano) && (
+                        <span className="bg-artGreen text-white text-[11px] font-bold uppercase tracking-widest px-3.5 py-1 rounded-full shadow-md shadow-artGreen/30 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-white"></span>
+                          Free
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
 
                 {perfil.biografia && (
                   <p className="max-w-2xl mx-auto lg:mx-0 text-gray-500 leading-relaxed text-sm font-light">
@@ -361,7 +483,7 @@ export default function ArtistProfile() {
                     className="bg-[#F9F8F6] rounded-[1.3rem] p-3 border border-black/5 hover:bg-white hover:shadow-lg hover:shadow-black/5 transition-all text-center lg:text-left"
                   >
                     <span className="text-artDark text-xl font-black block">
-                      {perfil.seguidores}
+                      {seguidoresCount}
                     </span>
                     <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
                       Seguidores
@@ -409,59 +531,74 @@ export default function ArtistProfile() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    {perfil.relacionamento?.seguindo ? (
-                      <button
-                        type="button"
-                        onClick={handleToggleFollow}
-                        className="flex-1 bg-artDark/10 text-artDark border border-black/10 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
-                      >
-                        <i className="fa-solid fa-user-check mr-2"></i>
-                        Seguindo
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleToggleFollow}
-                        className="flex-1 bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange transition-all flex items-center justify-center"
-                      >
-                        <i className="fa-solid fa-user-plus mr-2"></i>
-                        Seguir
-                      </button>
-                    )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {perfil.relacionamento?.seguindo ? (
+                        <button
+                          type="button"
+                          onClick={handleToggleFollow}
+                          className="flex-1 bg-artDark/10 text-artDark border border-black/10 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                        >
+                          <i className="fa-solid fa-user-check mr-2"></i>
+                          Seguindo
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleToggleFollow}
+                          className="flex-1 bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange transition-all flex items-center justify-center"
+                        >
+                          <i className="fa-solid fa-user-plus mr-2"></i>
+                          Seguir
+                        </button>
+                      )}
 
-                    {isGuest ? (
-                      <button
-                        type="button"
-                        onClick={() => handleAcaoRestritaVisitante("enviar mensagens para este artista")}
-                        className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
-                      >
-                        <i className="fa-solid fa-paper-plane mr-2"></i>
-                        Mensagem
-                      </button>
-                    ) : (
-                      <Link
-                        to="/mensagens"
-                        className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
-                      >
-                        <i className="fa-solid fa-paper-plane mr-2"></i>
-                        Mensagem
-                      </Link>
-                    )}
+                      {isGuest ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAcaoRestritaVisitante("enviar mensagens para este artista")}
+                          className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                        >
+                          <i className="fa-solid fa-paper-plane mr-2"></i>
+                          Mensagem
+                        </button>
+                      ) : (
+                        <Link
+                          to="/mensagens"
+                          className="flex-1 bg-white border border-black/5 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue hover:text-white transition-all text-center"
+                        >
+                          <i className="fa-solid fa-paper-plane mr-2"></i>
+                          Mensagem
+                        </Link>
+                      )}
 
-                    <MenuOpcoes
-                      tipo="perfil"
-                      detalhesLink={`/artista/${perfil.id}`}
-                      onDenunciar={() => {
-                        if (isGuest) {
-                          handleAcaoRestritaVisitante("denunciar um perfil");
-                        } else {
-                          setModalDenunciaAberto(true);
-                        }
-                      }}
-                      onCompartilhar={() => setModalCompartilharAberto(true)}
-                      onCopiarLinkSuccess={mostrarAviso}
-                    />
+                      <MenuOpcoes
+                        tipo="perfil"
+                        detalhesLink={`/artista/${perfil.id}`}
+                        isBloqueado={isBlocked}
+                        onBloquear={handleToggleBlockUser}
+                        onDenunciar={() => {
+                          if (isGuest) {
+                            handleAcaoRestritaVisitante("denunciar um perfil");
+                          } else {
+                            setModalDenunciaAberto(true);
+                          }
+                        }}
+                        onCompartilhar={() => setModalCompartilharAberto(true)}
+                        onCopiarLinkSuccess={mostrarAviso}
+                      />
+                    </div>
+
+                    {/* Botão CTA de Negociação / Orçamento */}
+                    <button
+                      type="button"
+                      onClick={handleAbrirChatCTA}
+                      className="w-full mt-2.5 bg-gradient-to-r from-artPurple via-indigo-600 to-artOrange text-white py-2.5 px-4 rounded-full text-xs font-bold hover:opacity-95 transition-all shadow-md shadow-artPurple/20 flex items-center justify-center gap-2 active:scale-95"
+                      title="Iniciar negociação de encomenda diretamente no chat"
+                    >
+                      <i className="fa-solid fa-handshake"></i>
+                      Pedir Orçamento
+                    </button>
                   </div>
                 )}
               </div>
@@ -683,7 +820,6 @@ export default function ArtistProfile() {
             )}
           </div>
         </section>
-      </main>
 
       {/* Modal de Apresentação / Edição de Portfólio & Certificados */}
       <ModalPortfolioApresentacao

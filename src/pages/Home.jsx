@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
+import PostCard from "../components/PostCard";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { feedService, obrasService, usuarioService, getMediaUrl } from "../services/api";
@@ -199,13 +199,8 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased font-sans overflow-x-hidden">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen">
-        <div className="p-4 sm:p-6 lg:p-10 max-w-[1500px] mx-auto">
+    <div className="w-full">
+      <div className="p-4 sm:p-6 lg:p-10 max-w-[1500px] mx-auto">
           {/* Banner de Aviso para Visitantes */}
           {isGuest && (
             <div className="bg-artBlue/10 border border-artBlue/20 rounded-[2rem] p-5 sm:p-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-fadeIn">
@@ -318,28 +313,59 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
-                {SETORES_ARTISTICOS.map((setor) => {
-                  const isSelected = setorSelecionado === setor.id;
-                  return (
-                    <button
-                      key={setor.id}
-                      type="button"
-                      onClick={() => {
-                        setSetorSelecionado(setor.id);
-                        setSubcategoriaSelecionada("");
-                      }}
-                      className={`px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all border flex items-center gap-2 ${
-                        isSelected
-                          ? `${setor.corBg} border-transparent shadow-md scale-105`
-                          : "bg-white text-gray-600 border-black/5 hover:bg-gray-50 shadow-sm"
-                      }`}
-                    >
-                      <i className={`${setor.icone} text-[11px]`}></i>
-                      <span>{setor.nome}</span>
-                    </button>
-                  );
-                })}
+              <div className="relative group/setores">
+                {/* Botão de Rolar para a Esquerda */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById("setores-scroll-container");
+                    if (el) el.scrollBy({ left: -260, behavior: "smooth" });
+                  }}
+                  className="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-black/10 items-center justify-center text-xs text-artDark hover:bg-gray-100 z-20 transition-all opacity-80 hover:opacity-100 hover:scale-110"
+                  title="Rolar para esquerda"
+                >
+                  <i className="fa-solid fa-chevron-left text-[10px]"></i>
+                </button>
+
+                <div
+                  id="setores-scroll-container"
+                  className="flex gap-2.5 overflow-x-auto pb-2 scroll-smooth no-scrollbar"
+                >
+                  {SETORES_ARTISTICOS.map((setor) => {
+                    const isSelected = setorSelecionado === setor.id;
+                    return (
+                      <button
+                        key={setor.id}
+                        type="button"
+                        onClick={() => {
+                          setSetorSelecionado(setor.id);
+                          setSubcategoriaSelecionada("");
+                        }}
+                        className={`px-5 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all border flex items-center gap-2 shrink-0 ${
+                          isSelected
+                            ? `${setor.corBg} border-transparent shadow-md scale-105`
+                            : "bg-white text-gray-600 border-black/5 hover:bg-gray-50 shadow-sm"
+                        }`}
+                      >
+                        <i className={`${setor.icone} text-[11px]`}></i>
+                        <span>{setor.nome}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Botão de Rolar para a Direita */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById("setores-scroll-container");
+                    if (el) el.scrollBy({ left: 260, behavior: "smooth" });
+                  }}
+                  className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-md border border-black/10 items-center justify-center text-xs text-artDark hover:bg-gray-100 z-20 transition-all opacity-80 hover:opacity-100 hover:scale-110"
+                  title="Rolar para direita"
+                >
+                  <i className="fa-solid fa-chevron-right text-[10px]"></i>
+                </button>
               </div>
 
               {/* Subcategorias Dinâmicas do Setor Ativo */}
@@ -402,7 +428,7 @@ export default function Home() {
               ) : (
                 <div className="columns-1 md:columns-2 xl:columns-3 gap-6 space-y-6">
                   {postsFiltrados.map((post) => (
-                    <FeedCard
+                    <PostCard
                       key={post.id}
                       post={post}
                       currentUserId={currentUser?.id}
@@ -457,7 +483,6 @@ export default function Home() {
             </aside>
           </div>
         </div>
-      </main>
 
       <ModalDenuncia
         aberto={modalDenunciaAberto}
@@ -474,164 +499,5 @@ export default function Home() {
         acao={acaoTentada}
       />
     </div>
-  );
-}
-
-function FeedCard({ post, currentUserId, isGuest, onToggleLike, onToggleSave, onToggleFollow, onDenunciar, mostrarAviso }) {
-  const isMe = !isGuest && currentUserId === post.usuario?.id;
-  const cats = (post.categorias && post.categorias.length > 0) ? post.categorias : (post.categoria ? [post.categoria] : []);
-
-  return (
-    <article className="break-inside-avoid bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all group mb-6 relative">
-      <div className="relative overflow-hidden">
-        <Link to={`/obra/${post.id}`} className="block">
-          <img
-            src={getMediaUrl(post.arquivoUrl) || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
-            alt={post.legenda || "Obra"}
-            onError={(e) => {
-              e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
-            }}
-            className="w-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        </Link>
-
-        <div className="absolute top-3 right-3 z-10">
-          <MenuOpcoes
-            tipo="obra"
-            detalhesLink={`/obra/${post.id}`}
-            isSalvo={post.salvo_por_mim}
-            onSalvar={onToggleSave}
-            onDenunciar={onDenunciar}
-            onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "info")}
-          />
-        </div>
-      </div>
-
-      <div className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex flex-wrap gap-1.5">
-            {cats.map((c, i) => {
-              const catNome = c?.nomeCategoria || c?.nome || (typeof c === "string" ? c : "Arte");
-              const estilo = getEstiloCategoria(catNome) || { corTag: "bg-artPurple/10 text-artPurple" };
-              return (
-                <span
-                  key={c?.id || i}
-                  className={`${estilo.corTag || "bg-artPurple/10 text-artPurple"} px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest border`}
-                >
-                  {catNome}
-                </span>
-              );
-            })}
-          </div>
-
-          <span className="text-[10px] text-gray-400 font-bold">
-            {post.dataPostagem ? new Date(post.dataPostagem).toLocaleDateString("pt-BR") : ""}
-          </span>
-        </div>
-
-        {post.legenda && (
-          <h2 className="font-editorial text-xl italic leading-snug mb-3">
-            {post.legenda}
-          </h2>
-        )}
-
-        {/* Autor */}
-        <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-black/5">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link
-              to={isMe ? "/perfil" : `/artista/${post.usuario?.id}`}
-              className="w-9 h-9 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-opacity"
-              title={`Ver perfil de ${post.usuario?.nome || "Artista"}`}
-            >
-              {post.usuario?.fotoPerfil ? (
-                <img
-                  src={getMediaUrl(post.usuario.fotoPerfil)}
-                  alt={post.usuario.nome}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-artPurple flex items-center justify-center text-white text-xs font-bold">
-                  {post.usuario?.nome?.charAt(0)?.toUpperCase() || "A"}
-                </div>
-              )}
-            </Link>
-
-            <div className="min-w-0">
-              <Link
-                to={isMe ? "/perfil" : `/artista/${post.usuario?.id}`}
-                className="text-sm font-bold truncate block hover:text-artPurple transition-colors"
-              >
-                {post.usuario?.nome || "Artista"}
-              </Link>
-              <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
-                Artista • {post.seguidores || 0} seguidores
-              </p>
-            </div>
-          </div>
-
-          {!isMe && post.usuario?.id && (
-            <button
-              type="button"
-              onClick={onToggleFollow}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-                post.seguindo_usuario
-                  ? "bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-500"
-                  : "bg-artDark text-white hover:bg-artPurple"
-              }`}
-            >
-              {post.seguindo_usuario ? "Seguindo" : "+ Seguir"}
-            </button>
-          )}
-        </div>
-
-        {/* Barra de Interação */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/5">
-          <div className="flex items-center gap-4 text-xs font-bold">
-            <button
-              type="button"
-              onClick={onToggleLike}
-              className={`flex items-center gap-1.5 transition-colors ${
-                post.curtido_por_mim ? "text-red-500" : "text-gray-400 hover:text-red-500"
-              }`}
-              title={post.curtido_por_mim ? "Remover curtida" : "Curtir obra"}
-            >
-              <i className={post.curtido_por_mim ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
-              <span>{post.likes || 0}</span>
-            </button>
-
-            {/* Botão de Favorito destacado em Amarelo quando salvo */}
-            <button
-              type="button"
-              onClick={onToggleSave}
-              className={`flex items-center gap-1.5 transition-all ${
-                post.salvo_por_mim
-                  ? "text-amber-500 scale-110"
-                  : "text-gray-400 hover:text-amber-500"
-              }`}
-              title={post.salvo_por_mim ? "Remover dos favoritos" : "Salvar obra nos favoritos"}
-            >
-              <i className={post.salvo_por_mim ? "fa-solid fa-bookmark text-amber-500" : "fa-regular fa-bookmark"}></i>
-            </button>
-
-            <Link
-              to={`/obra/${post.id}`}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-artBlue transition-colors"
-              title="Comentários"
-            >
-              <i className="fa-regular fa-comment"></i>
-              <span>{post.comentarios || 0}</span>
-            </Link>
-          </div>
-
-          <Link
-            to={`/obra/${post.id}`}
-            className="w-8 h-8 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center"
-            title="Ver detalhes da obra"
-          >
-            <i className="fa-solid fa-arrow-right text-xs"></i>
-          </Link>
-        </div>
-      </div>
-    </article>
   );
 }

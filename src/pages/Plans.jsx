@@ -1,467 +1,397 @@
-import { useState } from "react";
-import Sidebar from "../components/Sidebar";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-
-const planoAtual = "FREE";
-
-const planos = [
-  {
-    id: "FREE",
-    nome: "Free",
-    apelido: "Entusiasta",
-    descricao: "Para quem está começando a montar seu portfólio.",
-    preco: "Grátis",
-    destaque: false,
-    cor: "text-artGreen",
-    fundoIcone: "bg-artGreen/10",
-    botao: "Plano atual",
-    recursos: [
-      { texto: "Até 10 obras no portfólio", ativo: true },
-      { texto: "Perfil público básico", ativo: true },
-      { texto: "Salvar obras favoritas", ativo: true },
-      { texto: "Mensagens básicas", ativo: true },
-      { texto: "Solicitar encomendas", ativo: true },
-      { texto: "Estatísticas avançadas", ativo: false },
-      { texto: "Destaque no feed", ativo: false },
-      { texto: "Selo Pro no perfil", ativo: false },
-    ],
-  },
-  {
-    id: "PREMIUM",
-    nome: "Premium",
-    apelido: "Artista",
-    descricao: "Para artistas que querem mais controle do portfólio.",
-    preco: "R$ 29,90",
-    destaque: true,
-    cor: "text-artPurple",
-    fundoIcone: "bg-artPurple/10",
-    botao: "Assinar futuramente",
-    recursos: [
-      { texto: "Até 50 obras no portfólio", ativo: true },
-      { texto: "Perfil público completo", ativo: true },
-      { texto: "Área de encomendas", ativo: true },
-      { texto: "Mensagens comerciais", ativo: true },
-      { texto: "Estatísticas intermediárias", ativo: true },
-      { texto: "Mais visibilidade no feed", ativo: true },
-      { texto: "Destaque manual de obras", ativo: false },
-      { texto: "Relatórios avançados", ativo: false },
-    ],
-  },
-  {
-    id: "PRO",
-    nome: "Pro",
-    apelido: "Profissional",
-    descricao: "Para artistas profissionais que desejam mais destaque.",
-    preco: "R$ 49,90",
-    destaque: false,
-    cor: "text-artBlue",
-    fundoIcone: "bg-artBlue/10",
-    botao: "Assinar futuramente",
-    recursos: [
-      { texto: "Obras ilimitadas", ativo: true },
-      { texto: "Perfil com selo Pro", ativo: true },
-      { texto: "Área de encomendas completa", ativo: true },
-      { texto: "Mensagens comerciais", ativo: true },
-      { texto: "Estatísticas avançadas", ativo: true },
-      { texto: "Destaque de obras no feed", ativo: true },
-      { texto: "Relatórios de desempenho", ativo: true },
-      { texto: "Prioridade visual no portfólio", ativo: true },
-    ],
-  },
-];
-
-const comparativo = [
-  {
-    recurso: "Limite de obras",
-    free: "10 obras",
-    premium: "50 obras",
-    pro: "Ilimitado",
-  },
-  {
-    recurso: "Mensagens",
-    free: "Básicas",
-    premium: "Comerciais",
-    pro: "Comerciais",
-  },
-  {
-    recurso: "Encomendas",
-    free: "Solicitar",
-    premium: "Receber e gerenciar",
-    pro: "Receber e gerenciar",
-  },
-  {
-    recurso: "Estatísticas",
-    free: "Limitadas",
-    premium: "Intermediárias",
-    pro: "Avançadas",
-  },
-  {
-    recurso: "Destaque no feed",
-    free: "Não incluso",
-    premium: "Parcial",
-    pro: "Incluso",
-  },
-];
+import { planosService } from "../services/api";
+import { useToast } from "../contexts/ToastContext";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Plans() {
-  const [noticeMessage, setNoticeMessage] = useState("");
+  const { addToast } = useToast();
+  const { user: authUser } = useAuth();
+  const [meuPlano, setMeuPlano] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [assinandoId, setAssinandoId] = useState(null);
 
-  const mostrarAviso = (mensagem) => {
-    setNoticeMessage(mensagem);
-    setTimeout(() => setNoticeMessage(""), 4000);
+  const carregarMeuPlano = async () => {
+    try {
+      const dados = await planosService.obterMeuPlano();
+      setMeuPlano(dados);
+    } catch {
+      setMeuPlano({
+        tipo: "Free",
+        nomeExibicao: "Artfolio Free",
+        cor: "artGreen",
+        precoPlano: 0.0,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePlano = (plano) => {
-    if (plano.id === planoAtual) {
-      mostrarAviso("Este já é o plano ativo na prévia visual.");
+  useEffect(() => {
+    carregarMeuPlano();
+  }, []);
+
+  const handleAssinar = async (plano) => {
+    if (!authUser) {
+      addToast("Faça login na sua conta para assinar ou trocar de plano.", "Atenção", "aviso");
       return;
     }
 
-    mostrarAviso(
-      "A assinatura real será integrada futuramente ao backend e à tabela Assinatura."
-    );
+    if (meuPlano?.tipo?.toLowerCase() === plano.tipo.toLowerCase()) {
+      addToast(`Você já está aproveitando os benefícios do plano ${plano.nome}.`, "Plano Ativo", "info");
+      return;
+    }
+
+    try {
+      setAssinandoId(plano.id);
+      const res = await planosService.assinarPlano(plano.id);
+      setMeuPlano(res);
+      addToast(`Parabéns! Seu plano agora é ${plano.nome}. Os novos recursos já estão liberados!`, "Sucesso!", "sucesso");
+    } catch (err) {
+      addToast(err.message || "Não foi possível alterar de plano. Tente novamente.", "Erro", "erro");
+    } finally {
+      setAssinandoId(null);
+    }
   };
 
+  // Cards com alinhamento rigoroso linha por linha (exatamente 9 linhas sincronizadas)
+  const planos = [
+    {
+      id: 1,
+      tipo: "Free",
+      nome: "Artfolio Free",
+      subtitulo: "Essencial",
+      tagline: "Para quem está começando a expor seus trabalhos na comunidade.",
+      preco: "Grátis",
+      periodo: "sempre gratuito",
+      destaque: false,
+      corNome: "text-artGreen",
+      corBorda: "border-artGreen/30 hover:border-artGreen",
+      corBadge: "bg-artGreen text-white shadow-md shadow-artGreen/30",
+      corLed: "ring-4 ring-[#00B894] shadow-[0_0_15px_#00B894,0_0_30px_rgba(0,184,148,0.7)]",
+      corBotao: "bg-[#F9F8F6] text-artDark border border-black/10 hover:bg-artGreen hover:text-white",
+      recursos: [
+        { texto: "Portfólio com biografia e links externos", ativo: true },
+        { texto: "Qualidade original preservada", ativo: true },
+        { texto: "Postagem simples (1 página)", ativo: true },
+        { texto: "Chat livre e ilimitado", ativo: true },
+        { texto: "Moldura LED e tag verde Free no perfil", ativo: true },
+        { texto: "Estatísticas completas", ativo: false },
+        { texto: "Mensagem inicial customizável", ativo: false },
+        { texto: "Destaque segmentado no feed", ativo: false },
+        { texto: "Prioridade orgânica em novos públicos", ativo: false },
+      ],
+    },
+    {
+      id: 2,
+      tipo: "Pro",
+      nome: "Artfolio Pro",
+      subtitulo: "Profissional",
+      tagline: "Para artistas que buscam presença profissional, métricas e carrosséis.",
+      preco: "R$ 29,90",
+      periodo: "por mês",
+      destaque: true,
+      corNome: "text-artPurple",
+      corBorda: "border-artPurple shadow-xl shadow-artPurple/15",
+      corBadge: "bg-artPurple text-white shadow-md shadow-artPurple/30",
+      corLed: "ring-4 ring-[#6C5CE7] shadow-[0_0_15px_#6C5CE7,0_0_30px_rgba(108,92,231,0.7)]",
+      corBotao: "bg-artPurple text-white hover:bg-indigo-700 shadow-lg shadow-artPurple/25",
+      recursos: [
+        { texto: "Portfólio com biografia e links externos", ativo: true },
+        { texto: "Qualidade original preservada", ativo: true },
+        { texto: "Múltiplas páginas por post", ativo: true },
+        { texto: "Chat livre e ilimitado", ativo: true },
+        { texto: "Moldura LED e tag roxa Pro no perfil", ativo: true },
+        { texto: "Estatísticas completas", ativo: true },
+        { texto: "Mensagem inicial customizável", ativo: true },
+        { texto: "Destaque segmentado no feed", ativo: false },
+        { texto: "Prioridade orgânica em novos públicos", ativo: false },
+      ],
+    },
+    {
+      id: 3,
+      tipo: "Boost",
+      nome: "Artfolio Boost",
+      subtitulo: "Alcance Máximo",
+      tagline: "Para acelerar seu alcance sem pay-to-win. Destaque inteligente para novos públicos.",
+      preco: "R$ 49,90",
+      periodo: "por mês",
+      destaque: false,
+      corNome: "text-artOrange",
+      corBorda: "border-artOrange/40 hover:border-artOrange",
+      corBadge: "bg-artOrange text-white shadow-md shadow-artOrange/30",
+      corLed: "ring-4 ring-[#FF793F] shadow-[0_0_15px_#FF793F,0_0_30px_rgba(255,121,63,0.7)]",
+      corBotao: "bg-artOrange text-white hover:bg-orange-600 shadow-lg shadow-artOrange/25",
+      recursos: [
+        { texto: "Portfólio com biografia e links externos", ativo: true },
+        { texto: "Qualidade original preservada", ativo: true },
+        { texto: "Múltiplas páginas por post", ativo: true },
+        { texto: "Chat livre e ilimitado", ativo: true },
+        { texto: "Moldura LED e tag laranja Boost no perfil", ativo: true },
+        { texto: "Estatísticas completas", ativo: true },
+        { texto: "Mensagem inicial customizável", ativo: true },
+        { texto: "Destaque segmentado no feed", ativo: true },
+        { texto: "Prioridade orgânica em novos públicos", ativo: true },
+      ],
+    },
+  ];
+
+  // Tabela comparativa simétrica e rigorosamente alinhada linha por linha
+  const comparativo = [
+    {
+      funcionalidade: "Portfólio",
+      free: "Biografia e links externos",
+      pro: "Biografia e links externos",
+      boost: "Biografia e links externos",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Resolução",
+      free: "Qualidade original preservada",
+      pro: "Qualidade original preservada",
+      boost: "Qualidade original preservada",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Postagens",
+      free: "Postagem simples (1 página)",
+      pro: "Múltiplas páginas por post",
+      boost: "Múltiplas páginas por post",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Chat",
+      free: "Livre e ilimitado",
+      pro: "Livre e ilimitado",
+      boost: "Livre e ilimitado",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Identidade",
+      free: "Moldura LED e tag verde Free",
+      pro: "Moldura LED e tag roxa Pro",
+      boost: "Moldura LED e tag laranja Boost",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Estatísticas",
+      free: "Estatísticas completas",
+      pro: "Estatísticas completas",
+      boost: "Estatísticas completas",
+      isRiscado: { free: true, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Mensagem CTA",
+      free: "Mensagem inicial customizável",
+      pro: "Mensagem inicial customizável",
+      boost: "Mensagem inicial customizável",
+      isRiscado: { free: true, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Visibilidade",
+      free: "Destaque segmentado no feed",
+      pro: "Destaque segmentado no feed",
+      boost: "Destaque segmentado no feed",
+      isRiscado: { free: true, pro: true, boost: false },
+    },
+    {
+      funcionalidade: "Prioridade",
+      free: "Prioridade orgânica em novos públicos",
+      pro: "Prioridade orgânica em novos públicos",
+      boost: "Prioridade orgânica em novos públicos",
+      isRiscado: { free: true, pro: true, boost: false },
+    },
+  ];
+
+  const planoAtivoTipo = meuPlano?.tipo || "Free";
+
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased font-sans overflow-x-hidden">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+    <div className="w-full px-4 sm:px-6 lg:px-10 py-12">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <header className="text-center mb-14">
+          <div className="inline-flex items-center gap-2 bg-artPurple/10 border border-artPurple/20 text-artPurple px-4 py-1.5 rounded-full text-[11px] font-bold tracking-widest uppercase mb-4">
+            <i className="fa-solid fa-gem text-xs"></i>
+            Planos e Ferramentas Profissionais
+          </div>
 
-      <Sidebar />
+          <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-tight">
+            Evolua sua arte. <br />
+            <span className="italic text-artOrange">Destaque seu talento.</span>
+          </h1>
 
-      <main className="ml-16 min-h-screen px-4 sm:px-6 lg:px-10 py-10">
-        <div className="max-w-6xl mx-auto">
-          <header className="text-center mb-10">
-            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-3 block">
-              Planos e permissões
-            </span>
+          <p className="text-sm sm:text-base text-gray-500 mt-4 max-w-2xl mx-auto leading-relaxed">
+            No Artfolio, você nunca paga taxas ou porcentagens sobre suas vendas. Nossos planos focam em profissionalização, visibilidade qualificada e personalização de perfil.
+          </p>
+        </header>
 
-            <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-tight">
-              Escolha seu <br />
-              <span className="italic text-artOrange">legado.</span>
-            </h1>
+        {/* Cards dos 3 Planos com alinhamento rigoroso */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
+          {planos.map((plano) => {
+            const ehPlanoAtual = planoAtivoTipo.toLowerCase() === plano.tipo.toLowerCase();
+            const estaAssinando = assinandoId === plano.id;
 
-            <p className="text-sm text-gray-500 mt-4 max-w-2xl mx-auto leading-relaxed">
-              Cada plano libera recursos diferentes dentro do Artfolio. No
-              backend, o sistema vai verificar o usuário logado, a assinatura
-              ativa e as permissões antes de liberar estatísticas, encomendas,
-              destaque e limite de obras.
-            </p>
-          </header>
-
-          {noticeMessage && (
-            <div className="bg-artOrange/10 text-artOrange border border-artOrange/10 rounded-[1.3rem] px-5 py-3 mb-8 text-xs font-bold max-w-4xl mx-auto">
-              <i className="fa-solid fa-circle-info mr-2"></i>
-              {noticeMessage}
-            </div>
-          )}
-
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-            {planos.map((plano) => (
-              <PlanoCard
+            return (
+              <div
                 key={plano.id}
-                plano={plano}
-                ativo={plano.id === planoAtual}
-                onClick={() => handlePlano(plano)}
-              />
-            ))}
-          </section>
-
-          <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-7 bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
-              <span className="text-artBlue font-bold tracking-widest uppercase text-[10px] block mb-2">
-                Controle por assinatura
-              </span>
-
-              <h2 className="font-editorial text-3xl italic mb-3">
-                O sistema vai liberar recursos conforme o plano.
-              </h2>
-
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Quando o usuário fizer login, o backend vai retornar dados como
-                id, nome, e-mail, tipo de usuário, plano atual e status da
-                assinatura. Com isso, o frontend poderá mostrar ou bloquear áreas
-                como estatísticas, encomendas, destaque no feed e limite de
-                obras.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
-                <ResumoPlano
-                  titulo="Free"
-                  descricao="Acesso básico"
-                  icone="fa-solid fa-seedling"
-                />
-
-                <ResumoPlano
-                  titulo="Premium"
-                  descricao="Recursos comerciais"
-                  icone="fa-solid fa-star"
-                />
-
-                <ResumoPlano
-                  titulo="Pro"
-                  descricao="Destaque e análise"
-                  icone="fa-solid fa-crown"
-                />
-              </div>
-            </div>
-
-            <div className="lg:col-span-5 bg-gradient-to-br from-artDark via-purple-950 to-indigo-950 text-white rounded-[2rem] p-6 lg:p-8 relative overflow-hidden shadow-xl border border-artPurple/20">
-              <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
-                Evolução Artística & Alcance
-              </span>
-
-              <h2 className="font-editorial text-3xl sm:text-4xl italic leading-tight">
-                Potencialize a visibilidade do seu talento.
-              </h2>
-
-              <p className="text-sm text-gray-300 mt-3 leading-relaxed font-light">
-                Cada nível de plano foi desenhado para acompanhar a sua jornada, desde as primeiras publicações até a consolidação profissional na comunidade artística.
-              </p>
-
-              <div className="mt-6 space-y-3.5 text-xs font-semibold">
-                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
-                  <div className="w-8 h-8 rounded-lg bg-artPurple/20 text-artPurple flex items-center justify-center">
-                    <i className="fa-solid fa-palette text-sm"></i>
-                  </div>
-                  <span>Exposição ilimitada de criações e coleções autorais</span>
-                </div>
-
-                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
-                  <div className="w-8 h-8 rounded-lg bg-artOrange/20 text-artOrange flex items-center justify-center">
-                    <i className="fa-solid fa-crown text-sm"></i>
-                  </div>
-                  <span>Selo oficial de Artista Verificado no perfil público</span>
-                </div>
-
-                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
-                  <div className="w-8 h-8 rounded-lg bg-artBlue/20 text-artBlue flex items-center justify-center">
-                    <i className="fa-solid fa-chart-line text-sm"></i>
-                  </div>
-                  <span>Painel de métricas, visualizações e tendências em tempo real</span>
-                </div>
-
-                <div className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                    <i className="fa-solid fa-gem text-sm"></i>
-                  </div>
-                  <span>Destaque prioritário no feed de descobertas e buscas</span>
-                </div>
-              </div>
-
-              <i className="fa-solid fa-crown absolute -right-6 -bottom-8 text-[8rem] text-white/5 rotate-12"></i>
-            </div>
-          </section>
-
-          <section className="mt-8 bg-white rounded-[2rem] border border-black/5 p-5 lg:p-6">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
-              <div>
-                <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Comparativo
-                </span>
-
-                <h2 className="font-editorial text-3xl italic">
-                  Diferenças entre os planos
-                </h2>
-              </div>
-
-              <Link
-                to="/estatisticas"
-                className="bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all text-center"
+                className={`relative rounded-3xl p-7 sm:p-8 bg-white border transition-all duration-300 flex flex-col justify-between ${ehPlanoAtual ? "ring-2 ring-artDark shadow-2xl scale-[1.02]" : plano.corBorda
+                  }`}
               >
-                Ver estatísticas
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] border-separate border-spacing-y-2">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-widest text-gray-400">
-                    <th className="px-4 py-3">Recurso</th>
-                    <th className="px-4 py-3">Free</th>
-                    <th className="px-4 py-3">Premium</th>
-                    <th className="px-4 py-3">Pro</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {comparativo.map((item) => (
-                    <tr key={item.recurso} className="bg-[#F9F8F6]">
-                      <td className="px-4 py-4 rounded-l-2xl text-sm font-bold">
-                        {item.recurso}
-                      </td>
-
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {item.free}
-                      </td>
-
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {item.premium}
-                      </td>
-
-                      <td className="px-4 py-4 rounded-r-2xl text-sm text-gray-500">
-                        {item.pro}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="mt-8 bg-artPurple/5 border border-artPurple/10 rounded-[2rem] p-5 lg:p-6">
-            <div className="flex flex-col md:flex-row gap-4 md:items-center justify-between">
-              <div className="flex gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
-                  <i className="fa-solid fa-circle-info"></i>
-                </div>
+                {/* Badge de Destaque ou Plano Atual */}
+                {ehPlanoAtual ? (
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-artDark text-white px-4 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase shadow-md flex items-center gap-1.5">
+                    <i className="fa-solid fa-circle-check text-emerald-400 text-[10px]"></i>
+                    Seu Plano Ativo
+                  </span>
+                ) : plano.destaque ? (
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-artPurple text-white px-4 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase shadow-md">
+                    Mais Popular
+                  </span>
+                ) : null}
 
                 <div>
-                  <h2 className="text-sm font-bold uppercase tracking-widest">
-                    Importante para o TCC
-                  </h2>
+                  {/* Topo do Card */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <span className={`text-[11px] font-bold uppercase tracking-widest ${plano.corNome}`}>
+                        {plano.subtitulo}
+                      </span>
+                      <h3 className="font-editorial text-2xl sm:text-3xl mt-0.5">{plano.nome}</h3>
+                    </div>
 
-                  <p className="text-sm text-gray-500 mt-1 max-w-3xl leading-relaxed">
-                    O Artfolio não intermedia pagamentos entre comprador e
-                    artista. Os planos servem para liberar recursos da plataforma
-                    ao artista, como limite de obras, estatísticas, destaque e
-                    ferramentas comerciais.
+                    {/* Mockup miniatura do LED com luz neon brilhosa */}
+                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center p-1 relative">
+                      <div className={`w-9 h-9 rounded-xl bg-gray-200 overflow-hidden ${plano.corLed} flex items-center justify-center text-xs font-bold`}>
+                        <i className="fa-solid fa-palette text-gray-500"></i>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500 leading-relaxed min-h-[38px] mb-6">
+                    {plano.tagline}
                   </p>
+
+                  {/* Preço */}
+                  <div className="mb-6 pb-6 border-b border-black/5">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-editorial text-4xl sm:text-5xl font-bold tracking-tight">
+                        {plano.preco}
+                      </span>
+                      {plano.periodo && (
+                        <span className="text-xs text-gray-400 font-medium">/{plano.periodo}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lista de Recursos rigorosamente alinhada */}
+                  <ul className="space-y-3 mb-8">
+                    {plano.recursos.map((rec, idx) => (
+                      <li key={idx} className="flex items-start gap-2.5 text-xs min-h-[22px]">
+                        <span
+                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${rec.ativo ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-300"
+                            }`}
+                        >
+                          <i className={`fa-solid ${rec.ativo ? "fa-check" : "fa-xmark"} text-[9px]`}></i>
+                        </span>
+                        <span className={rec.ativo ? "text-gray-700 font-medium" : "text-gray-400 line-through opacity-60"}>
+                          {rec.texto}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Botão de Ação */}
+                <div>
+                  <button
+                    type="button"
+                    disabled={ehPlanoAtual || estaAssinando || loading}
+                    onClick={() => handleAssinar(plano)}
+                    className={`w-full py-3.5 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 ${ehPlanoAtual
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                      : plano.corBotao
+                      }`}
+                  >
+                    {estaAssinando ? (
+                      <>
+                        <i className="fa-solid fa-spinner fa-spin"></i>
+                        Atualizando...
+                      </>
+                    ) : ehPlanoAtual ? (
+                      <>
+                        <i className="fa-solid fa-check"></i>
+                        Plano Atual
+                      </>
+                    ) : plano.id === 1 ? (
+                      "Voltar para Free"
+                    ) : (
+                      `Mudar para ${plano.nome}`
+                    )}
+                  </button>
                 </div>
               </div>
-
-              <Link
-                to="/meu-portfolio"
-                className="bg-white border border-black/5 px-5 py-3 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all text-center"
-              >
-                Ir para portfólio
-              </Link>
-            </div>
-          </section>
+            );
+          })}
         </div>
-      </main>
-    </div>
-  );
-}
 
-function PlanoCard({ plano, ativo, onClick }) {
-  return (
-    <article
-      className={`rounded-[2rem] border p-6 relative overflow-hidden transition-all ${
-        plano.destaque
-          ? "bg-artDark text-white border-artDark shadow-xl shadow-black/10 md:-translate-y-3"
-          : "bg-white border-black/5"
-      }`}
-    >
-      {plano.destaque && (
-        <span className="absolute top-5 right-5 bg-artPurple text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-          Recomendado
-        </span>
-      )}
-
-      {ativo && (
-        <span
-          className={`absolute ${
-            plano.destaque ? "top-12 right-5" : "top-5 right-5"
-          } bg-artOrange text-white px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest`}
-        >
-          Ativo
-        </span>
-      )}
-
-      <div
-        className={`w-12 h-12 rounded-2xl ${plano.fundoIcone} ${plano.cor} flex items-center justify-center mb-5`}
-      >
-        <i className="fa-solid fa-crown"></i>
-      </div>
-
-      <span
-        className={`text-[10px] font-bold uppercase tracking-widest ${
-          plano.destaque ? "text-gray-400" : "text-gray-400"
-        }`}
-      >
-        {plano.apelido}
-      </span>
-
-      <h2 className="font-editorial text-4xl italic mt-1">
-        {plano.nome}
-      </h2>
-
-      <p
-        className={`text-sm mt-3 leading-relaxed ${
-          plano.destaque ? "text-gray-400" : "text-gray-500"
-        }`}
-      >
-        {plano.descricao}
-      </p>
-
-      <div className="mt-6">
-        <span className="font-black text-3xl">{plano.preco}</span>
-
-        {plano.id !== "FREE" && (
-          <span
-            className={`text-xs ml-1 ${
-              plano.destaque ? "text-gray-400" : "text-gray-500"
-            }`}
-          >
-            / mês
-          </span>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={onClick}
-        className={`w-full mt-6 px-5 py-3 rounded-full text-xs font-bold transition-all ${
-          ativo
-            ? plano.destaque
-              ? "bg-white/10 text-white cursor-default"
-              : "bg-[#F9F8F6] text-gray-400 cursor-default"
-            : plano.destaque
-            ? "bg-white text-artDark hover:bg-artPurple hover:text-white"
-            : "bg-artDark text-white hover:bg-artPurple"
-        }`}
-      >
-        {ativo ? "Plano atual" : plano.botao}
-      </button>
-
-      <div className="mt-6 space-y-3">
-        {plano.recursos.map((recurso) => (
-          <div
-            key={recurso.texto}
-            className={`flex items-center gap-3 text-sm ${
-              recurso.ativo
-                ? plano.destaque
-                  ? "text-white"
-                  : "text-artDark"
-                : "text-gray-400"
-            }`}
-          >
-            <i
-              className={`fa-solid ${
-                recurso.ativo ? "fa-check" : "fa-xmark"
-              } ${recurso.ativo ? plano.cor : "text-gray-400"}`}
-            ></i>
-
-            <span>{recurso.texto}</span>
+        {/* Tabela Comparativa de Recursos (Visão Lado a Lado Rigorosa) */}
+        <section className="bg-white rounded-3xl p-6 sm:p-10 border border-black/5 shadow-sm mb-14">
+          <div className="text-center mb-8">
+            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-2">
+              Visão Lado a Lado
+            </span>
+            <h2 className="font-editorial text-3xl sm:text-4xl">Comparativo dos Planos</h2>
           </div>
-        ))}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-black/5 text-gray-400 font-bold uppercase tracking-wider">
+                  <th className="py-4 px-4">Funcionalidades</th>
+                  <th className="py-4 px-4 text-artGreen">Free</th>
+                  <th className="py-4 px-4 text-artPurple">Pro</th>
+                  <th className="py-4 px-4 text-artOrange">Boost</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {comparativo.map((linha, index) => (
+                  <tr key={index} className="hover:bg-[#F9F8F6]/50 transition-colors">
+                    <td className="py-4 px-4 font-semibold text-gray-800">{linha.funcionalidade}</td>
+                    <td className={`py-4 px-4 ${linha.isRiscado.free ? "text-gray-400 line-through opacity-60" : "text-gray-700 font-medium"}`}>
+                      {linha.free}
+                    </td>
+                    <td className={`py-4 px-4 ${linha.isRiscado.pro ? "text-gray-400 line-through opacity-60" : "text-artPurple font-medium"}`}>
+                      {linha.pro}
+                    </td>
+                    <td className={`py-4 px-4 ${linha.isRiscado.boost ? "text-gray-400 line-through opacity-60" : "text-artOrange font-medium"}`}>
+                      {linha.boost}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Rodapé explicativo / Transparência */}
+        <div className="bg-[#121212] text-white rounded-3xl p-8 sm:p-10 text-center relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-artPurple/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="relative z-10 max-w-2xl mx-auto">
+            <h3 className="font-editorial text-2xl sm:text-3xl mb-3">
+              Transparência e Respeito aos Artistas
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-300 leading-relaxed mb-6 font-light">
+              Não cobramos comissões sobre suas vendas nem intermediamos pagamentos. Todas as negociações feitas via chat são 100% suas, sem taxas embutidas. Seu sucesso pertence a você.
+            </p>
+            <Link
+              to="/termos"
+              className="inline-block text-[11px] font-bold text-artOrange hover:underline uppercase tracking-widest"
+            >
+              Conheça nossos Termos de Uso e Política de Planos →
+            </Link>
+          </div>
+        </div>
       </div>
-    </article>
-  );
-}
-
-function ResumoPlano({ titulo, descricao, icone }) {
-  return (
-    <div className="bg-[#F9F8F6] rounded-[1.3rem] p-4 border border-black/5">
-      <div className="w-9 h-9 rounded-xl bg-artPurple/10 text-artPurple flex items-center justify-center mb-3">
-        <i className={icone}></i>
-      </div>
-
-      <p className="font-black text-lg">{titulo}</p>
-
-      <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
-        {descricao}
-      </span>
     </div>
   );
 }

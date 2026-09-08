@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, getMediaUrl } from "../services/api";
 
@@ -53,13 +52,8 @@ export default function MeuPortfolio() {
   };
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased font-sans">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto">
+    <div className="w-full p-4 sm:p-6 lg:p-10">
+      <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
@@ -230,7 +224,6 @@ export default function MeuPortfolio() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
   );
 }

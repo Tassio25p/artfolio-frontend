@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { usuarioService } from "../services/api";
 import ModalConversao from "../components/ModalConversao";
 
 const obrasDestaque = [
@@ -66,6 +67,16 @@ export default function Inicio() {
   const { enterAsGuest } = useAuth();
   const [modalAberto, setModalAberto] = useState(false);
   const [acaoTentada, setAcaoTentada] = useState("interagir");
+  const [estatisticas, setEstatisticas] = useState({ total_artistas: 0, total_obras: 0, total_categorias: 0 });
+
+  useEffect(() => {
+    usuarioService
+      .obterEstatisticasGerais()
+      .then((data) => {
+        if (data) setEstatisticas(data);
+      })
+      .catch(() => null);
+  }, []);
 
   const handleEntrarComoVisitante = () => {
     enterAsGuest();
@@ -175,27 +186,31 @@ export default function Inicio() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-10 max-w-lg">
-                <div className="bg-white rounded-[1.5rem] p-4 border border-black/5">
-                  <p className="text-2xl font-black text-artOrange">120+</p>
+                <div className="bg-white rounded-[1.5rem] p-4 border border-black/5 shadow-xs">
+                  <p className="text-2xl font-black text-artOrange">
+                    {estatisticas.total_artistas > 0 ? `${estatisticas.total_artistas}` : "—"}
+                  </p>
                   <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
-                    Artistas
+                    Artistas Cadastrados
                   </span>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    PF e PJ
+                    PF e PJ Reais
                   </p>
                 </div>
 
-                <div className="bg-white rounded-[1.5rem] p-4 border border-black/5">
-                  <p className="text-2xl font-black text-artPurple">500+</p>
+                <div className="bg-white rounded-[1.5rem] p-4 border border-black/5 shadow-xs">
+                  <p className="text-2xl font-black text-artPurple">
+                    {estatisticas.total_obras > 0 ? `${estatisticas.total_obras}` : "—"}
+                  </p>
                   <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
-                    Obras
+                    Obras Publicadas
                   </span>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Curadoria ativa
+                    Galeria ao vivo
                   </p>
                 </div>
 
-                <div className="bg-white rounded-[1.5rem] p-4 border border-black/5">
+                <div className="bg-white rounded-[1.5rem] p-4 border border-black/5 shadow-xs">
                   <p className="text-2xl font-black text-artBlue">LGPD</p>
                   <span className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
                     Privacidade

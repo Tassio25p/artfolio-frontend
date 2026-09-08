@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 const ToastContext = createContext(null);
 
@@ -42,6 +42,18 @@ export function ToastProvider({ children }) {
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Escuta eventos globais de toast disparados pela camada de API (ex: Rate Limiting 429)
+  useEffect(() => {
+    const handleToastEvent = (e) => {
+      const { mensagem, titulo, tipo, link } = e.detail || {};
+      if (mensagem) {
+        addToast(mensagem, titulo || "Aviso", tipo || "info", link || "");
+      }
+    };
+    window.addEventListener("artfolio:toast", handleToastEvent);
+    return () => window.removeEventListener("artfolio:toast", handleToastEvent);
+  }, [addToast]);
 
   return (
     <ToastContext.Provider value={{ addToast, removeToast }}>

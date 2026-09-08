@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
 import { useAuth } from "../contexts/AuthContext";
 import { usuarioService, getMediaUrl } from "../services/api";
 
@@ -71,13 +70,8 @@ export default function Seguindo() {
   const totalArtistas = seguindoLista.filter((s) => s.tipo_conta === "artista").length;
 
   return (
-    <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
-
-      <Sidebar />
-
-      <main className="ml-16 min-h-screen p-4 sm:p-6 lg:p-10">
-        <div className="max-w-6xl mx-auto">
+    <div className="w-full p-4 sm:p-6 lg:p-10">
+      <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
               <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
@@ -269,7 +263,6 @@ export default function Seguindo() {
             </section>
           </section>
         </div>
-      </main>
-    </div>
+      </div>
   );
 }
