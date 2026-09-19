@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ConversationItem from "../components/ConversationItem";
 import MessageBubble from "../components/MessageBubble";
+import ChameleonChatPattern from "../components/ChameleonChatPattern";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { mensagemService, usuarioService, planosService, authService, getMediaUrl } from "../services/api";
@@ -56,9 +57,8 @@ export default function Messages() {
   const digitandoTimeoutRef = useRef(null);
   const ultimoEnvioDigitandoRef = useRef(0);
 
-  // Trava de Nova Conversa exclusiva para seguidores
-  const [seguidores, setSeguidores] = useState([]);
-  const [carregandoSeguidores, setCarregandoSeguidores] = useState(false);
+  // Usuários e Artistas disponíveis para nova conversa
+  const [carregandoArtistas, setCarregandoArtistas] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("artfolio_hidden_chats", JSON.stringify(hiddenChatIds));
@@ -68,6 +68,9 @@ export default function Messages() {
   const [termoBuscaUsuario, setTermoBuscaUsuario] = useState("");
   const [resultadosBusca, setResultadosBusca] = useState([]);
   const [buscandoUsuarios, setBuscandoUsuarios] = useState(false);
+
+  // Contexto de Obra enviado via CTA
+  const [obraContexto, setObraContexto] = useState(null);
 
   // Rascunho de mensagem
   const [currentDraft, setCurrentDraft] = useState("");
@@ -121,6 +124,45 @@ export default function Messages() {
     try {
       const lista = await mensagemService.listarConversas();
       const convs = Array.isArray(lista) ? lista : [];
+
+      const paramArtistaId = searchParams.get("artistaId");
+      if (paramArtistaId) {
+        const artIdNum = Number(paramArtistaId);
+        const convExistente = convs.find(
+          (c) =>
+            Number(c.destinatario?.id) === artIdNum ||
+            Number(c.destinatarioId) === artIdNum ||
+            (Array.isArray(c.participantes) && c.participantes.some(p => Number(p.id || p.idUsuario || p.id_usuario) === artIdNum))
+        );
+        if (convExistente) {
+          setConversas(convs);
+          setActiveChatId(convExistente.id);
+          setActiveChat(convExistente);
+          activeChatIdRef.current = convExistente.id;
+          return;
+        } else {
+          const destNome = searchParams.get("destNome") || "Artista";
+          const destFoto = searchParams.get("destFoto") || "";
+          const draftChat = {
+            id: `draft_${artIdNum}`,
+            isDraft: true,
+            destinatarioId: artIdNum,
+            destinatario: {
+              id: artIdNum,
+              nome: destNome,
+              fotoPerfil: destFoto,
+              tipo_conta: "artista",
+            },
+            mensagens: [],
+          };
+          setConversas([draftChat, ...convs.filter(c => !String(c.id).startsWith("draft_"))]);
+          setActiveChatId(draftChat.id);
+          setActiveChat(draftChat);
+          activeChatIdRef.current = draftChat.id;
+          return;
+        }
+      }
+
       setConversas(convs);
 
       const currentId = activeChatIdRef.current;
@@ -143,7 +185,7 @@ export default function Messages() {
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, []);
+  }, [searchParams]);
 
   // Carregar outros artistas reais para iniciar novas conversas
   const carregarArtistas = useCallback(async () => {
@@ -158,43 +200,83 @@ export default function Messages() {
     }
   }, []);
 
-  // Executado APENAS UMA VEZ na montagem do componente
+  // Executado na montagem do componente
   useEffect(() => {
     carregarConversas();
     carregarArtistas();
     planosService.obterMeuPlano().then(setMeuPlano).catch(() => null);
     authService.getMe().then(setMeuUsuario).catch(() => null);
+  }, [carregarConversas, carregarArtistas]);
 
-    // Processar parâmetros de URL (CTA do perfil)
+  // Processar parâmetros de URL dinâmicos (CTA do perfil e CTA da obra)
+  useEffect(() => {
     const paramArtistaId = searchParams.get("artistaId");
     const paramMsg = searchParams.get("msg");
+    const paramObraId = searchParams.get("obraId");
+    const paramObraTitulo = searchParams.get("obraTitulo");
+    const paramObraImagem = searchParams.get("obraImagem");
+    const paramObraPreco = searchParams.get("obraPreco");
+
+    if (paramObraId || paramObraTitulo) {
+      setObraContexto({
+        id: paramObraId,
+        titulo: paramObraTitulo || "Obra de Arte",
+        imagemUrl: paramObraImagem || "",
+        precoBase: paramObraPreco || "",
+      });
+    }
+
     if (paramArtistaId) {
       const artIdNum = Number(paramArtistaId);
       const destNome = searchParams.get("destNome") || "Artista";
       const destFoto = searchParams.get("destFoto") || "";
 
-      const draftChat = {
-        id: `draft_${artIdNum}`,
-        isDraft: true,
-        destinatarioId: artIdNum,
-        destinatario: {
-          id: artIdNum,
-          nome: destNome,
-          fotoPerfil: destFoto,
-          tipo_conta: "artista",
-        },
-        mensagens: [],
-      };
-      setActiveChatId(draftChat.id);
-      setActiveChat(draftChat);
+      setConversas((currentConvs) => {
+        const existente = currentConvs.find(
+          (c) =>
+            Number(c.destinatario?.id) === artIdNum ||
+            Number(c.destinatarioId) === artIdNum ||
+            (Array.isArray(c.participantes) && c.participantes.some(p => Number(p.id || p.idUsuario || p.id_usuario) === artIdNum))
+        );
+
+        if (existente) {
+          setActiveChatId(existente.id);
+          setActiveChat(existente);
+          activeChatIdRef.current = existente.id;
+          return currentConvs;
+        } else {
+          const draftChat = {
+            id: `draft_${artIdNum}`,
+            isDraft: true,
+            destinatarioId: artIdNum,
+            destinatario: {
+              id: artIdNum,
+              nome: destNome,
+              fotoPerfil: destFoto,
+              tipo_conta: "artista",
+            },
+            mensagens: [],
+          };
+          setActiveChatId(draftChat.id);
+          setActiveChat(draftChat);
+          activeChatIdRef.current = draftChat.id;
+          const semOutrosDrafts = currentConvs.filter((c) => !String(c.id).startsWith("draft_"));
+          return [draftChat, ...semOutrosDrafts];
+        }
+      });
+
       setMobileView("chat");
 
       if (paramMsg) {
-        setCurrentDraft(paramMsg);
+        let draftText = paramMsg;
+        if (paramMsg.includes("[OBRA_ANEXO:")) {
+          const endIdx = paramMsg.indexOf("]");
+          draftText = paramMsg.substring(endIdx + 1).trim();
+        }
+        setCurrentDraft(draftText);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams]);
 
   // 2. RESTAURAR O OUVINTE EM TEMPO REAL (artfolio_sync)
   useEffect(() => {
@@ -514,35 +596,15 @@ export default function Messages() {
     setCurrentDraft("");
   };
 
-  const checarSeSeguidor = (artista) => {
-    if (!artista) return false;
-    return Boolean(
-      artista.te_segue ||
-      artista.segue_voce ||
-      artista.is_seguidor ||
-      artista.isSeguidor ||
-      artista.teSegue ||
-      artista.segueVoce ||
-      artista.segueDeVolta ||
-      seguidores.some((s) => Number(s.id) === Number(artista.id))
-    );
-  };
-
   const abrirModalNovoChat = async () => {
     setModalNovoChatAberto(true);
     setBuscaModalTexto("");
     setResultadosModal([]);
-    carregarArtistas();
-    if (authUser?.id) {
-      setCarregandoSeguidores(true);
-      try {
-        const segs = await usuarioService.listarSeguidores(authUser.id);
-        setSeguidores(Array.isArray(segs) ? segs : []);
-      } catch {
-        setSeguidores([]);
-      } finally {
-        setCarregandoSeguidores(false);
-      }
+    setCarregandoArtistas(true);
+    try {
+      await carregarArtistas();
+    } finally {
+      setCarregandoArtistas(false);
     }
   };
 
@@ -565,17 +627,6 @@ export default function Messages() {
   };
 
   const handleIniciarConversaComArtista = async (artista) => {
-    // Trava de Nova Conversa: permitida exclusivamente com seguidores
-    const isSeguidor = checarSeSeguidor(artista);
-    if (!isSeguidor) {
-      addToast(
-        "Você só pode iniciar conversas com usuários que seguem o seu perfil.",
-        "Acesso Restrito",
-        "aviso"
-      );
-      return;
-    }
-
     handleSelecionarUsuarioBusca(artista);
     setModalNovoChatAberto(false);
     setBuscaModalTexto("");
@@ -601,17 +652,49 @@ export default function Messages() {
     const texto = currentDraft.trim();
     setCurrentDraft("");
 
-    // Se for conversa rascunho (draft), cria a conversa agora no primeiro envio
+    // Se for conversa rascunho (draft), cria a conversa no backend antes de enviar
     let conversaIdReal = activeChatId;
-    if (activeChat?.isDraft) {
+    const isDraftChat = Boolean(
+      activeChat?.isDraft ||
+      String(activeChatId).startsWith("draft_") ||
+      isNaN(Number(activeChatId))
+    );
+
+    if (isDraftChat) {
       try {
-        const novaConversa = await mensagemService.obterOuCriarConversa(activeChat.destinatarioId);
+        const destId =
+          activeChat?.destinatarioId ||
+          activeChat?.destinatario?.id ||
+          (String(activeChatId).startsWith("draft_")
+            ? Number(String(activeChatId).replace("draft_", ""))
+            : null);
+
+        if (!destId) {
+          addToast("Não foi possível identificar o usuário destinatário.", "Erro", "erro");
+          return;
+        }
+
+        const novaConversa = await mensagemService.obterOuCriarConversa(destId);
         conversaIdReal = novaConversa.id;
         setActiveChatId(novaConversa.id);
+        activeChatIdRef.current = novaConversa.id;
+        setActiveChat(novaConversa);
       } catch (err) {
         addToast(err.message || "Erro ao iniciar conversa.", "Erro", "erro");
         return;
       }
+    }
+
+    let textoFinal = texto;
+    if (obraContexto && !texto.includes("[OBRA_ANEXO:")) {
+      const payloadAnexo = {
+        id: obraContexto.id,
+        titulo: obraContexto.titulo,
+        imagem: obraContexto.imagemUrl || obraContexto.imagem || "",
+        preco: obraContexto.precoBase || obraContexto.preco || "",
+      };
+      textoFinal = `[OBRA_ANEXO:${JSON.stringify(payloadAnexo)}]\n${texto}`;
+      setObraContexto(null);
     }
 
     // Mensagem otimista com confirmação visual de envio e leitura (dois traços)
@@ -619,24 +702,24 @@ export default function Messages() {
       id: `otimista-${Date.now()}`,
       idConversa: conversaIdReal,
       idRemetente: authUser?.id || 0,
-      conteudo: texto,
+      conteudo: textoFinal,
       dataEnvio: new Date().toISOString(),
       enviado_por_mim: true,
       lida: false,
     };
 
     setActiveChat((prev) => ({
-      ...prev,
+      ...(prev || {}),
       id: conversaIdReal,
       isDraft: false,
       mensagens: [...(prev?.mensagens || []), msgOtimista],
     }));
 
     try {
-      await mensagemService.enviarMensagem(conversaIdReal, { conteudo: texto });
+      await mensagemService.enviarMensagem(conversaIdReal, { conteudo: textoFinal });
       await carregarConversas(true);
     } catch (err) {
-      addToast("Erro ao enviar mensagem no servidor.", "Erro", "erro");
+      addToast(err.message || "Erro ao enviar mensagem no servidor.", "Erro", "erro");
     }
   };
 
@@ -758,7 +841,26 @@ export default function Messages() {
   };
 
   const handleDeletarMensagemIndividual = async (mensagemId) => {
-    handleConfirmarExclusao(mensagemId);
+    try {
+      await mensagemService.deletarMensagem(mensagemId);
+      setActiveChat((prev) => ({
+        ...prev,
+        mensagens: (prev?.mensagens || []).filter((m) => m.id !== mensagemId),
+      }));
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.id === activeChat?.id
+            ? {
+                ...c,
+                mensagens: (c.mensagens || []).filter((m) => m.id !== mensagemId),
+              }
+            : c
+        )
+      );
+      addToast("Mensagem apagada para você.", "Mensagem Apagada", "info");
+    } catch (err) {
+      addToast(err.message || "Erro ao apagar mensagem.", "Erro", "erro");
+    }
   };
 
   const handleDeletarMensagensSelecionadas = async () => {
@@ -767,20 +869,48 @@ export default function Messages() {
       const msgsParaDeletar = selectedIndexes
         .map((idx) => activeChat.mensagens[idx]?.id)
         .filter(Boolean);
-      for (const msgId of msgsParaDeletar) {
-        await mensagemService.deletarMensagem(msgId).catch(() => {});
+
+      if (msgsParaDeletar.length === 0) return;
+
+      if (typeof mensagemService.deletarMensagensLote === "function") {
+        await mensagemService.deletarMensagensLote(msgsParaDeletar);
+      } else {
+        for (const msgId of msgsParaDeletar) {
+          await mensagemService.deletarMensagem(msgId).catch(() => {});
+        }
       }
+
       setActiveChat((prev) => ({
         ...prev,
         mensagens: (prev?.mensagens || []).filter((_, idx) => !selectedIndexes.includes(idx)),
       }));
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.id === activeChat?.id
+            ? {
+                ...c,
+                mensagens: (c.mensagens || []).filter((_, idx) => !selectedIndexes.includes(idx)),
+              }
+            : c
+        )
+      );
+
       setSelectionMode(false);
       setSelectedIndexes([]);
-      await carregarConversas(true);
-      addToast("Mensagens selecionadas foram excluídas.", "Excluídas", "info");
-    } catch {
-      addToast("Erro ao excluir mensagens selecionadas.", "Erro", "erro");
+      addToast(
+        `${msgsParaDeletar.length} mensagem(ns) apagada(s) para você com sucesso.`,
+        "Mensagens Apagadas",
+        "sucesso"
+      );
+    } catch (err) {
+      addToast(err.message || "Erro ao apagar mensagens selecionadas.", "Erro", "erro");
     }
+  };
+
+  const toggleSelectMessage = (index) => {
+    setSelectedIndexes((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+    );
   };
 
   const handleLimparTudo = async () => {
@@ -819,11 +949,19 @@ export default function Messages() {
     }
   };
 
-  const isProOuBoost =
-    (meuPlano?.tipo || meuUsuario?.plano || authUser?.tipo_plano || authUser?.plano?.tipo || "").toLowerCase() === "pro" ||
+  const isBoost =
     (meuPlano?.tipo || meuUsuario?.plano || authUser?.tipo_plano || authUser?.plano?.tipo || "").toLowerCase() === "boost";
 
   const handleInserirMensagemPrePronta = async () => {
+    if (!isBoost) {
+      addToast(
+        "A personalização e disparo de mensagem pré-pronta / pitch de vendas é um recurso exclusivo do plano Artfolio Boost.",
+        "Exclusivo Boost",
+        "aviso"
+      );
+      return;
+    }
+
     let pitch = meuUsuario?.mensagem_cta || authUser?.mensagem_cta;
     if (!pitch) {
       try {
@@ -860,7 +998,7 @@ export default function Messages() {
         >
           <div className="p-6 lg:p-8 shrink-0 border-b border-black/5">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px]">
+              <span className="text-artPurple font-bold tracking-widest uppercase text-xs">
                 Mensagens Diretas
               </span>
 
@@ -868,7 +1006,7 @@ export default function Messages() {
               <div className="relative group">
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 bg-[#F9F8F6] border border-black/5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white transition-all"
+                  className="flex items-center gap-1.5 bg-[#F9F8F6] border border-black/5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white transition-all shadow-2xs"
                 >
                   <span
                     className={`w-2 h-2 rounded-full ${
@@ -897,19 +1035,13 @@ export default function Messages() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <h2 className="font-editorial text-4xl italic leading-none">Mensagens.</h2>
-              <button
-                type="button"
-                onClick={abrirModalNovoChat}
-                className="w-9 h-9 rounded-full bg-artPurple/10 text-artPurple hover:bg-artPurple hover:text-white transition-all flex items-center justify-center text-xs shadow-sm cursor-pointer"
-                title="Nova Conversa com Seguidor"
-              >
-                <i className="fa-solid fa-pen-to-square"></i>
-              </button>
+            <div className="flex items-center justify-between mt-1">
+              <h2 className="font-editorial text-4xl sm:text-5xl italic leading-none">
+                Mensagens<span className="text-artOrange not-italic">.</span>
+              </h2>
             </div>
-            <p className="text-xs text-gray-400 leading-relaxed mt-2 mb-4">
-              Converse diretamente com seus seguidores da comunidade.
+            <p className="text-sm text-gray-500 font-light leading-relaxed mt-2.5 mb-5">
+              Converse diretamente com artistas e membros da comunidade.
             </p>
 
             <button
@@ -935,18 +1067,11 @@ export default function Messages() {
                   <i className="fa-regular fa-comment-dots"></i>
                 </div>
                 <p className="text-xs font-bold uppercase tracking-widest mb-1 text-artDark">
-                  Nenhuma conversa visível
+                  Nenhuma conversa ativa
                 </p>
-                <p className="text-[11px] text-gray-400 leading-relaxed mb-4">
-                  Inicie um diálogo com qualquer artista ou usuário.
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  Clique no botão &quot;Nova Conversa&quot; acima para iniciar um bate-papo.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setModalNovoChatAberto(true)}
-                  className="bg-artPurple text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-indigo-700 transition-all shadow-md shadow-artPurple/20"
-                >
-                  Iniciar Conversa
-                </button>
               </div>
             ) : (
               conversas
@@ -961,6 +1086,14 @@ export default function Messages() {
                     (chat.mensagens?.length > 0
                       ? chat.mensagens[chat.mensagens.length - 1].conteudo
                       : "Sem mensagens");
+
+                  let previewFormatado = ultimaMsgTexto || "Anexo compartilhado";
+                  if (typeof previewFormatado === "string" && previewFormatado.includes("[OBRA_ANEXO:")) {
+                    const endIdx = previewFormatado.indexOf("]");
+                    const rest = previewFormatado.substring(endIdx + 1).trim();
+                    previewFormatado = `🎨 ${rest || "Interesse na Obra"}`;
+                  }
+
                   const horaMsg = chat.ultimaMensagem?.dataEnvio
                     ? new Date(chat.ultimaMensagem.dataEnvio).toLocaleTimeString([], {
                         hour: "2-digit",
@@ -977,7 +1110,7 @@ export default function Messages() {
                       <ConversationItem
                         active={activeChatId === chat.id}
                         name={destNome}
-                        message={ultimaMsgTexto || "Anexo compartilhado"}
+                        message={previewFormatado}
                         time={horaMsg}
                         onHide={() => handleHideConversation(chat.id)}
                         image={
@@ -1065,23 +1198,67 @@ export default function Messages() {
                 {/* Ações do Topo do Chat */}
                 <div className="flex items-center gap-2 relative">
                   {selectionMode ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap animate-fadeIn">
+                      <span className="text-[11px] sm:text-xs font-bold text-artDark mr-1">
+                        {selectedIndexes.length} selecionada(s)
+                      </span>
+
+                      {/* Botão Selecionar Tudo */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedIndexes.length === (activeChat.mensagens || []).length) {
+                            setSelectedIndexes([]);
+                          } else {
+                            setSelectedIndexes((activeChat.mensagens || []).map((_, i) => i));
+                          }
+                        }}
+                        className="px-2.5 sm:px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold bg-[#F9F8F6] text-artDark border border-black/10 hover:bg-gray-100 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <i className="fa-regular fa-square-check text-artPurple text-xs"></i>
+                        <span>{selectedIndexes.length === (activeChat.mensagens || []).length ? "Desmarcar tudo" : "Selecionar tudo"}</span>
+                      </button>
+
+                      {/* Botão Só as Minhas */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const minhasIndexes = (activeChat.mensagens || [])
+                            .map((m, idx) => {
+                              const isMe =
+                                m.enviado_por_mim ||
+                                m.idRemetente === authUser?.id ||
+                                Number(m.remetente_id || m.remetente?.id) === Number(authUser?.id);
+                              return isMe ? idx : null;
+                            })
+                            .filter((idx) => idx !== null);
+                          setSelectedIndexes(minhasIndexes);
+                        }}
+                        className="px-2.5 sm:px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold bg-[#F9F8F6] text-artDark border border-black/10 hover:bg-artPurple/10 hover:text-artPurple transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <i className="fa-solid fa-user text-artPurple text-xs"></i>
+                        <span>Só as minhas</span>
+                      </button>
+
+                      {/* Botão Apagar Selecionadas para Mim */}
                       <button
                         type="button"
                         onClick={handleDeletarMensagensSelecionadas}
                         disabled={selectedIndexes.length === 0}
-                        className="bg-red-50 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5"
+                        className="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-3.5 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-sm shadow-red-500/20 cursor-pointer"
                       >
                         <i className="fa-solid fa-trash text-xs"></i>
-                        <span>Excluir ({selectedIndexes.length})</span>
+                        <span>Apagar ({selectedIndexes.length})</span>
                       </button>
+
+                      {/* Botão Cancelar Seleção */}
                       <button
                         type="button"
                         onClick={() => {
                           setSelectionMode(false);
                           setSelectedIndexes([]);
                         }}
-                        className="text-xs text-gray-400 hover:text-artDark px-2 py-1"
+                        className="text-[10px] sm:text-xs text-gray-400 hover:text-artDark px-2 py-1.5 cursor-pointer font-bold"
                       >
                         Cancelar
                       </button>
@@ -1113,23 +1290,12 @@ export default function Messages() {
                             onClick={() => {
                               setShowChatMenu(false);
                               setSelectionMode(true);
+                              setSelectedIndexes([]);
                             }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-[#F9F8F6] flex items-center gap-2.5 text-artDark cursor-pointer"
+                            className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 cursor-pointer font-medium"
                           >
-                            <i className="fa-regular fa-square-check text-artPurple"></i>
-                            <span>Selecionar mensagens</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowChatMenu(false);
-                              setModalLimpezaAberto(true);
-                            }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 cursor-pointer"
-                          >
-                            <i className="fa-solid fa-broom"></i>
-                            <span>Limpar histórico</span>
+                            <i className="fa-solid fa-trash text-red-500 text-xs"></i>
+                            <span>Apagar mensagens...</span>
                           </button>
 
                           <button
@@ -1159,13 +1325,18 @@ export default function Messages() {
                 </div>
               </header>
 
-              {/* Histórico de Mensagens */}
-              <div
-                ref={messagesContainerRef}
-                onScroll={handleScrollMessages}
-                className="flex-1 p-4 sm:p-5 lg:p-6 overflow-y-auto space-y-3 no-scrollbar relative"
-              >
-                {(!activeChat.mensagens || activeChat.mensagens.length === 0) ? (
+              {/* Área do Chat com Fundo Estático e Histórico Rolável */}
+              <div className="relative flex-1 flex flex-col overflow-hidden bg-[#F9F8F6]">
+                {/* Estampa do camaleão fixa e contínua no fundo de toda a conversa */}
+                <ChameleonChatPattern />
+
+                {/* Histórico de Mensagens Rolável de Cima para Baixo */}
+                <div
+                  ref={messagesContainerRef}
+                  onScroll={handleScrollMessages}
+                  className="relative z-10 flex-1 p-4 sm:p-5 lg:p-6 overflow-y-auto space-y-3 no-scrollbar"
+                >
+                  {(!activeChat.mensagens || activeChat.mensagens.length === 0) ? (
                   <div className="h-full flex items-center justify-center text-center p-6">
                     <div>
                       <i className="fa-regular fa-comments text-4xl text-gray-300 mb-3 block"></i>
@@ -1199,9 +1370,29 @@ export default function Messages() {
                     return (
                       <div
                         key={msg.id || index}
-                        className={`flex items-start gap-2 group ${isMe ? "justify-end" : "justify-start"}`}
+                        className={`flex items-center gap-2 group ${isMe ? "justify-end" : "justify-start"}`}
                       >
-                        <div className={`flex flex-col max-w-md ${isMe ? "items-end" : "items-start"}`}>
+                        {selectionMode && !isMe && (
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectMessage(index)}
+                            className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                              selectedIndexes.includes(index)
+                                ? "bg-red-500 border-red-500 text-white shadow-sm"
+                                : "border-black/20 bg-white hover:border-red-400 text-transparent"
+                            }`}
+                            title={selectedIndexes.includes(index) ? "Desmarcar" : "Selecionar para apagar"}
+                          >
+                            <i className="fa-solid fa-check text-[10px]"></i>
+                          </button>
+                        )}
+
+                        <div
+                          className={`flex flex-col max-w-md ${isMe ? "items-end" : "items-start"} ${
+                            selectionMode ? "cursor-pointer" : ""
+                          }`}
+                          onClick={selectionMode ? () => toggleSelectMessage(index) : undefined}
+                        >
                           {editingMessageId === msg.id ? (
                             /* Modo de Edição Inline da Mensagem */
                             <div className="w-full min-w-[260px] sm:min-w-[320px] bg-white border-2 border-artPurple/30 rounded-3xl p-3.5 shadow-xl flex flex-col gap-2 animate-fadeIn">
@@ -1272,6 +1463,21 @@ export default function Messages() {
                             <RenderAttachment arquivoUrl={msg.arquivoUrl} isMe={isMe} />
                           )}
                         </div>
+
+                        {selectionMode && isMe && (
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectMessage(index)}
+                            className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                              selectedIndexes.includes(index)
+                                ? "bg-red-500 border-red-500 text-white shadow-sm"
+                                : "border-black/20 bg-white hover:border-red-400 text-transparent"
+                            }`}
+                            title={selectedIndexes.includes(index) ? "Desmarcar" : "Selecionar para apagar"}
+                          >
+                            <i className="fa-solid fa-check text-[10px]"></i>
+                          </button>
+                        )}
                       </div>
                     );
                   })
@@ -1305,7 +1511,58 @@ export default function Messages() {
                     <span>Novas mensagens</span>
                   </button>
                 )}
+                </div>
               </div>
+
+              {/* Card Contextual de Obra Fixado no Chat */}
+              {obraContexto && (
+                <div className="mx-4 mb-2 p-3 bg-gradient-to-r from-artPurple/10 via-white to-artOrange/10 border border-artPurple/20 rounded-2xl flex items-center justify-between gap-3 shadow-sm animate-fadeIn">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {obraContexto.imagemUrl ? (
+                      <img
+                        src={getMediaUrl(obraContexto.imagemUrl)}
+                        alt={obraContexto.titulo}
+                        className="w-12 h-12 rounded-xl object-cover border border-black/10 shrink-0 shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-artPurple/10 text-artPurple flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-palette text-sm"></i>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-artPurple block">
+                        Interesse na Obra
+                      </span>
+                      <h4 className="text-xs font-bold text-artDark truncate">
+                        {obraContexto.titulo}
+                      </h4>
+                      {obraContexto.precoBase && (
+                        <span className="text-[11px] font-bold text-emerald-600">
+                          Preço Base: {obraContexto.precoBase}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {obraContexto.id && (
+                      <Link
+                        to={`/obra/${obraContexto.id}`}
+                        className="px-2.5 py-1 text-[10px] font-bold text-artPurple bg-white border border-artPurple/20 rounded-full hover:bg-artPurple hover:text-white transition-all"
+                      >
+                        Ver Obra
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setObraContexto(null)}
+                      className="w-6 h-6 rounded-full hover:bg-black/5 text-gray-400 hover:text-artDark flex items-center justify-center transition-colors text-xs cursor-pointer"
+                      title="Dispensar referência"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Input de Mensagem */}
               <footer className="p-3 sm:p-4 bg-white border-t border-black/5 shrink-0">
@@ -1344,12 +1601,12 @@ export default function Messages() {
                     />
 
                     <div className="absolute right-3 flex items-center space-x-1">
-                      {isProOuBoost && (
+                      {isBoost && (
                         <button
                           type="button"
                           onClick={handleInserirMensagemPrePronta}
                           className="w-10 h-10 rounded-full hover:bg-artOrange/10 text-artOrange transition-colors flex items-center justify-center cursor-pointer shadow-xs"
-                          title="Inserir Minha Mensagem Pré-Pronta / Pitch de Vendas"
+                          title="Inserir Minha Mensagem Pré-Pronta / Pitch de Vendas (Exclusivo Boost)"
                         >
                           <i className="fa-solid fa-bolt text-sm"></i>
                         </button>
@@ -1382,22 +1639,18 @@ export default function Messages() {
               </footer>
             </>
           ) : (
-            <div className="h-full flex items-center justify-center text-center p-6">
-              <div>
-                <div className="w-16 h-16 rounded-3xl bg-artPurple/10 text-artPurple flex items-center justify-center text-2xl mx-auto mb-3">
+            <div className="h-full flex items-center justify-center text-center p-6 relative bg-[#F9F8F6]">
+              {/* Estampa sutil de camaleões em degradê base */}
+              <ChameleonChatPattern />
+
+              <div className="relative z-10">
+                <div className="w-16 h-16 rounded-3xl bg-artPurple/10 text-artPurple flex items-center justify-center text-2xl mx-auto mb-3 shadow-xs">
                   <i className="fa-regular fa-comments"></i>
                 </div>
-                <h3 className="font-editorial text-3xl italic mb-2">Suas Conversas</h3>
-                <p className="text-xs text-gray-400 max-w-sm mx-auto leading-relaxed mb-4">
-                  Selecione uma conversa ao lado ou inicie um novo chat com um artista da comunidade.
+                <h3 className="font-editorial text-4xl italic mb-2">Suas Conversas</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed font-light">
+                  Selecione uma conversa ao lado ou clique em &quot;Nova Conversa&quot; para iniciar um novo diálogo com qualquer artista ou membro da comunidade.
                 </p>
-                <button
-                  type="button"
-                  onClick={abrirModalNovoChat}
-                  className="bg-artPurple text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-artPurple/20 cursor-pointer"
-                >
-                  Nova Conversa
-                </button>
               </div>
             </div>
           )}
@@ -1425,7 +1678,7 @@ export default function Messages() {
             </div>
 
             <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-              <span className="font-semibold text-artPurple"><i className="fa-solid fa-shield-halved mr-1"></i>Regra de Privacidade:</span> Novas conversas só podem ser iniciadas com usuários que seguem seu perfil.
+              Escolha um artista da comunidade ou pesquise pelo nome para iniciar uma conversa direta.
             </p>
 
             {/* Input de Busca de Usuário no Modal */}
@@ -1435,7 +1688,7 @@ export default function Messages() {
                 type="text"
                 value={buscaModalTexto}
                 onChange={(e) => handleDigitarBuscaModal(e.target.value)}
-                placeholder="Pesquisar seguidor pelo nome..."
+                placeholder="Pesquisar usuário ou artista pelo nome..."
                 className="w-full bg-[#F9F8F6] border border-black/5 rounded-2xl pl-9 pr-8 py-2.5 text-xs outline-none focus:ring-2 ring-artPurple/20 transition-all placeholder:text-gray-400"
                 autoFocus
               />
@@ -1453,7 +1706,7 @@ export default function Messages() {
               )}
             </div>
 
-            {/* Lista de Resultados da Busca ou Lista de Seguidores (Filtrada exclusivamente por quem segue) */}
+            {/* Lista de Resultados da Busca ou Lista de Artistas Disponíveis */}
             <div className="max-h-64 overflow-y-auto space-y-2 pr-1 no-scrollbar mb-4">
               {buscaModalTexto ? (
                 buscandoModal ? (
@@ -1461,21 +1714,17 @@ export default function Messages() {
                     <i className="fa-solid fa-spinner fa-spin text-artPurple text-base mb-2 block"></i>
                     Buscando usuários...
                   </div>
-                ) : (() => {
-                  const filtrados = resultadosModal.filter(checarSeSeguidor);
-                  if (filtrados.length === 0) {
-                    return (
-                      <div className="p-6 text-center text-xs text-gray-500">
-                        <div className="w-12 h-12 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center mx-auto mb-3 text-lg">
-                          <i className="fa-solid fa-user-lock"></i>
-                        </div>
-                        <p className="font-bold text-gray-700">
-                          Você só pode iniciar conversas com usuários que seguem o seu perfil.
-                        </p>
-                      </div>
-                    );
-                  }
-                  return filtrados.map((usr) => {
+                ) : resultadosModal.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-gray-500">
+                    <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3 text-lg">
+                      <i className="fa-solid fa-user-slash"></i>
+                    </div>
+                    <p className="font-bold text-gray-700">
+                      Nenhum usuário encontrado com esse nome.
+                    </p>
+                  </div>
+                ) : (
+                  resultadosModal.map((usr) => {
                     const usrPlano = (usr.plano || "Free").toLowerCase();
                     const ledClass =
                       usr.mostrar_moldura_led !== false
@@ -1512,9 +1761,6 @@ export default function Messages() {
                               <h4 className="font-editorial text-base italic font-bold group-hover:text-artPurple transition-colors truncate">
                                 {usr.nome}
                               </h4>
-                              <span className="bg-emerald-100 text-emerald-700 text-[8px] font-bold uppercase px-1.5 py-0.2 rounded-full shadow-xs">
-                                Te segue
-                              </span>
                             </div>
                             <p className="text-[10px] text-gray-400 truncate capitalize">
                               {usr.tipo_conta || "Artista"}
@@ -1542,65 +1788,55 @@ export default function Messages() {
                         </div>
                       </div>
                     );
-                  });
-                })()
-              ) : carregandoSeguidores ? (
+                  })
+                )
+              ) : carregandoArtistas ? (
                 <div className="p-6 text-center text-xs text-gray-400">
                   <i className="fa-solid fa-spinner fa-spin text-artPurple text-base mb-2 block"></i>
-                  Carregando seus seguidores...
+                  Carregando artistas disponíveis...
                 </div>
-              ) : (() => {
-                const baseLista = artistasDisponiveis.length > 0 ? artistasDisponiveis : seguidores;
-                const filtrados = baseLista.filter(checarSeSeguidor);
-
-                if (filtrados.length === 0) {
-                  return (
-                    <div className="p-6 text-center text-xs text-gray-500">
-                      <div className="w-12 h-12 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center mx-auto mb-3 text-lg">
-                        <i className="fa-solid fa-user-lock"></i>
-                      </div>
-                      <p className="font-bold text-gray-700">
-                        Você só pode iniciar conversas com usuários que seguem o seu perfil.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return filtrados.map((seg) => (
+              ) : artistasDisponiveis.length === 0 ? (
+                <div className="p-6 text-center text-xs text-gray-500">
+                  <div className="w-12 h-12 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center mx-auto mb-3 text-lg">
+                    <i className="fa-solid fa-users"></i>
+                  </div>
+                  <p className="font-bold text-gray-700">
+                    Nenhum artista disponível no momento.
+                  </p>
+                </div>
+              ) : (
+                artistasDisponiveis.map((art) => (
                   <div
-                    key={seg.id}
+                    key={art.id}
                     className="w-full p-3 rounded-2xl bg-[#F9F8F6] hover:bg-artPurple/5 hover:border-artPurple/20 border border-transparent transition-all flex items-center justify-between gap-3 text-left group shadow-2xs"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {seg.fotoPerfil ? (
+                      {art.fotoPerfil ? (
                         <img
-                          src={getMediaUrl(seg.fotoPerfil)}
-                          alt={seg.nome}
+                          src={getMediaUrl(art.fotoPerfil)}
+                          alt={art.nome}
                           className="w-10 h-10 rounded-full object-cover border border-black/5"
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-artPurple text-white font-bold flex items-center justify-center text-sm">
-                          {seg.nome?.charAt(0)?.toUpperCase() || "S"}
+                          {art.nome?.charAt(0)?.toUpperCase() || "A"}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <h4 className="font-editorial text-base italic font-bold group-hover:text-artPurple transition-colors truncate">
-                            {seg.nome}
+                            {art.nome}
                           </h4>
-                          <span className="bg-emerald-100 text-emerald-700 text-[8px] font-bold uppercase px-1.5 py-0.2 rounded-full">
-                            Seguidor
-                          </span>
                         </div>
                         <p className="text-[10px] text-gray-400 truncate">
-                          {seg.biografia || "Seguidor no Artfolio"}
+                          {art.biografia || art.tipo_conta || "Artista no Artfolio"}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
                       <Link
-                        to={`/artista/${seg.id}`}
+                        to={`/artista/${art.id}`}
                         onClick={() => setModalNovoChatAberto(false)}
                         className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-black/10 text-gray-600 hover:text-artPurple hover:border-artPurple transition-all"
                         title="Ver perfil"
@@ -1609,7 +1845,7 @@ export default function Messages() {
                       </Link>
                       <button
                         type="button"
-                        onClick={() => handleIniciarConversaComArtista(seg)}
+                        onClick={() => handleIniciarConversaComArtista(art)}
                         className="px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-artPurple text-white hover:bg-indigo-700 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                         title="Iniciar conversa"
                       >
@@ -1617,8 +1853,8 @@ export default function Messages() {
                       </button>
                     </div>
                   </div>
-                ));
-              })()}
+                ))
+              )}
             </div>
 
             <button

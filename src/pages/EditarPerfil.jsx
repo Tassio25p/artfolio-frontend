@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { authService, usuarioService, getMediaUrl } from "../services/api";
+import { authService, usuarioService, obrasService, getMediaUrl } from "../services/api";
 
 const categorias = [
   { value: "pintura-digital", label: "Pintura Digital" },
@@ -31,11 +31,13 @@ function EditarPerfil() {
   // Dados extras (somente leitura, vindos da API)
   const [tipoConta, setTipoConta] = useState("cliente");
   const [email, setEmail] = useState("");
+  const [fundoPerfil, setFundoPerfil] = useState("");
 
   // Estados de controle
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingBg, setUploadingBg] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
   const [noticeType, setNoticeType] = useState("info"); // "info" | "success" | "error"
 
@@ -47,6 +49,23 @@ function EditarPerfil() {
 
   // Carregar dados do usuário ao montar o componente
   const { user: authUser, refreshUser } = useAuth();
+  const planoUsuario = (authUser?.plano || "").toLowerCase();
+  const isProOuBoost = planoUsuario === "boost" || planoUsuario === "pro";
+  const isBoost = planoUsuario === "boost";
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerFileInputRef = useRef(null);
+
+  // Estados de Estética Avançada do Perfil (Fundo, Cor do Nick e LED)
+  const [corNomeHex, setCorNomeHex] = useState("");
+  const [corLedHex, setCorLedHex] = useState(() => localStorage.getItem("artfolio_boost_led_color") || "#FF793F");
+  const [mostrarMolduraLed, setMostrarMolduraLed] = useState(true);
+  const [mostrarBadgePlano, setMostrarBadgePlano] = useState(true);
+
+  const mostrarAviso = (mensagem, tipo = "info") => {
+    setNoticeMessage(mensagem);
+    setNoticeType(tipo);
+    setTimeout(() => setNoticeMessage(""), 5000);
+  };
 
   useEffect(() => {
     const carregarPerfil = async () => {
@@ -63,6 +82,18 @@ function EditarPerfil() {
         setImagePreview(getMediaUrl(usuario.fotoPerfil) || "");
         setTipoConta(usuario.tipo_conta || "cliente");
         setEmail(usuario.email || "");
+
+        const bgSalvo = localStorage.getItem(`artfolio_boost_profile_bg_${usuario.id}`) || usuario.fundo_perfil || "";
+        setFundoPerfil(bgSalvo);
+
+        const nickSalvo = localStorage.getItem(`artfolio_profile_nick_color_${usuario.id}`) || usuario.cor_nome_hex || usuario.corNomeHex || "";
+        setCorNomeHex(nickSalvo);
+
+        const ledSalvo = localStorage.getItem("artfolio_boost_led_color") || usuario.cor_led_hex || usuario.cor_led || "#FF793F";
+        setCorLedHex(ledSalvo);
+
+        setMostrarMolduraLed(usuario.mostrar_moldura_led !== false && localStorage.getItem("artfolio_mostrar_moldura_led") !== "false");
+        setMostrarBadgePlano(usuario.mostrar_badge_plano !== false && localStorage.getItem("artfolio_mostrar_badge_plano") !== "false");
       } catch (error) {
         mostrarAviso("Erro ao carregar dados do perfil. Faça login novamente.", "error");
         setTimeout(() => navigate("/login"), 2000);
@@ -74,18 +105,102 @@ function EditarPerfil() {
     carregarPerfil();
   }, [navigate]);
 
-  const mostrarAviso = (mensagem, tipo = "info") => {
-    setNoticeMessage(mensagem);
-    setNoticeType(tipo);
-    setTimeout(() => setNoticeMessage(""), 5000);
+  const handleFundoPerfilChange = (novoBg) => {
+    setFundoPerfil(novoBg);
+    if (authUser?.id) {
+      localStorage.setItem(`artfolio_boost_profile_bg_${authUser.id}`, novoBg);
+      window.dispatchEvent(
+        new CustomEvent("artfolio_profile_prefs_changed", {
+          detail: { fundoPerfil: novoBg },
+        })
+      );
+    }
+  };
+
+  const handleCorNomeChange = (novaCor) => {
+    setCorNomeHex(novaCor);
+    if (authUser?.id) {
+      localStorage.setItem(`artfolio_profile_nick_color_${authUser.id}`, novaCor);
+      window.dispatchEvent(
+        new CustomEvent("artfolio_profile_prefs_changed", {
+          detail: { corNomeHex: novaCor, corNickHex: novaCor },
+        })
+      );
+    }
+  };
+
+  const handleCorLedChange = (novaCor) => {
+    setCorLedHex(novaCor);
+    localStorage.setItem("artfolio_boost_led_color", novaCor);
+    window.dispatchEvent(
+      new CustomEvent("artfolio_profile_prefs_changed", {
+        detail: { corLedHex: novaCor, corLed: novaCor },
+      })
+    );
+  };
+
+  const handleToggleMolduraLed = (valor) => {
+    setMostrarMolduraLed(valor);
+    localStorage.setItem("artfolio_mostrar_moldura_led", String(valor));
+    window.dispatchEvent(
+      new CustomEvent("artfolio_profile_prefs_changed", {
+        detail: { mostrarMolduraLed: valor },
+      })
+    );
+  };
+
+  const handleToggleBadgePlano = (valor) => {
+    setMostrarBadgePlano(valor);
+    localStorage.setItem("artfolio_mostrar_badge_plano", String(valor));
+    window.dispatchEvent(
+      new CustomEvent("artfolio_profile_prefs_changed", {
+        detail: { mostrarBadgePlano: valor },
+      })
+    );
+  };
+
+  const handleBannerFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      mostrarAviso("Selecione apenas arquivos de imagem para o banner.", "error");
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      mostrarAviso("O banner excede o tamanho máximo de 15MB.", "error");
+      return;
+    }
+
+    setUploadingBanner(true);
+    try {
+      const uploadRes = await obrasService.uploadImagem(file);
+      if (uploadRes?.url) {
+        handleFundoPerfilChange(uploadRes.url);
+        mostrarAviso("Imagem de fundo atualizada com sucesso!", "success");
+      }
+    } catch (err) {
+      console.error("Erro ao enviar banner:", err);
+      mostrarAviso("Falha ao enviar a imagem de fundo.", "error");
+    } finally {
+      setUploadingBanner(false);
+      if (bannerFileInputRef.current) bannerFileInputRef.current.value = "";
+    }
   };
 
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
+    const isGif = file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
+    if (isGif && !isBoost) {
+      mostrarAviso("O upload de avatar animado em formato GIF é um recurso exclusivo para assinantes do plano Artfolio Boost.", "error");
+      return;
+    }
+
     if (!file.type.startsWith("image/")) {
-      mostrarAviso("Selecione apenas arquivos de imagem (JPG, PNG, WEBP).", "error");
+      mostrarAviso("Selecione apenas arquivos de imagem válidos (JPG, PNG, WEBP" + (isBoost ? ", GIF" : "") + ").", "error");
       return;
     }
 
@@ -102,7 +217,7 @@ function EditarPerfil() {
       setImagePreview(getMediaUrl(novaFoto) || "");
       setNomeArquivo("");
       await refreshUser();
-      mostrarAviso("Foto de perfil atualizada com sucesso!", "success");
+      mostrarAviso(isGif ? "Avatar animado (GIF) atualizado com sucesso!" : "Foto de perfil atualizada com sucesso!", "success");
     } catch (error) {
       mostrarAviso(error.message || "Erro ao fazer upload da foto de perfil.", "error");
     } finally {
@@ -141,6 +256,10 @@ function EditarPerfil() {
       if (behance !== (usuarioAtual?.behance || "")) dados.behance = behance || null;
       if (website !== (usuarioAtual?.website || "")) dados.website = website || null;
       if (portfolio !== (usuarioAtual?.portfolio || "")) dados.portfolio = portfolio || null;
+      if (corNomeHex !== (usuarioAtual?.cor_nome_hex || "")) dados.cor_nome_hex = corNomeHex || null;
+      if (corLedHex !== (usuarioAtual?.cor_led_hex || "")) dados.cor_led_hex = corLedHex || null;
+      if (mostrarMolduraLed !== (usuarioAtual?.mostrar_moldura_led !== false)) dados.mostrar_moldura_led = mostrarMolduraLed;
+      if (mostrarBadgePlano !== (usuarioAtual?.mostrar_badge_plano !== false)) dados.mostrar_badge_plano = mostrarBadgePlano;
 
       if (Object.keys(dados).length === 0) {
         mostrarAviso("Nenhuma alteração detectada.", "info");
@@ -328,6 +447,368 @@ function EditarPerfil() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Personalização Estética Completa do Perfil (Fundo, Nickname, LED e Selo) */}
+                  <div className="mt-4 bg-gradient-to-br from-artOrange/5 via-artPurple/5 to-transparent border border-artOrange/20 rounded-[1.5rem] p-4 text-left w-full space-y-4">
+                    
+                    {/* 1. SEÇÃO PLANO DE FUNDO (EXCLUSIVO BOOST) */}
+                    <div className="space-y-2.5 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-artOrange flex items-center gap-1.5">
+                          <i className="fa-solid fa-wand-magic-sparkles"></i>
+                          Fundo do Perfil
+                        </span>
+                        {isBoost ? (
+                          fundoPerfil && (
+                            <button
+                              type="button"
+                              onClick={() => handleFundoPerfilChange("")}
+                              className="text-[9px] font-bold text-gray-400 hover:text-red-500 cursor-pointer"
+                            >
+                              Redefinir
+                            </button>
+                          )
+                        ) : (
+                          <span className="bg-artOrange/10 text-artOrange border border-artOrange/25 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                            <i className="fa-solid fa-lock text-[8px]"></i>
+                            Exclusivo Boost
+                          </span>
+                        )}
+                      </div>
+
+                      {!isBoost && (
+                        <div className="p-2 rounded-xl bg-artOrange/[0.06] border border-artOrange/20 text-[10px] text-artOrange font-medium flex items-center gap-2">
+                          <i className="fa-solid fa-lock text-xs shrink-0"></i>
+                          <span>O plano de fundo personalizado (estático ou cores HEX) é exclusivo do plano <strong>Artfolio Boost</strong>.</span>
+                        </div>
+                      )}
+
+                      <div className={`space-y-2.5 ${!isBoost ? "opacity-50 select-none pointer-events-none blur-[0.5px]" : ""}`}>
+                        <p className="text-[11px] text-gray-500 leading-tight">
+                          Personalize o fundo do seu cabeçalho com temas, cores HEX ou imagens estáticas:
+                        </p>
+
+                        {/* Temas Pré-definidos */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: "sunset", label: "Aurora", bg: "linear-gradient(135deg, rgba(255,121,63,0.18), rgba(108,92,231,0.18), rgba(255,118,117,0.15))" },
+                            { id: "cyber", label: "Cyber", bg: "linear-gradient(135deg, rgba(9,132,227,0.18), rgba(108,92,231,0.22), rgba(232,67,147,0.15))" },
+                            { id: "emerald", label: "Oasis", bg: "linear-gradient(135deg, rgba(0,184,148,0.18), rgba(9,132,227,0.15), rgba(85,239,196,0.15))" },
+                            { id: "dark", label: "Obsidian", bg: "linear-gradient(135deg, #1e272e, #2d3436, #000000)" },
+                          ].map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              disabled={!isBoost}
+                              onClick={() => handleFundoPerfilChange(preset.bg)}
+                              className={`h-8 rounded-xl border text-[9px] font-bold transition-all flex items-center justify-center cursor-pointer ${
+                                fundoPerfil === preset.bg
+                                  ? "border-artOrange ring-2 ring-artOrange/40 scale-105"
+                                  : "border-black/10 hover:opacity-80"
+                              } ${preset.id === "dark" ? "text-white" : "text-artDark"}`}
+                              style={{ background: preset.bg }}
+                              title={preset.label}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Seletor de Cor HEX para o Fundo */}
+                        <div>
+                          <label className="text-[9px] font-bold uppercase text-gray-500 block mb-1 flex items-center gap-1.5">
+                            <i className="fa-solid fa-palette text-artPurple text-[10px]"></i>
+                            <span>Cor HEX do Fundo:</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative w-8 h-8 rounded-xl overflow-hidden shadow-xs border border-black/15 shrink-0 flex items-center justify-center cursor-pointer group">
+                              <input
+                                type="color"
+                                disabled={!isBoost}
+                                value={fundoPerfil.startsWith("#") ? fundoPerfil : "#FF793F"}
+                                onChange={(e) => handleFundoPerfilChange(e.target.value.toUpperCase())}
+                                className="absolute inset-0 w-[150%] h-[150%] -top-2 -left-2 cursor-pointer opacity-0"
+                                title="Escolher cor no seletor"
+                              />
+                              <div
+                                className="w-full h-full"
+                                style={{ backgroundColor: fundoPerfil.startsWith("#") ? fundoPerfil : "#FF793F" }}
+                              />
+                              <i className="fa-solid fa-eye-dropper text-white text-[9px] absolute drop-shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></i>
+                            </div>
+                            <input
+                              type="text"
+                              disabled={!isBoost}
+                              value={fundoPerfil.startsWith("#") ? fundoPerfil : ""}
+                              onChange={(e) => handleFundoPerfilChange(e.target.value)}
+                              placeholder="#FF793F"
+                              maxLength={7}
+                              className="w-full bg-[#F9F8F6] rounded-xl px-3 py-1.5 text-xs font-mono font-bold outline-none focus:ring-1 ring-artOrange/50 border border-black/5 uppercase"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Upload de Imagem de Banner ou URL (Estática apenas - sem GIF/Vídeo) */}
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-bold uppercase text-gray-500 block flex items-center gap-1.5">
+                            <i className="fa-solid fa-image text-artOrange text-[10px]"></i>
+                            <span>Imagem Estática de Banner (JPG/PNG):</span>
+                          </label>
+                          
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!isBoost || uploadingBanner}
+                              onClick={() => bannerFileInputRef.current?.click()}
+                              className="bg-white border border-artOrange/30 hover:border-artOrange text-artDark hover:text-artOrange px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer disabled:cursor-not-allowed"
+                            >
+                              <i className={uploadingBanner ? "fa-solid fa-spinner fa-spin text-artOrange" : "fa-solid fa-cloud-arrow-up text-artOrange"}></i>
+                              <span>{uploadingBanner ? "Enviando..." : "Upload do PC"}</span>
+                            </button>
+                            
+                            <input
+                              type="text"
+                              disabled={!isBoost}
+                              value={fundoPerfil.startsWith("http") ? fundoPerfil : ""}
+                              onChange={(e) => handleFundoPerfilChange(e.target.value)}
+                              placeholder="Ou cole URL da imagem..."
+                              className="w-full bg-[#F9F8F6] rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-1 ring-artOrange/50 border border-black/5"
+                            />
+                          </div>
+
+                          <input
+                            ref={bannerFileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={handleBannerFileChange}
+                            className="hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. SEÇÃO COR DO NOME / NICKNAME NO PERFIL (EXCLUSIVO BOOST) */}
+                    <div className="pt-3 border-t border-black/5 space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-artPurple flex items-center gap-1.5">
+                          <i className="fa-solid fa-font"></i>
+                          Cor do Nome / Nick no Perfil
+                        </span>
+                        {isBoost ? (
+                          corNomeHex && (
+                            <button
+                              type="button"
+                              onClick={() => handleCorNomeChange("")}
+                              className="text-[9px] font-bold text-gray-400 hover:text-red-500 cursor-pointer"
+                            >
+                              Padrão
+                            </button>
+                          )
+                        ) : (
+                          <span className="bg-artOrange/10 text-artOrange border border-artOrange/25 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                            <i className="fa-solid fa-lock text-[8px]"></i>
+                            Exclusivo Boost
+                          </span>
+                        )}
+                      </div>
+
+                      {!isBoost && (
+                        <div className="p-2 rounded-xl bg-artPurple/[0.06] border border-artPurple/20 text-[10px] text-artPurple font-medium flex items-center gap-2">
+                          <i className="fa-solid fa-lock text-xs shrink-0"></i>
+                          <span>A cor personalizada do nick é exclusiva do plano <strong>Artfolio Boost</strong>.</span>
+                        </div>
+                      )}
+
+                      <div className={`space-y-2 ${!isBoost ? "opacity-50 select-none pointer-events-none blur-[0.5px]" : ""}`}>
+                        <p className="text-[11px] text-gray-500 leading-tight">
+                          Destaque seu nick com a cor ideal para contrastar com seu perfil:
+                        </p>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {[
+                            { hex: "#FFFFFF", label: "Branco" },
+                            { hex: "#2D3436", label: "Preto" },
+                            { hex: "#FF793F", label: "Laranja" },
+                            { hex: "#6C5CE7", label: "Roxo" },
+                            { hex: "#00B894", label: "Esmeralda" },
+                            { hex: "#0984E3", label: "Azul" },
+                            { hex: "#FDCB6E", label: "Dourado" },
+                          ].map((item) => (
+                            <button
+                              key={item.hex}
+                              type="button"
+                              disabled={!isBoost}
+                              onClick={() => handleCorNomeChange(item.hex)}
+                              className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                                corNomeHex.toUpperCase() === item.hex.toUpperCase()
+                                  ? "ring-2 ring-artPurple scale-110 shadow-xs"
+                                  : "border-black/10 hover:scale-105"
+                              }`}
+                              style={{ backgroundColor: item.hex }}
+                              title={item.label}
+                            >
+                              {corNomeHex.toUpperCase() === item.hex.toUpperCase() && (
+                                <i className={`fa-solid fa-check text-[9px] ${item.hex === "#FFFFFF" || item.hex === "#FDCB6E" ? "text-black" : "text-white"}`}></i>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <div className="relative w-8 h-8 rounded-xl overflow-hidden shadow-xs border border-black/15 shrink-0 flex items-center justify-center cursor-pointer group">
+                            <input
+                              type="color"
+                              disabled={!isBoost}
+                              value={corNomeHex || "#2D3436"}
+                              onChange={(e) => handleCorNomeChange(e.target.value.toUpperCase())}
+                              className="absolute inset-0 w-[150%] h-[150%] -top-2 -left-2 cursor-pointer opacity-0"
+                              title="Escolher cor personalizada para o nick"
+                            />
+                            <div
+                              className="w-full h-full"
+                              style={{ backgroundColor: corNomeHex || "#2D3436" }}
+                            />
+                            <i className="fa-solid fa-eye-dropper text-white text-[9px] absolute drop-shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></i>
+                          </div>
+                          <input
+                            type="text"
+                            disabled={!isBoost}
+                            value={corNomeHex}
+                            onChange={(e) => handleCorNomeChange(e.target.value)}
+                            placeholder="#HEX personalizado (ex: #FFFFFF)"
+                            maxLength={7}
+                            className="w-full bg-[#F9F8F6] rounded-xl px-3 py-1.5 text-xs font-mono font-bold outline-none focus:ring-1 ring-artPurple/50 border border-black/5 uppercase"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. SEÇÃO COR DO LED DO AVATAR (PRO & BOOST) */}
+                    <div className="pt-3 border-t border-black/5 space-y-2.5 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 flex items-center gap-1.5">
+                          <i className="fa-solid fa-lightbulb"></i>
+                          Iluminação LED Neon do Avatar
+                        </span>
+                        
+                        <div className="flex items-center gap-2">
+                          {!isProOuBoost && (
+                            <span className="bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                              <i className="fa-solid fa-lock text-[8px]"></i>
+                              Pro & Boost
+                            </span>
+                          )}
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <span className="text-[10px] font-bold text-gray-500">Exibir LED</span>
+                            <input
+                              type="checkbox"
+                              checked={mostrarMolduraLed}
+                              onChange={(e) => handleToggleMolduraLed(e.target.checked)}
+                              className="w-3.5 h-3.5 text-emerald-600 rounded cursor-pointer accent-emerald-600"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {!isProOuBoost && mostrarMolduraLed && (
+                        <div className="p-2 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 text-[10px] text-emerald-700 font-medium flex items-center gap-2">
+                          <i className="fa-solid fa-circle-info text-xs shrink-0"></i>
+                          <span>No plano Free a moldura LED é fixa na cor verde padrão. Troca de cor liberada nos planos <strong>Pro</strong> e <strong>Boost</strong>.</span>
+                        </div>
+                      )}
+
+                      {mostrarMolduraLed && (
+                        <div className={`space-y-2 animate-fadeIn ${!isProOuBoost ? "opacity-50 select-none pointer-events-none blur-[0.5px]" : ""}`}>
+                          <p className="text-[11px] text-gray-500 leading-tight">
+                            Escolha a cor do brilho LED que contorna a foto do seu perfil:
+                          </p>
+
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[
+                              { hex: "#FF793F", label: "Laranja Artfolio" },
+                              { hex: "#6C5CE7", label: "Roxo Cyber" },
+                              { hex: "#00B894", label: "Verde Neon" },
+                              { hex: "#0984E3", label: "Azul Elétrico" },
+                              { hex: "#E84393", label: "Rosa Magenta" },
+                              { hex: "#FDCB6E", label: "Âmbar Solar" },
+                              { hex: "#00CEC9", label: "Ciano Brilhante" },
+                            ].map((item) => (
+                              <button
+                                key={item.hex}
+                                type="button"
+                                disabled={!isProOuBoost}
+                                onClick={() => handleCorLedChange(item.hex)}
+                                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                                  corLedHex.toUpperCase() === item.hex.toUpperCase()
+                                    ? "ring-2 ring-emerald-500 scale-110 shadow-xs"
+                                    : "border-black/10 hover:scale-105"
+                                }`}
+                                style={{ backgroundColor: item.hex }}
+                                title={item.label}
+                              >
+                                {corLedHex.toUpperCase() === item.hex.toUpperCase() && (
+                                  <i className="fa-solid fa-check text-[9px] text-white"></i>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <div className="relative w-8 h-8 rounded-xl overflow-hidden shadow-xs border border-black/15 shrink-0 flex items-center justify-center cursor-pointer group">
+                              <input
+                                type="color"
+                                disabled={!isProOuBoost}
+                                value={corLedHex || "#00B894"}
+                                onChange={(e) => handleCorLedChange(e.target.value.toUpperCase())}
+                                className="absolute inset-0 w-[150%] h-[150%] -top-2 -left-2 cursor-pointer opacity-0"
+                                title="Escolher cor personalizada para o LED"
+                              />
+                              <div
+                                className="w-full h-full"
+                                style={{ backgroundColor: corLedHex || "#00B894" }}
+                              />
+                              <i className="fa-solid fa-eye-dropper text-white text-[9px] absolute drop-shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></i>
+                            </div>
+                            <input
+                              type="text"
+                              disabled={!isProOuBoost}
+                              value={corLedHex}
+                              onChange={(e) => handleCorLedChange(e.target.value)}
+                              placeholder="#FF793F"
+                              maxLength={7}
+                              className="w-full bg-[#F9F8F6] rounded-xl px-3 py-1.5 text-xs font-mono font-bold outline-none focus:ring-1 ring-emerald-500/50 border border-black/5 uppercase"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. SEÇÃO EXIBIR SELO DO PLANO NO PERFIL (TODOS OS PLANOS) */}
+                    <div className="pt-3 border-t border-black/5 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-artDark flex items-center gap-1.5">
+                          <i className="fa-solid fa-award text-artOrange"></i>
+                          Exibir Selo do Plano no Perfil
+                        </span>
+                        <p className="text-[11px] text-gray-500 leading-tight mt-0.5">
+                          Mostra o selo (Free, Pro ou Boost) ao lado do seu nome.
+                        </p>
+                      </div>
+                      
+                      <label className="flex items-center gap-1.5 cursor-pointer shrink-0 ml-3">
+                        <input
+                          type="checkbox"
+                          checked={mostrarBadgePlano}
+                          onChange={(e) => handleToggleBadgePlano(e.target.checked)}
+                          className="w-4 h-4 text-artOrange rounded cursor-pointer accent-artOrange"
+                        />
+                      </label>
+                    </div>
+
+                  </div>
+
+
+
 
                   <div className="mt-4 bg-artPurple/5 border border-artPurple/10 rounded-[1.5rem] p-4 text-left w-full">
                     <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2">

@@ -23,6 +23,12 @@ export default function Home() {
   const [modalConversaoAberto, setModalConversaoAberto] = useState(false);
   const [acaoTentada, setAcaoTentada] = useState("interagir");
 
+  const mostrarAviso = (mensagem, tipo = "info") => {
+    setNoticeMessage(mensagem);
+    setNoticeType(tipo);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
+
   const carregarFeed = async () => {
     try {
       const feedData = await feedService.obterFeed();
@@ -40,12 +46,6 @@ export default function Home() {
   useEffect(() => {
     carregarFeed();
   }, [currentUser?.id]);
-
-  const mostrarAviso = (mensagem, tipo = "info") => {
-    setNoticeMessage(mensagem);
-    setNoticeType(tipo);
-    setTimeout(() => setNoticeMessage(""), 4000);
-  };
 
   const handleToggleLike = async (postId, estaCurtido) => {
     if (isGuest) {
@@ -239,16 +239,16 @@ export default function Home() {
           <header className="mb-8">
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-6">
               <div>
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
+                <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm mb-2.5 block">
                   Galeria & Feed
                 </span>
 
-                <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl italic leading-none">
+                <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl italic leading-[1.05]">
                   O que há de <br />
-                  <span className="text-artDark not-italic">novo hoje.</span>
+                  <span className="text-artDark not-italic">novo hoje<span className="text-artOrange">.</span></span>
                 </h1>
 
-                <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed font-light">
+                <p className="text-base text-gray-500 mt-4 max-w-2xl leading-relaxed font-light">
                   Explore obras de toda a comunidade, descubra novos criadores e acompanhe publicações em tempo real.
                 </p>
               </div>
@@ -292,6 +292,56 @@ export default function Home() {
                 {noticeMessage}
               </div>
             )}
+
+            {/* Banner Motivacional "Espaço Criativo" no topo */}
+            <div className="bg-gradient-to-r from-artDark via-[#1E1E24] to-artDark text-white rounded-3xl p-5 sm:p-6 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 border border-white/10 shadow-lg relative overflow-hidden group">
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-artOrange via-amber-500 to-artPurple text-white flex items-center justify-center text-xl shrink-0 shadow-md shadow-artOrange/25">
+                  <i className="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-artOrange font-bold tracking-widest uppercase text-[10px]">
+                      Espaço Criativo
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-artOrange"></span>
+                    <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Comunidade Artfolio</span>
+                  </div>
+                  <h3 className="font-editorial text-xl sm:text-2xl italic font-bold">
+                    Não se acanhe! Mostre a todos a sua obra-prima.
+                  </h3>
+                  <p className="text-xs text-gray-300 mt-1 max-w-2xl leading-relaxed font-light">
+                    Compartilhe suas criações com a comunidade, conecte-se com novos admiradores e faça sua arte aparecer no top dos tops!
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative z-10 shrink-0 w-full md:w-auto">
+                {isGuest ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAcaoTentada("criar uma publicação");
+                      setModalConversaoAberto(true);
+                    }}
+                    className="w-full md:w-auto bg-artOrange text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-white hover:text-artDark transition-all shadow-md flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-plus text-xs"></i>
+                    Criar conta de Artista
+                  </button>
+                ) : (
+                  <Link
+                    to="/criar-obra"
+                    className="w-full md:w-auto bg-gradient-to-r from-artOrange to-[#e55039] text-white px-6 py-3 rounded-full text-xs font-bold hover:opacity-95 transition-all shadow-md shadow-artOrange/20 inline-flex items-center justify-center gap-2 text-center"
+                  >
+                    <i className="fa-solid fa-plus text-xs"></i>
+                    Publicar Obra
+                  </Link>
+                )}
+              </div>
+
+              <i className="fa-solid fa-palette absolute -right-6 -bottom-8 text-[8rem] text-white/[0.03] rotate-12 pointer-events-none"></i>
+            </div>
 
             {/* Setores Artísticos (Macro-Categorias Vibrantes) */}
             <div className="space-y-3">
@@ -404,83 +454,44 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-            <section className="xl:col-span-9">
-              {loading ? (
-                <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center">
-                  <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
-                  <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
-                    Carregando feed...
-                  </p>
-                </div>
-              ) : postsFiltrados.length === 0 ? (
-                <div className="bg-white rounded-[2rem] border border-black/5 p-10 text-center">
-                  <i className="fa-solid fa-palette text-4xl text-gray-200 mb-4"></i>
+          {/* Grid de Obras (Agora ocupando 100% da largura em até 4 colunas perfeitamente simétricas) */}
+          <div className="w-full">
+            {loading ? (
+              <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center shadow-xs">
+                <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-4"></i>
+                <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">
+                  Carregando feed...
+                </p>
+              </div>
+            ) : postsFiltrados.length === 0 ? (
+              <div className="bg-white rounded-[2rem] border border-black/5 p-10 text-center shadow-xs">
+                <i className="fa-solid fa-palette text-4xl text-gray-200 mb-4"></i>
 
-                  <h2 className="font-editorial text-3xl italic">
-                    Nenhuma obra encontrada.
-                  </h2>
-
-                  <p className="text-sm text-gray-500 mt-2">
-                    Tente selecionar outra categoria ou volte mais tarde para conferir novas publicações.
-                  </p>
-                </div>
-              ) : (
-                <div className="columns-1 md:columns-2 xl:columns-3 gap-6 space-y-6">
-                  {postsFiltrados.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      currentUserId={currentUser?.id}
-                      isGuest={isGuest}
-                      onToggleLike={() => handleToggleLike(post.id, post.curtido_por_mim)}
-                      onToggleSave={() => handleToggleSave(post.id, post.salvo_por_mim)}
-                      onToggleFollow={() => handleToggleFollow(post.usuario?.id, post.seguindo_usuario)}
-                      onDenunciar={() => handleAbrirDenuncia(post)}
-                      mostrarAviso={mostrarAviso}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <aside className="xl:col-span-3 space-y-5">
-              <div className="bg-artDark text-white rounded-[2rem] p-6 relative overflow-hidden shadow-sm">
-                <span className="text-artOrange font-bold tracking-widest uppercase text-[10px] block mb-2">
-                  Dica da Comunidade
-                </span>
-
-                <h2 className="font-editorial text-2xl italic leading-tight">
-                  Publique com detalhes.
+                <h2 className="font-editorial text-3xl italic">
+                  Nenhuma obra encontrada.
                 </h2>
 
-                <p className="text-xs text-gray-400 mt-3 leading-relaxed font-light">
-                  Obras com legendas contextualizadas, técnicas utilizadas e boa iluminação recebem até 3x mais engajamento de apreciadores.
+                <p className="text-sm text-gray-500 mt-2">
+                  Tente selecionar outra categoria ou volte mais tarde para conferir novas publicações.
                 </p>
-
-                {isGuest ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAcaoTentada("criar uma publicação");
-                      setModalConversaoAberto(true);
-                    }}
-                    className="inline-block mt-5 bg-artOrange text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-white hover:text-artDark transition-all"
-                  >
-                    Criar conta de Artista
-                  </button>
-                ) : (
-                  <Link
-                    to="/criar-obra"
-                    className="inline-block mt-5 bg-white text-artDark px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange hover:text-white transition-all"
-                  >
-                    Criar publicação
-                  </Link>
-                )}
-
-                <i className="fa-solid fa-palette absolute -right-5 -bottom-6 text-[6rem] text-white/5 rotate-12"></i>
               </div>
-            </aside>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {postsFiltrados.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    currentUserId={currentUser?.id}
+                    isGuest={isGuest}
+                    onToggleLike={() => handleToggleLike(post.id, post.curtido_por_mim)}
+                    onToggleSave={() => handleToggleSave(post.id, post.salvo_por_mim)}
+                    onToggleFollow={() => handleToggleFollow(post.usuario?.id, post.seguindo_usuario)}
+                    onDenunciar={() => handleAbrirDenuncia(post)}
+                    mostrarAviso={mostrarAviso}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

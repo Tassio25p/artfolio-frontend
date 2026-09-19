@@ -20,6 +20,10 @@ export default function Configuracoes() {
   const [tipoConta, setTipoConta] = useState("cliente");
   const [avatar, setAvatar] = useState("");
   const [mostrarMolduraLed, setMostrarMolduraLed] = useState(true);
+  const [mostrarBadgePlano, setMostrarBadgePlano] = useState(true);
+  const [corLedHex, setCorLedHex] = useState(() => {
+    return localStorage.getItem("artfolio_boost_led_color") || "#FF793F";
+  });
   const [mensagemCta, setMensagemCta] = useState("");
   const [planoInfo, setPlanoInfo] = useState(null);
 
@@ -64,6 +68,13 @@ export default function Configuracoes() {
 
   const isArtista = tipoConta === "artista" || tipoConta === "galeria";
   const isPlanoFree = (planoInfo?.tipo || "Free").toLowerCase() === "free";
+  const isPlanoBoost = (planoInfo?.tipo || "Free").toLowerCase() === "boost";
+
+  const mostrarAviso = (mensagem, tipo = "info") => {
+    setNoticeMessage(mensagem);
+    setNoticeType(tipo);
+    setTimeout(() => setNoticeMessage(""), 5000);
+  };
 
   // Carregar dados do usuário ao montar o componente
   useEffect(() => {
@@ -82,6 +93,11 @@ export default function Configuracoes() {
         setTipoConta(usuario.tipo_conta || "cliente");
         setAvatar(usuario.fotoPerfil || "");
         setMostrarMolduraLed(usuario.mostrar_moldura_led !== false);
+        setMostrarBadgePlano(usuario.mostrar_badge_plano !== false);
+        if (usuario.cor_led_hex || usuario.led_color) {
+          setCorLedHex(usuario.cor_led_hex || usuario.led_color);
+          localStorage.setItem("artfolio_boost_led_color", usuario.cor_led_hex || usuario.led_color);
+        }
         setMensagemCta(usuario.mensagem_cta || "");
         setPlanoInfo(planoData);
         setArtistasCadastrados(Array.isArray(todosArtistas) ? todosArtistas : []);
@@ -113,44 +129,47 @@ export default function Configuracoes() {
   };
 
   const menuItems = [
-    { id: "conta", label: "Conta", icon: "fa-solid fa-user" },
+    {
+      id: "conta",
+      label: "Conta",
+      icon: "fa-solid fa-user",
+      hoverClass: "hover:text-artPurple hover:bg-artPurple/10 hover:border-artPurple/20",
+    },
     {
       id: "seguranca",
       label: "Segurança",
       icon: "fa-solid fa-shield-halved",
+      hoverClass: "hover:text-artBlue hover:bg-artBlue/10 hover:border-artBlue/20",
     },
     {
       id: "privacidade",
       label: "Privacidade",
       icon: "fa-solid fa-eye-slash",
+      hoverClass: "hover:text-artGreen hover:bg-artGreen/10 hover:border-artGreen/20",
     },
     {
       id: "notificacoes",
       label: "Notificações",
       icon: "fa-solid fa-bell",
+      hoverClass: "hover:text-artOrange hover:bg-artOrange/10 hover:border-artOrange/20",
     },
-
     {
       id: "bloqueados",
       label: "Bloqueados",
       icon: "fa-solid fa-ban",
+      hoverClass: "hover:text-red-500 hover:bg-red-50 hover:border-red-200",
     },
     ...(isArtista
       ? [
           {
             id: "assinatura",
             label: "Assinatura",
-            icon: "fa-solid fa-crown",
+            icon: "fa-solid fa-gem",
+            hoverClass: "hover:text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/20",
           },
         ]
       : []),
   ];
-
-  const mostrarAviso = (mensagem, tipo = "info") => {
-    setNoticeMessage(mensagem);
-    setNoticeType(tipo);
-    setTimeout(() => setNoticeMessage(""), 5000);
-  };
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -164,9 +183,16 @@ export default function Configuracoes() {
         if (nome !== (usuarioAtual?.nome || "")) dados.nome = nome;
         if (telefone !== (usuarioAtual?.telefone || "")) dados.telefone = telefone || null;
         dados.mostrar_moldura_led = mostrarMolduraLed;
-        if (!isPlanoFree && mensagemCta) {
-          dados.mensagem_cta = mensagemCta;
+        dados.mostrar_badge_plano = mostrarBadgePlano;
+        
+        if (isPlanoBoost) {
+          dados.cor_led_hex = corLedHex;
+          dados.mensagem_cta = mensagemCta || null;
         }
+
+        localStorage.setItem("artfolio_mostrar_moldura_led", String(mostrarMolduraLed));
+        localStorage.setItem("artfolio_mostrar_badge_plano", String(mostrarBadgePlano));
+        localStorage.setItem("artfolio_boost_led_color", corLedHex);
 
         const usuarioAtualizado = await usuarioService.atualizarPerfil(dados);
         setNome(usuarioAtualizado.nome || "");
@@ -175,7 +201,22 @@ export default function Configuracoes() {
         setTipoConta(usuarioAtualizado.tipo_conta || "cliente");
         setAvatar(usuarioAtualizado.fotoPerfil || "");
         setMostrarMolduraLed(usuarioAtualizado.mostrar_moldura_led !== false);
+        setMostrarBadgePlano(usuarioAtualizado.mostrar_badge_plano !== false);
+        if (usuarioAtualizado.cor_led_hex || usuarioAtualizado.led_color) {
+          setCorLedHex(usuarioAtualizado.cor_led_hex || usuarioAtualizado.led_color);
+        }
         setMensagemCta(usuarioAtualizado.mensagem_cta || "");
+
+        // Disparar evento para atualizar sidebar e perfil instantaneamente
+        window.dispatchEvent(
+          new CustomEvent("artfolio_profile_prefs_changed", {
+            detail: {
+              corLedHex,
+              mostrarBadgePlano,
+              mostrarMolduraLed,
+            },
+          })
+        );
 
         // Sincronizar contexto global do usuário
         if (typeof refreshUser === "function") {
@@ -346,14 +387,14 @@ export default function Configuracoes() {
                       key={item.id}
                       type="button"
                       onClick={() => setActiveTab(item.id)}
-                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all duration-300 flex items-center gap-2.5 ${
+                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all duration-300 flex items-center gap-2.5 border border-transparent cursor-pointer ${
                         activeTab === item.id
                           ? "bg-artDark text-white shadow-md shadow-black/10"
-                          : "bg-[#F9F8F6] text-gray-400 hover:text-artDark hover:bg-[#eae7df]"
+                          : `bg-[#F9F8F6] text-gray-400 ${item.hoverClass}`
                       }`}
                     >
-                      <i className={item.icon}></i>
-                      {item.label}
+                      <i className={`${item.icon} text-xs transition-colors`}></i>
+                      <span>{item.label}</span>
                     </button>
                   ))}
                 </div>
@@ -499,22 +540,38 @@ export default function Configuracoes() {
                       </h3>
                     </div>
 
-                    <ToggleOption
-                      title="Moldura LED Neon e Tag do Plano no Perfil"
-                      description={`Ativa a iluminação neon na foto de perfil e a tag sólida do seu plano (${planoInfo?.tipo === "Boost" ? "Laranja Boost" : planoInfo?.tipo === "Pro" ? "Roxo Pro" : "Verde Free"}). Ao desativar, tanto a moldura quanto a tag são ocultadas.`}
-                      active={mostrarMolduraLed}
-                      onToggle={() => setMostrarMolduraLed(!mostrarMolduraLed)}
-                    />
+                    {/* Personalização Estética (Fundo, Nick e LED) */}
+                    <div className="bg-[#F9F8F6] rounded-[1.5rem] p-5 border border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-artDark flex items-center gap-1.5">
+                            <i className="fa-solid fa-palette text-artOrange"></i>
+                            Personalização Estética (Fundo, Nick e LED)
+                          </h4>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                          A personalização completa de cores de LED, cor do nome/nick, selo de plano e plano de fundo do perfil agora fica centralizada na página de <strong>Editar Perfil</strong>.
+                        </p>
+                      </div>
+
+                      <Link
+                        to="/editar-perfil"
+                        className="bg-artOrange hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                      >
+                        <i className="fa-solid fa-sliders text-[11px]"></i>
+                        <span>Personalizar em Editar Perfil</span>
+                      </Link>
+                    </div>
 
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
                           Mensagem Pré-Pronta / Pitch de Vendas (Chat)
                         </label>
-                        {isPlanoFree && (
-                          <span className="bg-artPurple/15 text-artPurple border border-artPurple/30 text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        {!isPlanoBoost && (
+                          <span className="bg-artOrange/15 text-artOrange border border-artOrange/30 text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1">
                             <i className="fa-solid fa-lock text-[8px]"></i>
-                            Exclusivo Pro / Boost
+                            Exclusivo Boost
                           </span>
                         )}
                       </div>
@@ -522,34 +579,34 @@ export default function Configuracoes() {
                       <textarea
                         rows={3}
                         value={mensagemCta}
-                        disabled={isPlanoFree}
+                        disabled={!isPlanoBoost}
                         onChange={(event) => setMensagemCta(event.target.value)}
                         placeholder={
-                          isPlanoFree
-                            ? "Recurso exclusivo dos planos Pro e Boost. Assine para criar seu pitch de vendas pré-definido e enviar com um clique no chat!"
+                          !isPlanoBoost
+                            ? "Recurso exclusivo do plano Boost. Assine o Artfolio Boost para criar seu pitch de vendas pré-definido e enviar com um clique no chat!"
                             : "Ex: Olá! Trabalho com encomendas personalizadas e minhas vagas estão abertas. Posso te enviar minha tabela de valores?"
                         }
                         className={`w-full rounded-2xl px-5 py-4 outline-none text-sm leading-relaxed resize-none transition-all ${
-                          isPlanoFree
+                          !isPlanoBoost
                             ? "bg-[#F9F8F6] border border-black/5 opacity-60 cursor-not-allowed text-gray-400"
-                            : "bg-[#F9F8F6] focus:bg-white border border-transparent focus:border-artPurple/30 focus:ring-4 focus:ring-artPurple/10"
+                            : "bg-[#F9F8F6] focus:bg-white border border-transparent focus:border-artOrange/30 focus:ring-4 focus:ring-artOrange/10"
                         }`}
                       />
                       <p className="text-[11px] text-gray-400 mt-1.5">
-                        {isPlanoFree ? (
+                        {!isPlanoBoost ? (
                           <span>
-                            Personalize sua proposta e dispare com agilidade dentro do chat assinando o{" "}
+                            Personalize seu pitch de vendas e dispare com agilidade dentro do chat assinando o{" "}
                             <button
                               type="button"
                               onClick={() => setActiveTab("assinatura")}
-                              className="text-artPurple font-bold hover:underline"
+                              className="text-artOrange font-bold hover:underline"
                             >
-                              Artfolio Pro ou Boost
+                              Artfolio Boost
                             </button>
                             .
                           </span>
                         ) : (
-                          "Atalho rápido: você poderá disparar essa mensagem pré-configurada diretamente dentro do chat com um único clique."
+                          "Atalho rápido: você poderá disparar essa mensagem pré-configurada diretamente dentro do chat com um único clique no botão de raio."
                         )}
                       </p>
                     </div>
@@ -615,26 +672,6 @@ export default function Configuracoes() {
                       })}
                     </div>
                   </div>
-
-                  <div className="mt-8 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="bg-artDark text-white px-8 py-3.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-artPurple transition-all shadow-lg shadow-black/10 flex items-center gap-2 active:scale-95 disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <>
-                          <i className="fa-solid fa-spinner fa-spin"></i>
-                          Salvando...
-                        </>
-                      ) : (
-                        <>
-                          <i className="fa-solid fa-check"></i>
-                          Salvar Alterações
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -645,8 +682,9 @@ export default function Configuracoes() {
                       Proteção
                     </span>
 
-                    <h2 className="font-editorial text-3xl italic">
-                      Segurança da conta
+                    <h2 className="font-editorial text-3xl italic flex items-center gap-2.5">
+                      <i className="fa-solid fa-shield-halved text-artBlue not-italic text-2xl"></i>
+                      <span>Segurança da conta</span>
                     </h2>
                   </div>
 
@@ -933,16 +971,18 @@ export default function Configuracoes() {
                     </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
                     <PlanoCard
                       ativo={(planoInfo?.tipo || "Free").toLowerCase() === "free"}
-                      titulo="Free"
-                      subtitulo="Grátis"
+                      titulo="Artfolio Free"
+                      subtitulo="Essencial"
+                      preco="Grátis"
+                      periodo="sempre gratuito"
                       cor="artGreen"
-                      descricao={[
-                        "1 página por postagem",
-                        "Chat ilimitado para negociações",
-                        "Moldura LED verde opcional",
+                      recursos={[
+                        "Postagem simples (1 página)",
+                        "Chat livre e ilimitado",
+                        "Moldura LED verde no perfil",
                       ]}
                       botao={(planoInfo?.tipo || "Free").toLowerCase() === "free" ? "Plano Atual" : "Selecionar"}
                       onClick={() => navigate("/planos")}
@@ -951,13 +991,15 @@ export default function Configuracoes() {
                     <PlanoCard
                       ativo={(planoInfo?.tipo || "").toLowerCase() === "pro"}
                       destaque
-                      titulo="Pro"
-                      subtitulo="R$ 29,90 / mês"
+                      titulo="Artfolio Pro"
+                      subtitulo="Profissional"
+                      preco="R$ 29,90"
+                      periodo="por mês"
                       cor="artPurple"
-                      descricao={[
-                        "Carrossel de imagens (múltiplas)",
+                      recursos={[
+                        "Múltiplas páginas por post",
                         "Painel de Analytics e Pódio",
-                        "Botão CTA Pedir Orçamento",
+                        "Moldura LED roxa no perfil",
                       ]}
                       botao={(planoInfo?.tipo || "").toLowerCase() === "pro" ? "Plano Atual" : "Fazer Upgrade"}
                       onClick={() => navigate("/planos")}
@@ -965,13 +1007,15 @@ export default function Configuracoes() {
 
                     <PlanoCard
                       ativo={(planoInfo?.tipo || "").toLowerCase() === "boost"}
-                      titulo="Boost"
-                      subtitulo="R$ 49,90 / mês"
+                      titulo="Artfolio Boost"
+                      subtitulo="Alcance Máximo"
+                      preco="R$ 49,90"
+                      periodo="por mês"
                       cor="artOrange"
-                      descricao={[
-                        "Tudo incluído no plano Pro",
-                        "Destaque segmentado no feed",
-                        "Moldura LED laranja vibrante",
+                      recursos={[
+                        "Arquivos até 100 MB",
+                        "Mensagem inicial customizável",
+                        "Moldura LED laranja no perfil",
                       ]}
                       botao={(planoInfo?.tipo || "").toLowerCase() === "boost" ? "Plano Atual" : "Fazer Upgrade"}
                       onClick={() => navigate("/planos")}
@@ -1032,37 +1076,72 @@ function ToggleOption({ title, description, active, onToggle, disabled = false, 
   );
 }
 
-function PlanoCard({ ativo, destaque, titulo, subtitulo, cor = "artDark", descricao = [], botao, onClick }) {
-  const corClasse = cor === "artGreen" ? "text-artGreen" : cor === "artPurple" ? "text-artPurple" : cor === "artOrange" ? "text-artOrange" : "text-artDark";
-  const bordaAtivo = cor === "artGreen" ? "border-artGreen bg-artGreen/5" : cor === "artPurple" ? "border-artPurple bg-artPurple/5" : cor === "artOrange" ? "border-artOrange bg-artOrange/5" : "border-artDark bg-[#F9F8F6]";
+function PlanoCard({ ativo, destaque, titulo, subtitulo, preco, periodo, cor = "artDark", recursos = [], botao, onClick }) {
+  const configs = {
+    artGreen: {
+      corNome: "text-artGreen",
+      corBorda: "border-artGreen/30 hover:border-artGreen",
+      corBadge: "bg-artGreen text-white shadow-md shadow-artGreen/30",
+      corBotao: "bg-[#F9F8F6] text-artDark border border-black/10 hover:bg-artGreen hover:text-white",
+    },
+    artPurple: {
+      corNome: "text-artPurple",
+      corBorda: "border-artPurple shadow-xl shadow-artPurple/15",
+      corBadge: "bg-artPurple text-white shadow-md shadow-artPurple/30",
+      corBotao: "bg-artPurple text-white hover:bg-indigo-700 shadow-lg shadow-artPurple/25",
+    },
+    artOrange: {
+      corNome: "text-artOrange",
+      corBorda: "border-artOrange/40 hover:border-artOrange",
+      corBadge: "bg-artOrange text-white shadow-md shadow-artOrange/30",
+      corBotao: "bg-artOrange text-white hover:bg-orange-600 shadow-lg shadow-artOrange/25",
+    },
+  };
+
+  const cfg = configs[cor] || configs.artGreen;
 
   return (
     <div
-      className={`p-5 rounded-[1.8rem] border-2 transition-all relative overflow-hidden flex flex-col justify-between ${
+      className={`relative rounded-3xl p-6 bg-white border transition-all duration-300 flex flex-col justify-between ${
         ativo
-          ? bordaAtivo
-          : "border-black/5 hover:border-black/10 bg-white"
+          ? "ring-2 ring-artDark shadow-2xl scale-[1.02]"
+          : cfg.corBorda
       }`}
     >
+      {/* Badge de Destaque ou Plano Atual */}
+      {ativo ? (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-artDark text-white px-3.5 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase shadow-md flex items-center gap-1.5 whitespace-nowrap">
+          <i className="fa-solid fa-circle-check text-emerald-400 text-[9px]"></i>
+          Seu Plano Ativo
+        </span>
+      ) : destaque ? (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-artPurple text-white px-3.5 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase shadow-md whitespace-nowrap">
+          Mais Popular
+        </span>
+      ) : null}
+
       <div>
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-editorial text-2xl">{titulo}</h3>
-          {ativo && (
-            <span className="bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full">
-              Ativo
-            </span>
-          )}
+        <div className="flex items-center justify-between mb-3 mt-1">
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${cfg.corNome}`}>
+            {subtitulo}
+          </span>
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${cfg.corBadge}`}>
+            {titulo.replace("Artfolio ", "")}
+          </span>
         </div>
 
-        <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${corClasse}`}>
-          {subtitulo}
-        </p>
+        <h3 className="font-editorial text-2xl mb-1">{titulo}</h3>
 
-        <ul className="text-xs text-gray-500 space-y-1.5 mb-6">
-          {descricao.map((item) => (
-            <li key={item} className="flex items-start gap-1.5">
-              <i className={`fa-solid fa-check text-[10px] mt-0.5 ${corClasse}`}></i>
-              <span>{item}</span>
+        <div className="mb-5 flex items-baseline gap-1.5">
+          <span className="font-editorial text-3xl font-bold">{preco}</span>
+          <span className="text-xs text-gray-400 font-light">/{periodo}</span>
+        </div>
+
+        <ul className="text-xs text-gray-600 space-y-2 mb-6">
+          {recursos.map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <i className={`fa-solid fa-check text-[10px] mt-0.5 ${cfg.corNome}`}></i>
+              <span className="leading-snug">{item}</span>
             </li>
           ))}
         </ul>
@@ -1071,10 +1150,10 @@ function PlanoCard({ ativo, destaque, titulo, subtitulo, cor = "artDark", descri
       <button
         type="button"
         onClick={onClick}
-        className={`w-full py-2.5 rounded-full text-xs font-bold transition-all ${
+        className={`w-full py-3 rounded-full text-xs font-bold transition-all ${
           ativo
-            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-            : "bg-artDark text-white hover:bg-artPurple"
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+            : cfg.corBotao
         }`}
       >
         {botao}

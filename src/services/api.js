@@ -1,10 +1,15 @@
 import axios from "axios";
-import { getStoredToken } from "../contexts/AuthContext";
+import { getStoredToken, getStoredRefreshToken, storeToken, clearAllAuthStorage } from "../contexts/AuthContext";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "http://127.0.0.1:8000");
 
 // --- Gerenciamento de Autenticação / Token ---
 export const getToken = () => getStoredToken();
+export const getRefreshToken = () => getStoredRefreshToken();
 
 export const getUser = () => {
   const user = localStorage.getItem("usuario");
@@ -14,12 +19,7 @@ export const getUser = () => {
 export const setUser = (user) => localStorage.setItem("usuario", JSON.stringify(user));
 
 export const removeToken = () => {
-  localStorage.removeItem("artfolio_token");
-  localStorage.removeItem("artfolio_remember");
-  sessionStorage.removeItem("artfolio_token");
-  localStorage.removeItem("artfolio_guest");
-  localStorage.removeItem("token");
-  localStorage.removeItem("usuario");
+  clearAllAuthStorage();
 };
 
 // --- Configuração da Instância Central do Axios ---
@@ -31,6 +31,43 @@ export const api = axios.create({
 });
 
 let authExpiredDispatched = false;
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+export async function renovarSessaoSilenciosa() {
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) {
+    throw new Error("Nenhum refresh token disponível.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Falha ao renovar token de acesso.");
+  }
+
+  const data = await response.json();
+  if (data.access_token) {
+    storeToken(data.access_token, data.refresh_token || refreshToken);
+    return data.access_token;
+  }
+  throw new Error("Token de acesso inválido retornado na renovação.");
+}
 
 // Interceptor de Requisição: Injeta automaticamente o Bearer Token
 api.interceptors.request.use(
@@ -45,10 +82,11 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor de Resposta: Tratamento global de Rate Limiting (429) e Sessão Expirada (401)
+// Interceptor de Resposta: Tratamento global de Rate Limiting (429) e Renovação Silenciosa de Sessão (401)
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
     if (error.response?.status === 429) {
       const data = error.response.data;
       const mensagem =
@@ -65,21 +103,58 @@ api.interceptors.response.use(
           },
         })
       );
-    } else if (error.response?.status === 401 && !authExpiredDispatched) {
-      authExpiredDispatched = true;
-      window.dispatchEvent(new Event("auth:expired"));
-      setTimeout(() => {
-        authExpiredDispatched = false;
-      }, 2000);
+      return Promise.reject(error);
+    }
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/auth/login") &&
+      !originalRequest.url?.includes("/auth/refresh") &&
+      !originalRequest.url?.includes("/auth/cadastro")
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers["Authorization"] = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const novoToken = await renovarSessaoSilenciosa();
+        processQueue(null, novoToken);
+        originalRequest.headers["Authorization"] = `Bearer ${novoToken}`;
+        return api(originalRequest);
+      } catch (refreshErr) {
+        processQueue(refreshErr, null);
+        if (!authExpiredDispatched) {
+          authExpiredDispatched = true;
+          window.dispatchEvent(new Event("auth:expired"));
+          setTimeout(() => {
+            authExpiredDispatched = false;
+          }, 2000);
+        }
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
+      }
     }
 
     return Promise.reject(error);
   }
 );
 
-// --- Função utilitária para requisições ---
-async function apiRequest(endpoint, options = {}) {
-  const token = getToken();
+// --- Função utilitária para requisições com Fetch e auto-refresh ---
+async function apiRequest(endpoint, options = {}, isRetry = false) {
+  let token = getToken();
   const headers = {
     "Content-Type": "application/json",
     ...options.headers,
@@ -96,9 +171,20 @@ async function apiRequest(endpoint, options = {}) {
       headers,
     });
   } catch (err) {
-    throw new Error(
-      "Não foi possível conectar ao servidor backend (FastAPI na porta 8000). Verifique se o servidor backend está em execução."
-    );
+    const fallbackBase = API_BASE_URL.includes("127.0.0.1")
+      ? API_BASE_URL.replace("127.0.0.1", "localhost")
+      : API_BASE_URL.replace("localhost", "127.0.0.1");
+
+    try {
+      response = await fetch(`${fallbackBase}${endpoint}`, {
+        ...options,
+        headers,
+      });
+    } catch {
+      throw new Error(
+        "Não foi possível conectar ao servidor backend (FastAPI na porta 8000). Verifique se o servidor backend está em execução."
+      );
+    }
   }
 
   let data;
@@ -109,6 +195,34 @@ async function apiRequest(endpoint, options = {}) {
   }
 
   if (!response.ok) {
+    // Tentativa de silent refresh em 401 no fetch
+    if (
+      response.status === 401 &&
+      !isRetry &&
+      !endpoint.includes("/auth/login") &&
+      !endpoint.includes("/auth/refresh") &&
+      !endpoint.includes("/auth/cadastro")
+    ) {
+      try {
+        const novoToken = await renovarSessaoSilenciosa();
+        return await apiRequest(endpoint, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${novoToken}`,
+          },
+        }, true);
+      } catch {
+        if (!authExpiredDispatched) {
+          authExpiredDispatched = true;
+          window.dispatchEvent(new Event("auth:expired"));
+          setTimeout(() => {
+            authExpiredDispatched = false;
+          }, 2000);
+        }
+      }
+    }
+
     if (response.status === 429) {
       const msg =
         data?.mensagem ||
@@ -124,14 +238,6 @@ async function apiRequest(endpoint, options = {}) {
         })
       );
       throw new Error(msg);
-    }
-
-    if (response.status === 401 && !authExpiredDispatched) {
-      authExpiredDispatched = true;
-      window.dispatchEvent(new Event("auth:expired"));
-      setTimeout(() => {
-        authExpiredDispatched = false;
-      }, 2000);
     }
 
     const errorMsg = data?.detail || data?.message || `Erro ${response.status}: Falha na requisição`;
@@ -331,6 +437,12 @@ export const obrasService = {
       body: JSON.stringify(dados),
     });
   },
+
+  async alternarFixar(id) {
+    return await apiRequest(`/postagens/${id}/fixar`, {
+      method: "PATCH",
+    });
+  },
 };
 
 // --- Helper de mídia / URL ---
@@ -434,6 +546,12 @@ export const usuarioService = {
     return await apiRequest("/usuarios/me/senha", {
       method: "PATCH",
       body: JSON.stringify(dados),
+    });
+  },
+
+  async excluirConta() {
+    return await apiRequest("/usuarios/me", {
+      method: "DELETE",
     });
   },
 
@@ -552,20 +670,30 @@ export const usuarioService = {
       return [];
     }
   },
-
-  async obterEstatisticasPainel(artistaId) {
-    return await apiRequest(`/artistas/${artistaId}/estatisticas-painel`);
-  },
 };
 
 // --- Serviços de Notificações ---
 export const notificacaoService = {
-  async listar() {
+  async listar(tipo = null, apenasNaoLidas = false, limite = 50, offset = 0) {
     try {
-      const res = await apiRequest("/notificacoes");
-      return Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+      const params = new URLSearchParams();
+      if (tipo && tipo !== "Todas") params.append("tipo", tipo.toLowerCase());
+      if (apenasNaoLidas) params.append("apenas_nao_lidas", "true");
+      if (limite) params.append("limite", String(limite));
+      if (offset) params.append("offset", String(offset));
+
+      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const res = await apiRequest(`/notificacoes${queryStr}`);
+      return Array.isArray(res?.notificacoes) ? res.notificacoes : Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
     } catch {
       return [];
+    }
+  },
+  async contarNaoLidas() {
+    try {
+      return await apiRequest("/notificacoes/nao-lidas");
+    } catch {
+      return { quantidade: 0 };
     }
   },
   async marcarComoLida(id) {
@@ -722,6 +850,12 @@ export const mensagemService = {
   async deletarMensagem(mensagemId) {
     return await apiRequest(`/chat/mensagens/${mensagemId}`, {
       method: "DELETE",
+    });
+  },
+  async deletarMensagensLote(mensagemIds) {
+    return await apiRequest("/chat/mensagens/excluir-lote", {
+      method: "POST",
+      body: JSON.stringify({ mensagem_ids: mensagemIds }),
     });
   },
   async editarMensagem(mensagemId, { conteudo }) {

@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export default function Plans() {
   const { addToast } = useToast();
-  const { user: authUser } = useAuth();
+  const { user: authUser, refreshUser } = useAuth();
   const [meuPlano, setMeuPlano] = useState(null);
   const [loading, setLoading] = useState(true);
   const [assinandoId, setAssinandoId] = useState(null);
@@ -46,6 +46,9 @@ export default function Plans() {
       setAssinandoId(plano.id);
       const res = await planosService.assinarPlano(plano.id);
       setMeuPlano(res);
+      if (refreshUser) {
+        await refreshUser();
+      }
       addToast(`Parabéns! Seu plano agora é ${plano.nome}. Os novos recursos já estão liberados!`, "Sucesso!", "sucesso");
     } catch (err) {
       addToast(err.message || "Não foi possível alterar de plano. Tente novamente.", "Erro", "erro");
@@ -54,14 +57,14 @@ export default function Plans() {
     }
   };
 
-  // Cards com alinhamento rigoroso linha por linha (exatamente 9 linhas sincronizadas)
+  // Cards com alinhamento rigoroso linha por linha
   const planos = [
     {
       id: 1,
       tipo: "Free",
       nome: "Artfolio Free",
       subtitulo: "Essencial",
-      tagline: "Para quem está começando a expor seus trabalhos na comunidade.",
+      tagline: "Portfólio com bio e links, qualidade original, postagem simples (1 pág), até 10 MB, chat livre e ilimitado, moldura LED e tag verde Free no perfil. (Sem proteções ativas e sem personalizações de perfil).",
       preco: "Grátis",
       periodo: "sempre gratuito",
       destaque: false,
@@ -71,15 +74,14 @@ export default function Plans() {
       corLed: "ring-4 ring-[#00B894] shadow-[0_0_15px_#00B894,0_0_30px_rgba(0,184,148,0.7)]",
       corBotao: "bg-[#F9F8F6] text-artDark border border-black/10 hover:bg-artGreen hover:text-white",
       recursos: [
-        { texto: "Portfólio com biografia e links externos", ativo: true },
+        { texto: "Portfólio com bio e links", ativo: true },
         { texto: "Qualidade original preservada", ativo: true },
-        { texto: "Postagem simples (1 página)", ativo: true },
+        { texto: "Postagem simples (1 pág)", ativo: true },
+        { texto: "Tamanho de arquivo até 10 MB", ativo: true },
         { texto: "Chat livre e ilimitado", ativo: true },
         { texto: "Moldura LED e tag verde Free no perfil", ativo: true },
-        { texto: "Estatísticas completas", ativo: false },
-        { texto: "Mensagem inicial customizável", ativo: false },
-        { texto: "Destaque segmentado no feed", ativo: false },
-        { texto: "Prioridade orgânica em novos públicos", ativo: false },
+        { texto: "Pacote de proteção autoral (Download/Print/Amostra)", ativo: false },
+        { texto: "Personalização de perfil e tabela de preços", ativo: false },
       ],
     },
     {
@@ -87,7 +89,7 @@ export default function Plans() {
       tipo: "Pro",
       nome: "Artfolio Pro",
       subtitulo: "Profissional",
-      tagline: "Para artistas que buscam presença profissional, métricas e carrosséis.",
+      tagline: "Tudo do Free + múltiplas páginas por post, até 50 MB, estatísticas completas, moldura LED personalizável, e pacote de proteção autoral (bloqueio de download, print e modo amostra).",
       preco: "R$ 29,90",
       periodo: "por mês",
       destaque: true,
@@ -97,15 +99,14 @@ export default function Plans() {
       corLed: "ring-4 ring-[#6C5CE7] shadow-[0_0_15px_#6C5CE7,0_0_30px_rgba(108,92,231,0.7)]",
       corBotao: "bg-artPurple text-white hover:bg-indigo-700 shadow-lg shadow-artPurple/25",
       recursos: [
-        { texto: "Portfólio com biografia e links externos", ativo: true },
-        { texto: "Qualidade original preservada", ativo: true },
+        { texto: "Tudo do Free incluso", ativo: true },
         { texto: "Múltiplas páginas por post", ativo: true },
-        { texto: "Chat livre e ilimitado", ativo: true },
-        { texto: "Moldura LED e tag roxa Pro no perfil", ativo: true },
-        { texto: "Estatísticas completas", ativo: true },
-        { texto: "Mensagem inicial customizável", ativo: true },
-        { texto: "Destaque segmentado no feed", ativo: false },
-        { texto: "Prioridade orgânica em novos públicos", ativo: false },
+        { texto: "Tamanho de arquivo até 50 MB", ativo: true },
+        { texto: "Estatísticas completas da conta", ativo: true },
+        { texto: "Moldura LED personalizável", ativo: true },
+        { texto: "Pacote de proteção autoral (Download/Print/Amostra)", ativo: true },
+        { texto: "Fundo de cabeçalho e cor do nick", ativo: false },
+        { texto: "Avatar em GIF e tabela de preços", ativo: false },
       ],
     },
     {
@@ -113,7 +114,7 @@ export default function Plans() {
       tipo: "Boost",
       nome: "Artfolio Boost",
       subtitulo: "Alcance Máximo",
-      tagline: "Para acelerar seu alcance sem pay-to-win. Destaque inteligente para novos públicos.",
+      tagline: "Tudo do Pro + até 100 MB, personalização total de perfil (fundo de cabeçalho estático, cor do nick e avatar animado em GIF), e mensagem inicial customizável (tabela de preços).",
       preco: "R$ 49,90",
       periodo: "por mês",
       destaque: false,
@@ -123,26 +124,25 @@ export default function Plans() {
       corLed: "ring-4 ring-[#FF793F] shadow-[0_0_15px_#FF793F,0_0_30px_rgba(255,121,63,0.7)]",
       corBotao: "bg-artOrange text-white hover:bg-orange-600 shadow-lg shadow-artOrange/25",
       recursos: [
-        { texto: "Portfólio com biografia e links externos", ativo: true },
-        { texto: "Qualidade original preservada", ativo: true },
-        { texto: "Múltiplas páginas por post", ativo: true },
-        { texto: "Chat livre e ilimitado", ativo: true },
-        { texto: "Moldura LED e tag laranja Boost no perfil", ativo: true },
-        { texto: "Estatísticas completas", ativo: true },
-        { texto: "Mensagem inicial customizável", ativo: true },
-        { texto: "Destaque segmentado no feed", ativo: true },
-        { texto: "Prioridade orgânica em novos públicos", ativo: true },
+        { texto: "Tudo do Pro incluso", ativo: true },
+        { texto: "Tamanho de arquivo até 100 MB", ativo: true },
+        { texto: "Fundo de cabeçalho estático (JPG/PNG)", ativo: true },
+        { texto: "Cor personalizada da fonte do nick", ativo: true },
+        { texto: "Avatar animado em GIF (até 5 MB)", ativo: true },
+        { texto: "Mensagem pronta com tabela de preços (Chat)", ativo: true },
+        { texto: "Moldura LED e tag Boost com brilho", ativo: true },
+        { texto: "Pacote completo de proteção autoral", ativo: true },
       ],
     },
   ];
 
-  // Tabela comparativa simétrica e rigorosamente alinhada linha por linha
+  // Tabela comparativa simétrica e rigorosamente alinhada linha por linha (8 funcionalidades oficiais)
   const comparativo = [
     {
       funcionalidade: "Portfólio",
-      free: "Biografia e links externos",
-      pro: "Biografia e links externos",
-      boost: "Biografia e links externos",
+      free: "Bio e links externos",
+      pro: "Bio e links externos",
+      boost: "Bio e links externos",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
@@ -154,51 +154,44 @@ export default function Plans() {
     },
     {
       funcionalidade: "Postagens",
-      free: "Postagem simples (1 página)",
+      free: "Postagem simples (1 pág)",
       pro: "Múltiplas páginas por post",
       boost: "Múltiplas páginas por post",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
-      funcionalidade: "Chat",
-      free: "Livre e ilimitado",
-      pro: "Livre e ilimitado",
-      boost: "Livre e ilimitado",
+      funcionalidade: "Armazenamento",
+      free: "Até 10 MB por arquivo",
+      pro: "Até 50 MB por arquivo",
+      boost: "Até 100 MB por arquivo",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
-      funcionalidade: "Identidade",
-      free: "Moldura LED e tag verde Free",
-      pro: "Moldura LED e tag roxa Pro",
-      boost: "Moldura LED e tag laranja Boost",
+      funcionalidade: "Proteção Autoral",
+      free: "Sem proteção autoral",
+      pro: "Download, Print e Amostra",
+      boost: "Download, Print e Amostra",
+      isRiscado: { free: true, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Moldura LED",
+      free: "LED verde Free fixo",
+      pro: "LED personalizável",
+      boost: "LED personalizável",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
-      funcionalidade: "Estatísticas",
-      free: "Estatísticas completas",
-      pro: "Estatísticas completas",
-      boost: "Estatísticas completas",
+      funcionalidade: "Estética Perfil",
+      free: "Padrão sem customização",
+      pro: "LED customizável",
+      boost: "Fundo, Nick e Avatar GIF",
       isRiscado: { free: true, pro: false, boost: false },
     },
     {
-      funcionalidade: "Mensagem CTA",
-      free: "Mensagem inicial customizável",
-      pro: "Mensagem inicial customizável",
-      boost: "Mensagem inicial customizável",
-      isRiscado: { free: true, pro: false, boost: false },
-    },
-    {
-      funcionalidade: "Visibilidade",
-      free: "Destaque segmentado no feed",
-      pro: "Destaque segmentado no feed",
-      boost: "Destaque segmentado no feed",
-      isRiscado: { free: true, pro: true, boost: false },
-    },
-    {
-      funcionalidade: "Prioridade",
-      free: "Prioridade orgânica em novos públicos",
-      pro: "Prioridade orgânica em novos públicos",
-      boost: "Prioridade orgânica em novos públicos",
+      funcionalidade: "Tabela de Preços",
+      free: "Indisponível no Free",
+      pro: "Indisponível no Pro",
+      boost: "Mensagem pronta no Chat",
       isRiscado: { free: true, pro: true, boost: false },
     },
   ];
@@ -209,18 +202,18 @@ export default function Plans() {
     <div className="w-full px-4 sm:px-6 lg:px-10 py-12">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <header className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 bg-artPurple/10 border border-artPurple/20 text-artPurple px-4 py-1.5 rounded-full text-[11px] font-bold tracking-widest uppercase mb-4">
-            <i className="fa-solid fa-gem text-xs"></i>
+        <header className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 bg-artPurple/10 border border-artPurple/20 text-artPurple px-5 py-2 rounded-full text-xs font-bold tracking-widest uppercase mb-5 shadow-xs">
+            <i className="fa-solid fa-gem text-xs text-artOrange"></i>
             Planos e Ferramentas Profissionais
           </div>
 
-          <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-tight">
+          <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl leading-[1.08]">
             Evolua sua arte. <br />
             <span className="italic text-artOrange">Destaque seu talento.</span>
           </h1>
 
-          <p className="text-sm sm:text-base text-gray-500 mt-4 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg text-gray-500 mt-5 max-w-2xl mx-auto leading-relaxed font-light">
             No Artfolio, você nunca paga taxas ou porcentagens sobre suas vendas. Nossos planos focam em profissionalização, visibilidade qualificada e personalização de perfil.
           </p>
         </header>

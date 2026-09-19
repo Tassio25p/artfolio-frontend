@@ -29,10 +29,8 @@ export function useAuth() {
 }
 
 function getStoredToken() {
-  const remember = localStorage.getItem("artfolio_remember");
-  if (remember === "true") {
-    return localStorage.getItem("artfolio_token");
-  }
+  const localToken = localStorage.getItem("artfolio_token");
+  if (localToken) return localToken;
 
   const sessionToken = sessionStorage.getItem("artfolio_token");
   if (sessionToken) return sessionToken;
@@ -49,26 +47,39 @@ function getStoredToken() {
   return null;
 }
 
-function storeToken(token, remember) {
-  if (remember) {
-    localStorage.setItem("artfolio_token", token);
-    localStorage.setItem("artfolio_remember", "true");
-    sessionStorage.removeItem("artfolio_token");
-  } else {
-    sessionStorage.setItem("artfolio_token", token);
-    localStorage.setItem("artfolio_remember", "false");
-    localStorage.removeItem("artfolio_token");
+function getStoredRefreshToken() {
+  const localRefresh = localStorage.getItem("artfolio_refresh_token");
+  if (localRefresh) return localRefresh;
+
+  const sessionRefresh = sessionStorage.getItem("artfolio_refresh_token");
+  if (sessionRefresh) return sessionRefresh;
+
+  return null;
+}
+
+function storeToken(token, refreshToken = null, remember = true) {
+  localStorage.setItem("artfolio_token", token);
+  localStorage.setItem("artfolio_remember", remember ? "true" : "false");
+  sessionStorage.setItem("artfolio_token", token);
+  
+  if (refreshToken) {
+    localStorage.setItem("artfolio_refresh_token", refreshToken);
+    sessionStorage.setItem("artfolio_refresh_token", refreshToken);
   }
+  
   localStorage.removeItem("artfolio_guest");
 }
 
 function clearAllAuthStorage() {
   localStorage.removeItem("artfolio_token");
+  localStorage.removeItem("artfolio_refresh_token");
   localStorage.removeItem("artfolio_remember");
   sessionStorage.removeItem("artfolio_token");
+  sessionStorage.removeItem("artfolio_refresh_token");
   localStorage.removeItem("artfolio_guest");
   localStorage.removeItem("token");
   localStorage.removeItem("usuario");
+  localStorage.removeItem("artfolio_notifications_history");
 }
 
 function createGuestUser() {
@@ -172,7 +183,7 @@ export function AuthProvider({ children }) {
       throw new Error("Resposta de login inválida — token não recebido.");
     }
 
-    storeToken(data.access_token, lembrarAcesso);
+    storeToken(data.access_token, data.refresh_token, lembrarAcesso);
 
     if (data.usuario) {
       setUser({ ...data.usuario, isGuest: false });
@@ -210,7 +221,7 @@ export function AuthProvider({ children }) {
       throw new Error("Resposta de login inválida — token não recebido.");
     }
 
-    storeToken(data.access_token, true);
+    storeToken(data.access_token, data.refresh_token, true);
 
     if (data.usuario) {
       setUser({ ...data.usuario, isGuest: false });
@@ -279,4 +290,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-export { getStoredToken };
+export { getStoredToken, getStoredRefreshToken, storeToken, clearAllAuthStorage };

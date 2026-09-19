@@ -43,6 +43,13 @@ export default function Notificacoes() {
 
   const carregarNotificacoes = async () => {
     try {
+      // Limpeza preventiva de resíduos antigos do localStorage
+      try {
+        localStorage.removeItem("artfolio_notifications_history");
+      } catch {
+        // Ignore
+      }
+
       let apiItems = [];
       try {
         const res = await notificacaoService.listar();
@@ -50,22 +57,15 @@ export default function Notificacoes() {
           apiItems = res;
         } else if (res && Array.isArray(res.items)) {
           apiItems = res.items;
+        } else if (res && Array.isArray(res.notificacoes)) {
+          apiItems = res.notificacoes;
         }
-      } catch {
-        // Fallback
+      } catch (err) {
+        console.warn("[Notificacoes] Falha ao listar da API:", err);
       }
 
-      let localItems = [];
-      try {
-        const saved = localStorage.getItem("artfolio_notifications_history");
-        if (saved) localItems = JSON.parse(saved);
-      } catch {
-        // Ignore
-      }
-
-      const mesclados = [...apiItems, ...localItems];
-      const unicos = Array.from(new Map(mesclados.map((item) => [item.id, item])).values());
-      unicos.sort((a, b) => new Date(b.dataCriacao || 0) - new Date(a.dataCriacao || 0));
+      const unicos = Array.from(new Map(apiItems.map((item) => [item.id, item])).values());
+      unicos.sort((a, b) => new Date(b.dataCriacao || b.criado_em || 0) - new Date(a.dataCriacao || a.criado_em || 0));
 
       setNotificacoes(unicos);
     } catch (err) {
@@ -91,18 +91,12 @@ export default function Notificacoes() {
 
   const handleMarcarComoLida = async (id) => {
     try {
-      if (!String(id).startsWith("local-")) {
-        await markAsRead(id);
-      }
+      await markAsRead(id);
     } catch {
       // Ignore API sync fail
     }
 
-    setNotificacoes((prev) => {
-      const novao = prev.map((item) => (item.id === id ? { ...item, lida: true } : item));
-      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
-      return novao;
-    });
+    setNotificacoes((prev) => prev.map((item) => (item.id === id ? { ...item, lida: true } : item)));
     mostrarAviso("Notificação marcada como lida.", "success");
   };
 
@@ -113,28 +107,18 @@ export default function Notificacoes() {
       // Ignore API sync fail
     }
 
-    setNotificacoes((prev) => {
-      const novao = prev.map((item) => ({ ...item, lida: true }));
-      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
-      return novao;
-    });
+    setNotificacoes((prev) => prev.map((item) => ({ ...item, lida: true })));
     mostrarAviso("Todas as notificações foram marcadas como lidas.", "success");
   };
 
   const handleDeletar = async (id) => {
     try {
-      if (!String(id).startsWith("local-")) {
-        await notificacaoService.deletar(id);
-      }
+      await notificacaoService.deletar(id);
     } catch {
       // Ignore
     }
 
-    setNotificacoes((prev) => {
-      const novao = prev.filter((item) => item.id !== id);
-      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
-      return novao;
-    });
+    setNotificacoes((prev) => prev.filter((item) => item.id !== id));
     setSelectedIds((prev) => prev.filter((item) => item !== id));
     mostrarAviso("Notificação excluída com sucesso.", "success");
   };
@@ -150,7 +134,6 @@ export default function Notificacoes() {
 
     setNotificacoes([]);
     setSelectedIds([]);
-    localStorage.removeItem("artfolio_notifications_history");
     mostrarAviso("Todas as notificações foram excluídas.", "success");
   };
 
@@ -160,19 +143,13 @@ export default function Notificacoes() {
 
     for (const id of selectedIds) {
       try {
-        if (!String(id).startsWith("local-")) {
-          await notificacaoService.deletar(id);
-        }
+        await notificacaoService.deletar(id);
       } catch {
         // Ignore
       }
     }
 
-    setNotificacoes((prev) => {
-      const novao = prev.filter((item) => !selectedIds.includes(item.id));
-      localStorage.setItem("artfolio_notifications_history", JSON.stringify(novao));
-      return novao;
-    });
+    setNotificacoes((prev) => prev.filter((item) => !selectedIds.includes(item.id)));
     mostrarAviso(`${selectedIds.length} notificações excluídas com sucesso.`, "success");
     setSelectedIds([]);
   };
@@ -223,15 +200,15 @@ export default function Notificacoes() {
       <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
+              <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm mb-2.5 block">
                 Central de atividades
               </span>
 
-              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
+              <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl leading-[1.05]">
                 Notificações<span className="italic text-artOrange">.</span>
               </h1>
 
-              <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed font-light">
+              <p className="text-base text-gray-500 mt-4 max-w-xl leading-relaxed font-light">
                 Acompanhe curtidas, comentários, novos seguidores, mensagens e
                 alertas importantes sobre a sua conta no Artfolio.
               </p>

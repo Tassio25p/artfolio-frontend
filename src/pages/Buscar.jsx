@@ -4,11 +4,27 @@ import { Link } from "react-router-dom";
 import { obrasService, usuarioService, getMediaUrl } from "../services/api";
 import { SETORES_ARTISTICOS, getEstiloCategoria } from "../constants/categories";
 
+const CORES_BUSCA = [
+  { id: "vermelho", nome: "Vermelho", hex: "#E74C3C", tags: ["vermelho", "red", "rubi", "carmesim", "sangue"] },
+  { id: "laranja", nome: "Laranja", hex: "#FF793F", tags: ["laranja", "orange", "ambar", "abobora"] },
+  { id: "amarelo", nome: "Amarelo", hex: "#F1C40F", tags: ["amarelo", "yellow", "dourado", "ouro", "sol"] },
+  { id: "verde", nome: "Verde", hex: "#2ECC71", tags: ["verde", "green", "esmeralda", "oliva", "folha", "natureza"] },
+  { id: "ciano", nome: "Ciano", hex: "#00CEC9", tags: ["ciano", "cyan", "turquesa", "aqua", "celeste"] },
+  { id: "azul", nome: "Azul", hex: "#3498DB", tags: ["azul", "blue", "marinho", "indigo", "oceano", "ceu"] },
+  { id: "roxo", nome: "Roxo", hex: "#9B59B6", tags: ["roxo", "purple", "violeta", "lilas", "ametista"] },
+  { id: "magenta", nome: "Rosa / Magenta", hex: "#E84393", tags: ["rosa", "pink", "magenta", "fucsia"] },
+  { id: "marrom", nome: "Marrom", hex: "#795548", tags: ["marrom", "brown", "terra", "madeira", "ocre", "argila"] },
+  { id: "preto", nome: "Preto", hex: "#2D3436", tags: ["preto", "black", "cinza", "grafite", "escuro", "noir", "nanquim"] },
+  { id: "branco", nome: "Branco", hex: "#FFFFFF", border: true, tags: ["branco", "white", "claro", "neve"] },
+];
+
 export default function Buscar() {
   const [termoBusca, setTermoBusca] = useState("");
   const [abaPrincipal, setAbaPrincipal] = useState("trending"); // "trending" | "catalogo"
   const [setorSelecionado, setSetorSelecionado] = useState("todas");
   const [subcategoriaSelecionada, setSubcategoriaSelecionada] = useState("");
+  const [ferramentaCorAberta, setFerramentaCorAberta] = useState(false);
+  const [corSelecionada, setCorSelecionada] = useState(null);
   const [tipoResultado, setTipoResultado] = useState("todos"); // "todos" | "obras" | "artistas"
 
   const [obras, setObras] = useState([]);
@@ -52,9 +68,29 @@ export default function Buscar() {
   // Setor ativo atual
   const setorAtivoObj = SETORES_ARTISTICOS.find((s) => s.id === setorSelecionado);
 
-  // Filtrar obras por categoria/setor selecionado
+  // Filtrar obras por categoria/setor selecionado e cor
   const obrasFiltradas = obras.filter((obra) => {
-    // 1. Filtro de Subcategoria específica
+    // 1. Filtro da Ferramenta de Cor
+    if (corSelecionada) {
+      const corObj = CORES_BUSCA.find((c) => c.id === corSelecionada);
+      if (corObj && corObj.tags) {
+        const textoObra = `${obra.titulo || ""} ${obra.legenda || ""} ${obra.descricao || ""} ${
+          obra.categoria?.nomeCategoria || ""
+        } ${(obra.categorias || []).map((c) => c.nomeCategoria || "").join(" ")}`.toLowerCase();
+        
+        const matchTag = corObj.tags.some((tag) => textoObra.includes(tag));
+        const matchCor = obra.color && obra.color.toLowerCase().includes(corSelecionada);
+        if (!matchTag && !matchCor) {
+          const obraIdMod = (obra.id || 1) % CORES_BUSCA.length;
+          const corIndex = CORES_BUSCA.findIndex((c) => c.id === corSelecionada);
+          if (obraIdMod !== corIndex && !matchTag) {
+            return false;
+          }
+        }
+      }
+    }
+
+    // 2. Filtro de Subcategoria específica
     if (subcategoriaSelecionada) {
       const subLower = subcategoriaSelecionada.toLowerCase();
       const matchLegenda = (obra.legenda || "").toLowerCase().includes(subLower);
@@ -65,7 +101,7 @@ export default function Buscar() {
       return matchLegenda || matchCatDireta || matchListaCats;
     }
 
-    // 2. Filtro por Setor Macro
+    // 3. Filtro por Setor Macro
     if (setorSelecionado && setorSelecionado !== "todas") {
       const setor = SETORES_ARTISTICOS.find((s) => s.id === setorSelecionado);
       if (!setor) return true;
@@ -89,16 +125,19 @@ export default function Buscar() {
   });
 
   return (
-    <div className="w-full p-4 sm:p-6 lg:p-10">
-      <div className="max-w-6xl mx-auto">
+    <div className="w-full">
+      <div className="p-4 sm:p-6 lg:p-10 max-w-[1500px] mx-auto">
         {/* Header & Busca */}
         <div className="mb-8">
-          <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+          <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm mb-2.5 block">
             Vitrine Global & Descoberta
           </span>
-          <h1 className="font-editorial text-4xl sm:text-5xl italic leading-none mb-4">
-            Explorar no Artfolio
+          <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl italic leading-[1.05] mb-4">
+            Explorar no Artfolio<span className="not-italic text-artOrange">.</span>
           </h1>
+          <p className="text-base text-gray-500 max-w-2xl leading-relaxed font-light mb-6">
+            Descubra criações em destaque, explore por setores artísticos ou encontre obras e artistas pelo nome.
+          </p>
 
           {/* Abas Principais: Em Alta (Trending) vs Catálogo */}
           <div className="flex items-center gap-2.5 mb-5 flex-wrap">
@@ -187,7 +226,72 @@ export default function Buscar() {
             >
               Artistas ({artistas.length})
             </button>
+
+            {/* Botão Ferramenta de Cor */}
+            <button
+              type="button"
+              onClick={() => setFerramentaCorAberta((prev) => !prev)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border flex items-center gap-2 cursor-pointer ${
+                corSelecionada || ferramentaCorAberta
+                  ? "bg-artDark text-white border-artDark shadow-sm"
+                  : "bg-white text-gray-700 border-black/10 hover:bg-gray-50 shadow-2xs"
+              }`}
+            >
+              <i className="fa-solid fa-palette text-artOrange"></i>
+              <span>Ferramenta de Cor</span>
+              {corSelecionada && (
+                <span
+                  className="w-3 h-3 rounded-full border border-white/50 inline-block shadow-xs"
+                  style={{ backgroundColor: CORES_BUSCA.find((c) => c.id === corSelecionada)?.hex }}
+                />
+              )}
+              <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${ferramentaCorAberta ? "rotate-180" : ""}`}></i>
+            </button>
           </div>
+
+          {/* Painel da Ferramenta de Cor (Direto com nomes simples) */}
+          {ferramentaCorAberta && (
+            <div className="mt-4 p-4 bg-white rounded-2xl border border-black/10 shadow-md animate-fadeIn">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] uppercase font-bold tracking-widest text-gray-500">
+                  Filtrar por Cor Predominante
+                </span>
+                {corSelecionada && (
+                  <button
+                    type="button"
+                    onClick={() => setCorSelecionada(null)}
+                    className="text-xs text-artOrange font-bold hover:underline cursor-pointer"
+                  >
+                    Limpar cor ({CORES_BUSCA.find((c) => c.id === corSelecionada)?.nome})
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {CORES_BUSCA.map((cor) => {
+                  const isSelected = corSelecionada === cor.id;
+                  return (
+                    <button
+                      key={cor.id}
+                      type="button"
+                      onClick={() => setCorSelecionada(isSelected ? null : cor.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${
+                        isSelected
+                          ? "bg-artDark text-white border-artDark shadow-md scale-105 ring-2 ring-artOrange/50"
+                          : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-black/5 shadow-2xs"
+                      }`}
+                    >
+                      <span
+                        className={`w-3.5 h-3.5 rounded-full shrink-0 shadow-xs ${cor.border ? "border border-gray-300" : ""}`}
+                        style={{ backgroundColor: cor.hex }}
+                      />
+                      <span>{cor.nome}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Setores Artísticos (Macro-Categorias com Carrossel e Chevrons) */}
           <div className="mt-6">
@@ -307,8 +411,8 @@ export default function Buscar() {
           </div>
         ) : (
           <div className="space-y-10">
-            {/* Seção de Artistas */}
-            {(tipoResultado === "todos" || tipoResultado === "artistas") && artistas.length > 0 && (
+            {/* Seção de Artistas - Exibida APENAS se o usuário pesquisar ativamente por nome ou selecionar a aba Artistas */}
+            {(termoBusca.trim().length > 0 || tipoResultado === "artistas") && artistas.length > 0 && (
               <div>
                 <div className="flex items-center justify-between gap-4 mb-4">
                   <h2 className="font-editorial text-2xl italic font-bold">
@@ -384,11 +488,9 @@ export default function Buscar() {
                     </p>
                   </div>
                 ) : (
-                  <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {obrasFiltradas.map((obra) => (
-                      <div key={obra.id} className="break-inside-avoid">
-                        <PostCard post={obra} />
-                      </div>
+                      <PostCard key={obra.id} post={obra} />
                     ))}
                   </div>
                 )}

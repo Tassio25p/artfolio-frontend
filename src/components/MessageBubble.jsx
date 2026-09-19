@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { getMediaUrl } from "../services/api";
 
 export default function MessageBubble({
   text,
@@ -30,6 +32,24 @@ export default function MessageBubble({
   }, [menuAberto]);
 
   const isApagada = Boolean(deletado_em);
+
+  // Extrair anexo de obra caso presente na mensagem
+  let obraAnexo = null;
+  let textoExibicao = text || "";
+
+  if (typeof text === "string" && text.includes("[OBRA_ANEXO:")) {
+    const startIdx = text.indexOf("[OBRA_ANEXO:");
+    const endIdx = text.indexOf("]", startIdx);
+    if (endIdx > startIdx + 12) {
+      try {
+        const jsonStr = text.substring(startIdx + 12, endIdx);
+        obraAnexo = JSON.parse(jsonStr);
+        textoExibicao = (text.substring(0, startIdx) + text.substring(endIdx + 1)).trim();
+      } catch (_) {
+        // Fallback para texto puro
+      }
+    }
+  }
 
   return (
     <div className={`flex ${sent ? "justify-end" : "justify-start"} group/bubble relative`}>
@@ -100,15 +120,56 @@ export default function MessageBubble({
           ) : (
             /* Balão normal de mensagem */
             <div
-              className={`p-5 sm:p-6 rounded-[2rem] shadow-sm ${
+              className={`p-4 sm:p-5 rounded-[2rem] shadow-sm ${
                 sent
                   ? "bg-artDark text-white rounded-tr-none shadow-xl"
                   : "bg-white text-gray-700 rounded-tl-none border border-black/5"
               }`}
             >
-              <p className="text-sm leading-relaxed opacity-90 break-words whitespace-pre-wrap">
-                {text}
-              </p>
+              {/* Card de Referência da Obra Anexada */}
+              {obraAnexo && (
+                <Link
+                  to={obraAnexo.id ? `/obra/${obraAnexo.id}` : "#"}
+                  className={`mb-3 p-2.5 rounded-2xl flex items-center gap-3 border transition-all block group/anexo ${
+                    sent
+                      ? "bg-white/10 hover:bg-white/15 border-white/20 text-white"
+                      : "bg-[#FAF9F6] hover:bg-gray-100 border-black/10 text-artDark"
+                  }`}
+                  title="Abrir página desta obra"
+                >
+                  {obraAnexo.imagem ? (
+                    <img
+                      src={getMediaUrl(obraAnexo.imagem)}
+                      alt={obraAnexo.titulo || "Obra"}
+                      className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0 shadow-xs group-hover/anexo:scale-105 transition-transform"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-artOrange/20 text-artOrange flex items-center justify-center shrink-0">
+                      <i className="fa-solid fa-palette text-sm"></i>
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-artOrange block">
+                      Obra de Referência
+                    </span>
+                    <h4 className="text-xs font-bold truncate">
+                      {obraAnexo.titulo || "Obra de Arte"}
+                    </h4>
+                    {obraAnexo.preco && (
+                      <span className="text-[10px] font-bold opacity-85 block">
+                        {obraAnexo.preco}
+                      </span>
+                    )}
+                  </div>
+                  <i className="fa-solid fa-arrow-up-right-from-square text-xs opacity-60 mr-1"></i>
+                </Link>
+              )}
+
+              {textoExibicao && (
+                <p className="text-sm leading-relaxed opacity-90 break-words whitespace-pre-wrap">
+                  {textoExibicao}
+                </p>
+              )}
             </div>
           )}
 

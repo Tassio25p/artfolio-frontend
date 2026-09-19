@@ -105,39 +105,39 @@ export default function Login() {
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased overflow-hidden">
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
-      <main className="min-h-screen grid grid-cols-1 lg:grid-cols-12">
-        {/* Coluna Esquerda - Formulário de Login */}
-        <section className="lg:col-span-5 bg-white flex items-center justify-center p-6 lg:p-12">
-          <div className="w-full max-w-md">
+      <main className="h-screen max-h-screen overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+        {/* Coluna Esquerda - Formulário de Login Perfeitamente Centralizado e Sem Rolagem */}
+        <section className="lg:col-span-5 bg-white flex flex-col justify-center px-6 lg:px-12 py-4 lg:py-6 h-full overflow-y-auto lg:overflow-hidden">
+          <div className="w-full max-w-md mx-auto">
             <Link
               to="/"
-              className="font-editorial text-3xl font-black text-artOrange inline-block mb-8"
+              className="font-editorial text-3xl font-black text-artOrange inline-block mb-3"
             >
               Artfolio
             </Link>
 
-            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
+            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-1 block">
               Área do Artista
             </span>
 
-            <h1 className="font-editorial text-5xl lg:text-6xl leading-none mb-4">
+            <h1 className="font-editorial text-5xl lg:text-6xl leading-none mb-2">
               Fazer <span className="italic text-artOrange">Login.</span>
             </h1>
 
-            <p className="text-sm text-gray-500 leading-relaxed mb-6 font-light">
-              Entre com seu e-mail e senha para acessar o feed, publicar suas obras, interagir na comunidade e gerenciar seu portfólio.
+            <p className="text-sm text-gray-500 leading-relaxed mb-3 font-light">
+              Entre com seu e-mail e senha para acessar o feed, publicar suas obras e interagir na comunidade.
             </p>
 
             {noticeMessage && (
-              <div className={`${noticeStyles[noticeType] || noticeStyles.info} border rounded-[1.3rem] px-5 py-3 mb-6 text-xs font-bold leading-relaxed flex items-start gap-2`}>
+              <div className={`${noticeStyles[noticeType] || noticeStyles.info} border rounded-[1.2rem] px-4 py-2 mb-3 text-xs font-bold leading-relaxed flex items-start gap-2`}>
                 <i className="fa-solid fa-circle-info mt-0.5"></i>
                 <span>{noticeMessage}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-2.5">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">
                   E-mail
                 </label>
 
@@ -146,13 +146,13 @@ export default function Login() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="Digite seu e-mail"
-                  className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+                  className="w-full bg-[#F9F8F6] rounded-xl px-4 py-2 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">
                   Senha
                 </label>
 
@@ -161,12 +161,12 @@ export default function Login() {
                   value={senha}
                   onChange={(event) => setSenha(event.target.value)}
                   placeholder="Digite sua senha"
-                  className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+                  className="w-full bg-[#F9F8F6] rounded-xl px-4 py-2 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                   required
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm pt-1">
+              <div className="flex items-center justify-between text-xs pt-0.5">
                 <label className="flex items-center gap-2 text-gray-500 cursor-pointer text-xs">
                   <input
                     type="checkbox"
@@ -174,7 +174,7 @@ export default function Login() {
                     onChange={(event) =>
                       setLembrarAcesso(event.target.checked)
                     }
-                    className="accent-artPurple"
+                    className="accent-artPurple rounded"
                   />
                   Lembrar acesso
                 </label>
@@ -190,7 +190,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-artDark text-white py-4 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-xl shadow-black/10 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
+                className="w-full bg-artDark text-white py-2.5 rounded-full text-sm font-bold hover:bg-artPurple transition-all shadow-md shadow-black/10 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 mt-1"
               >
                 {loading ? (
                   <>
@@ -198,23 +198,23 @@ export default function Login() {
                   </>
                 ) : (
                   <>
-                    Entrar no Artfolio <i className="fa-solid fa-arrow-right"></i>
+                    Entrar no Artfolio <i className="fa-solid fa-arrow-right text-xs"></i>
                   </>
                 )}
               </button>
             </form>
 
             {/* Divisor Visual para Login Social */}
-            <div className="relative flex py-3 items-center my-3">
+            <div className="relative flex py-1 items-center my-2">
               <div className="flex-grow border-t border-gray-200"></div>
-              <span className="flex-shrink mx-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              <span className="flex-shrink mx-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 ou continue com
               </span>
               <div className="flex-grow border-t border-gray-200"></div>
             </div>
 
             {/* Botão Oficial do Google */}
-            <div className="flex justify-center my-2">
+            <div className="flex justify-center my-1">
               <GoogleLogin
                 onSuccess={handleGoogleSuccess}
                 onError={() => mostrarAviso("Falha na autenticação com o Google.", "error")}
@@ -225,38 +225,40 @@ export default function Login() {
               />
             </div>
 
-            {/* Opções Alternativas: Cadastrar como Artista OU Entrar como Visitante */}
-            <div className="mt-6 space-y-3">
+            {/* Opções Alternativas: Cadastrar como Artista OU Entrar como Visitante em 2 Colunas */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5">
               <Link
                 to="/cadastro"
-                className="w-full bg-[#FFF5F0] text-artOrange border border-artOrange/30 rounded-[1.5rem] p-3.5 text-xs font-bold hover:bg-artOrange hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm text-center block"
+                className="w-full bg-[#FFF5F0] text-artOrange border border-artOrange/30 rounded-xl py-2 px-2.5 text-xs font-bold hover:bg-artOrange hover:text-white transition-all flex items-center justify-center gap-1.5 shadow-xs text-center"
               >
-                <i className="fa-solid fa-palette"></i>
-                Novo por aqui? Cadastrar como Artista →
+                <i className="fa-solid fa-palette text-xs"></i>
+                Cadastrar Artista
               </Link>
 
               <button
                 type="button"
                 onClick={handleEntrarComoVisitante}
-                className="w-full bg-artBlue/10 text-artBlue border border-artBlue/20 rounded-[1.5rem] p-3.5 text-xs font-bold hover:bg-artBlue hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm"
+                className="w-full bg-artBlue/10 text-artBlue border border-artBlue/20 rounded-xl py-2 px-2.5 text-xs font-bold hover:bg-artBlue hover:text-white transition-all flex items-center justify-center gap-1.5 shadow-xs text-center"
               >
-                <i className="fa-solid fa-eye"></i>
-                Explorar como Visitante (Sem Login)
+                <i className="fa-solid fa-eye text-xs"></i>
+                Modo Visitante
               </button>
             </div>
 
-            <Link
-              to="/"
-              className="inline-block mt-6 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors"
-            >
-              <i className="fa-solid fa-arrow-left mr-2"></i>
-              Voltar para início
-            </Link>
+            <div className="mt-2.5 text-center sm:text-left">
+              <Link
+                to="/"
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-artOrange transition-colors"
+              >
+                <i className="fa-solid fa-arrow-left"></i>
+                Voltar para início
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* Coluna Direita - Banner Artístico Inspirador */}
-        <section className="hidden lg:block lg:col-span-7 relative overflow-hidden bg-artBlue">
+        {/* Coluna Direita - Banner Artístico Inspirador com Filtro Roxo */}
+        <section className="hidden lg:block lg:col-span-7 relative overflow-hidden bg-artPurple">
           <img
             src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200&auto=format&fit=crop"
             alt="Arte de fundo"

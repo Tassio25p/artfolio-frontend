@@ -5,43 +5,22 @@ const ToastContext = createContext(null);
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   const addToast = useCallback((message, title = "Notificação", type = "info", link = "") => {
     const id = Date.now() + Math.random();
     const newToast = { id, message, title, type, link };
 
-    // Adiciona o toast flutuante
+    // Adiciona o toast flutuante temporário
     setToasts((prev) => [...prev, newToast]);
-
-    // Salvar notificação no histórico permanente do localStorage para a Central de Notificações
-    try {
-      const historyRaw = localStorage.getItem("artfolio_notifications_history");
-      const history = historyRaw ? JSON.parse(historyRaw) : [];
-      
-      const newHistoryItem = {
-        id: `local-${id}`,
-        titulo: title,
-        mensagem: message,
-        tipo: type === "seguidor" ? "FOLLOW" : type === "mensagem" ? "MESSAGE" : type === "postagem" ? "LIKE" : "SYSTEM",
-        lida: false,
-        dataCriacao: new Date().toISOString(),
-        link: link || (type === "mensagem" ? "/mensagens" : type === "seguidor" ? "/seguidores" : "/feed"),
-      };
-
-      const updatedHistory = [newHistoryItem, ...history.slice(0, 49)]; // Guarda até 50 mais recentes
-      localStorage.setItem("artfolio_notifications_history", JSON.stringify(updatedHistory));
-    } catch {
-      // Ignore storage error
-    }
 
     // Autoclose após 6 segundos
     setTimeout(() => {
       removeToast(id);
     }, 6000);
-  }, []);
-
-  const removeToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  }, [removeToast]);
 
   // Escuta eventos globais de toast disparados pela camada de API (ex: Rate Limiting 429)
   useEffect(() => {

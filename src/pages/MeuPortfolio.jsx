@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, getMediaUrl } from "../services/api";
+import { desempacotarDadosObra } from "../utils/obraHelper";
 
 export default function MeuPortfolio() {
   const { user } = useAuth();
@@ -57,19 +58,19 @@ export default function MeuPortfolio() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+              <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm mb-2 block">
                 Gerenciamento de Criações
               </span>
-              <h1 className="font-editorial text-4xl sm:text-5xl italic leading-none">
-                Minhas Obras
+              <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl italic leading-[1.05]">
+                Minhas Obras<span className="text-artOrange not-italic">.</span>
               </h1>
-              <p className="text-sm text-gray-500 mt-2 font-light">
+              <p className="text-base text-gray-500 mt-3 font-light">
                 Gerencie todas as suas obras publicadas na plataforma
               </p>
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-artPurple/10 via-artOrange/10 to-artBlue/10 border border-artPurple/20 text-artPurple text-xs font-semibold mt-3 shadow-sm">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-artPurple/10 via-artOrange/10 to-artBlue/10 border border-artPurple/20 text-artPurple text-xs font-semibold mt-4 shadow-sm">
                 <i className="fa-solid fa-wand-magic-sparkles text-artOrange"></i>
                 <span className="bg-gradient-to-r from-artPurple via-artOrange to-artBlue bg-clip-text text-transparent font-bold">
-                  Aqui todas as suas contribuições belas para esta comunidade
+                  Todas as suas contribuições belas para esta comunidade
                 </span>
               </div>
             </div>
@@ -134,93 +135,114 @@ export default function MeuPortfolio() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {obras.map((obra) => (
-                <div
-                  key={obra.id}
-                  className="bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all flex flex-col group"
-                >
-                  <div className="relative h-60 bg-gray-100 overflow-hidden">
-                    <img
-                      src={getMediaUrl(obra.arquivoUrl)}
-                      alt={obra.legenda || "Obra"}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+              {obras.map((obra) => {
+                const dados = desempacotarDadosObra(obra);
+                const tituloObra = dados.titulo || obra.titulo || `Obra #${obra.id}`;
+                const imagemObra = obra.arquivoUrl || obra.imagem_url || obra.imagemUrl || obra.arquivo_url || "";
+                const totalCurtidas = obra.totalCurtidas ?? obra.total_curtidas ?? 0;
+                const totalComentarios = obra.totalComentarios ?? obra.total_comentarios ?? 0;
+                const totalViews = obra.visualizacoes ?? obra.total_visualizacoes ?? 0;
 
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                      <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-emerald-700 shadow-sm border border-black/5">
-                        ● Ativa
-                      </span>
-                    </div>
-                  </div>
+                return (
+                  <div
+                    key={obra.id}
+                    className="bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all flex flex-col group"
+                  >
+                    <Link to={`/obra/${obra.id}`} className="relative h-60 bg-gray-100 overflow-hidden block cursor-pointer">
+                      <img
+                        src={getMediaUrl(imagemObra)}
+                        alt={tituloObra}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
 
-                  <div className="p-5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {(obra.categorias && obra.categorias.length > 0 ? obra.categorias : (obra.categoria ? [obra.categoria] : [])).map((c, i) => (
-                          <span
-                            key={c.id || i}
-                            className="bg-artPurple/10 text-artPurple px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest"
-                          >
-                            {c.nomeCategoria}
-                          </span>
-                        ))}
-                      </div>
-
-                      <h3 className="font-editorial text-xl italic font-bold leading-snug line-clamp-1">
-                        {obra.legenda || `Obra #${obra.id}`}
-                      </h3>
-
-                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-400 font-bold">
-                        <span className="flex items-center gap-1">
-                          <i className="fa-regular fa-heart text-red-500"></i>
-                          {obra.totalCurtidas || 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <i className="fa-regular fa-comment text-artBlue"></i>
-                          {obra.totalComentarios || 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <i className="fa-regular fa-eye"></i>
-                          {obra.visualizacoes || 0}
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                        <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-emerald-700 shadow-sm border border-black/5">
+                          ● Ativa
                         </span>
                       </div>
-                    </div>
+                    </Link>
 
-                    <div className="mt-5 pt-4 border-t border-black/5 flex items-center justify-between gap-2">
-                      <Link
-                        to={`/obra/${obra.id}`}
-                        className="text-xs font-bold text-gray-600 hover:text-artDark transition-colors"
-                      >
-                        Ver Detalhes
-                      </Link>
+                    <div className="p-5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {(obra.categorias && obra.categorias.length > 0 ? obra.categorias : (obra.categoria ? [obra.categoria] : [])).map((c, i) => (
+                            <span
+                              key={c.id || i}
+                              className="bg-artPurple/10 text-artPurple px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest"
+                            >
+                              {c.nomeCategoria}
+                            </span>
+                          ))}
+                        </div>
 
-                      <div className="flex items-center gap-2">
-                        <Link
-                          to={`/editar-obra/${obra.id}`}
-                          className="w-8 h-8 rounded-full bg-gray-100 hover:bg-artDark hover:text-white transition-colors flex items-center justify-center text-xs"
-                          title="Editar"
-                        >
-                          <i className="fa-solid fa-pen"></i>
+                        <Link to={`/obra/${obra.id}`} className="block hover:text-artOrange transition-colors">
+                          <h3 className="font-editorial text-xl italic font-bold leading-snug line-clamp-1">
+                            {tituloObra}
+                          </h3>
                         </Link>
 
-                        <button
-                          type="button"
-                          onClick={() => handleExcluirObra(obra.id)}
-                          disabled={deletandoId === obra.id}
-                          className="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-xs"
-                          title="Excluir"
+                        {dados.descricao && (
+                          <p className="text-xs text-gray-400 line-clamp-1 mt-1 font-light">
+                            {dados.descricao}
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-4 mt-3 text-xs text-gray-400 font-bold">
+                          <span className="flex items-center gap-1" title="Curtidas">
+                            <i className="fa-regular fa-heart text-red-500"></i>
+                            {totalCurtidas}
+                          </span>
+                          <span className="flex items-center gap-1" title="Comentários">
+                            <i className="fa-regular fa-comment text-artBlue"></i>
+                            {totalComentarios}
+                          </span>
+                          <span className="flex items-center gap-1" title="Visualizações">
+                            <i className="fa-regular fa-eye"></i>
+                            {totalViews}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-4 border-t border-black/5 flex items-center justify-between gap-2">
+                        <Link
+                          to={`/obra/${obra.id}`}
+                          className="text-xs font-bold text-gray-600 hover:text-artDark transition-colors flex items-center gap-1.5"
                         >
-                          {deletandoId === obra.id ? (
-                            <i className="fa-solid fa-spinner fa-spin"></i>
-                          ) : (
-                            <i className="fa-solid fa-trash"></i>
-                          )}
-                        </button>
+                          <span>Ver Detalhes</span>
+                          <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                        </Link>
+
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/editar-obra/${obra.id}`}
+                            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-artDark hover:text-white transition-colors flex items-center justify-center text-xs"
+                            title="Editar"
+                          >
+                            <i className="fa-solid fa-pen"></i>
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => handleExcluirObra(obra.id)}
+                            disabled={deletandoId === obra.id}
+                            className="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-xs"
+                            title="Excluir"
+                          >
+                            {deletandoId === obra.id ? (
+                              <i className="fa-solid fa-spinner fa-spin"></i>
+                            ) : (
+                              <i className="fa-solid fa-trash"></i>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

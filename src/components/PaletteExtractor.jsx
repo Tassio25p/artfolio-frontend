@@ -6,7 +6,7 @@ import { getMediaUrl } from "../services/api";
  * Extrai automaticamente as 5 cores dominantes de uma imagem usando
  * a HTML5 Canvas 2D API em um canvas offscreen de 64x64 pixels (< 5ms).
  */
-export default function PaletteExtractor({ imageUrl }) {
+export default function PaletteExtractor({ imageUrl, onColorsExtracted, customColors = null }) {
   const [colors, setColors] = useState([]);
   const [copiedHex, setCopiedHex] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -14,6 +14,15 @@ export default function PaletteExtractor({ imageUrl }) {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Se o autor definiu cores customizadas manualmente, usa diretamente
+    if (Array.isArray(customColors) && customColors.length > 0) {
+      setColors(customColors);
+      if (onColorsExtracted) {
+        onColorsExtracted(customColors);
+      }
+      return;
+    }
 
     if (!imageUrl) {
       return;
@@ -41,8 +50,8 @@ export default function PaletteExtractor({ imageUrl }) {
 
         try {
           const canvas = canvasRef.current || document.createElement("canvas");
-          canvas.width = 64;
-          canvas.height = 64;
+          canvas.width = 96;
+          canvas.height = 96;
 
           const ctx = canvas.getContext("2d", { willReadFrequently: true });
           if (!ctx) {
@@ -50,31 +59,34 @@ export default function PaletteExtractor({ imageUrl }) {
             return;
           }
 
-          // Renderiza em 64x64 pixels para amostragem ultrarrápida
-          ctx.clearRect(0, 0, 64, 64);
-          ctx.drawImage(img, 0, 0, 64, 64);
+          ctx.clearRect(0, 0, 96, 96);
+          ctx.drawImage(img, 0, 0, 96, 96);
 
-          // Extrai o buffer de pixels RGBA
-          const imageData = ctx.getImageData(0, 0, 64, 64);
+          const imageData = ctx.getImageData(0, 0, 96, 96);
           const data = imageData.data;
           const colorBuckets = new Map();
 
-          // Itera a cada 16 bytes (equivalente a 1 pixel a cada 4 no buffer RGBA)
           for (let i = 0; i < data.length; i += 16) {
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
             const a = data[i + 3];
 
-            // Filtra transparências
             if (a < 128) continue;
 
-            // Filtra iluminação extrema (pretos absolutos < 15 ou brancos puros > 250)
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const delta = max - min;
+            const sat = max === 0 ? 0 : delta / max;
             const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-            if (lum < 15 || lum > 250) continue;
 
-            // Quantização cromática por blocos de 24 níveis
-            const step = 24;
+            // Ponderação cromática: Cores ricas e vivas (ex: vermelho, azul, laranja) ganham peso alto
+            // Darks absolutos ou brancos estourados ganham peso reduzido
+            const isExtreme = lum < 20 || lum > 245;
+            const weight = isExtreme ? 0.2 : (1 + Math.pow(sat, 1.3) * 5.0);
+
+            // Quantização por blocos de 20 níveis
+            const step = 20;
             const qR = Math.min(255, Math.round(r / step) * step);
             const qG = Math.min(255, Math.round(g / step) * step);
             const qB = Math.min(255, Math.round(b / step) * step);
@@ -83,30 +95,32 @@ export default function PaletteExtractor({ imageUrl }) {
             const existing = colorBuckets.get(key);
             if (existing) {
               existing.count += 1;
+              existing.score += weight;
               existing.sumR += r;
               existing.sumG += g;
               existing.sumB += b;
             } else {
               colorBuckets.set(key, {
                 count: 1,
+                score: weight,
                 sumR: r,
                 sumG: g,
                 sumB: b,
                 r: qR,
                 g: qG,
                 b: qB,
+                sat: sat,
               });
             }
           }
 
-          // Ordena blocos pela maior frequência
+          // Ordena buckets pela pontuação ponderada de vivacidade cromática
           const sortedBuckets = Array.from(colorBuckets.values()).sort(
-            (a, b) => b.count - a.count
+            (a, b) => b.score - a.score
           );
 
-          // Extração das 5 tonalidades mais frequentes preservando diversidade cromática
           const selectedColors = [];
-          const minColorDist = 36;
+          const minColorDist = 42;
 
           for (const bucket of sortedBuckets) {
             if (selectedColors.length >= 5) break;
@@ -122,7 +136,7 @@ export default function PaletteExtractor({ imageUrl }) {
               return Math.sqrt(dr * dr + dg * dg + db * db) < minColorDist;
             });
 
-            if (!isTooSimilar || selectedColors.length + (sortedBuckets.length - selectedColors.length) <= 5) {
+            if (!isTooSimilar) {
               const hex = `#${((1 << 24) + (avgR << 16) + (avgG << 8) + avgB)
                 .toString(16)
                 .slice(1)
@@ -131,7 +145,7 @@ export default function PaletteExtractor({ imageUrl }) {
             }
           }
 
-          // Preenche com restantes caso ainda haja menos de 5
+          // Preenche caso ainda haja menos de 5 cores
           if (selectedColors.length < 5) {
             for (const bucket of sortedBuckets) {
               if (selectedColors.length >= 5) break;
@@ -148,14 +162,22 @@ export default function PaletteExtractor({ imageUrl }) {
             }
           }
 
-          if (selectedColors.length > 0) {
-            setColors(selectedColors.map((c) => c.hex));
-          } else {
-            setColors(["#2D3436", "#636E72", "#B2BEC3", "#DFE6E9", "#0984E3"]);
+          const finalHexes =
+            selectedColors.length > 0
+              ? selectedColors.map((c) => c.hex)
+              : ["#E74C3C", "#FF793F", "#0984E3", "#00B894", "#2D3436"];
+
+          setColors(finalHexes);
+          if (onColorsExtracted) {
+            onColorsExtracted(finalHexes);
           }
         } catch (err) {
-          console.warn("PaletteExtractor: Erro ao ler buffer do canvas (possível restrição CORS):", err);
-          setColors(["#6C5CE7", "#FF793F", "#0984E3", "#00B894", "#2D3436"]);
+          console.warn("PaletteExtractor: Erro ao ler buffer do canvas:", err);
+          const fallbackHexes = ["#FF793F", "#E74C3C", "#0984E3", "#00B894", "#2D3436"];
+          setColors(fallbackHexes);
+          if (onColorsExtracted) {
+            onColorsExtracted(fallbackHexes);
+          }
         } finally {
           if (isMounted) setIsProcessing(false);
         }

@@ -5,10 +5,15 @@ import ModalDenuncia from "../components/ModalDenuncia";
 import ModalConversao from "../components/ModalConversao";
 import LightboxModal from "../components/LightboxModal";
 import ModalConfirmarExclusao from "../components/ModalConfirmarExclusao";
+import PriceBadge from "../components/PriceBadge";
+import ProtectedImageWrapper from "../components/ProtectedImageWrapper";
+import WatermarkOverlay from "../components/WatermarkOverlay";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, usuarioService, getMediaUrl } from "../services/api";
 import { getEstiloCategoria } from "../constants/categories";
+import { desempacotarDadosObra, getAvatarLedStyle } from "../utils/obraHelper";
 import ArtCanvasViewer from "../components/ArtCanvasViewer";
+import PaletteExtractor from "../components/PaletteExtractor";
 
 export default function DetalhesObra() {
   const { id } = useParams();
@@ -16,8 +21,13 @@ export default function DetalhesObra() {
 
   // Estados principais da obra
   const [obraDetalhe, setObraDetalhe] = useState(null);
+  const [ambientColors, setAmbientColors] = useState(["#FF793F", "#6C5CE7"]);
   const [comentarios, setComentarios] = useState([]);
   const [novoComentario, setNovoComentario] = useState("");
+
+  // Estado da mensagem direta contextualizada sobre a obra
+  const [mensagemDireta, setMensagemDireta] = useState("");
+  const [enviandoMensagemDireta, setEnviandoMensagemDireta] = useState(false);
 
   // Estados de engajamento e métricas
   const [isSalvo, setIsSalvo] = useState(false);
@@ -49,6 +59,29 @@ export default function DetalhesObra() {
   const [submittingComment, setSubmittingComment] = useState(false);
 
   const { user: currentUser, isAuthenticated, isGuest } = useAuth();
+
+  const autor = obraDetalhe?.autor || obraDetalhe?.usuario || {};
+  const isOwner = Boolean(
+    currentUser &&
+    (obraDetalhe?.idUsuario === currentUser.id ||
+     obraDetalhe?.id_usuario === currentUser.id ||
+     autor.id === currentUser.id)
+  );
+  const isDono = isOwner;
+
+  const dadosEstruturados = desempacotarDadosObra(obraDetalhe);
+  const tituloObra = dadosEstruturados.titulo || (obraDetalhe ? `Obra #${obraDetalhe.id}` : "");
+  const descricaoObra = dadosEstruturados.descricao || "";
+  const precoBaseObra = dadosEstruturados.precoBase;
+  const marcaDaguaObra = dadosEstruturados.marcaDagua;
+  const bloquearDownloadObra = dadosEstruturados.bloquearDownload;
+  const bloquearPrintObra = dadosEstruturados.bloquearPrint;
+
+  const mostrarAviso = (mensagem, tipo = "info") => {
+    setNoticeMessage(mensagem);
+    setNoticeType(tipo);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
 
   const carregarDadosObra = async () => {
     if (!id) return;
@@ -131,15 +164,6 @@ export default function DetalhesObra() {
     window.addEventListener("artfolio_sync", handleSync);
     return () => window.removeEventListener("artfolio_sync", handleSync);
   }, [id, obraDetalhe]);
-
-  const mostrarAviso = (mensagem, tipo = "info") => {
-    setNoticeMessage(mensagem);
-    setNoticeType(tipo);
-    setTimeout(() => setNoticeMessage(""), 4000);
-  };
-
-  const isDono = Boolean(currentUser?.id && (obraDetalhe?.autor?.id === currentUser.id || obraDetalhe?.usuario?.id === currentUser.id));
-  const isOwner = isDono;
 
   // Ação de Seguir / Deixar de Seguir Artista
   const handleToggleFollow = async () => {
@@ -282,6 +306,48 @@ export default function DetalhesObra() {
     }
   };
 
+  const handleEnviarMensagemDireta = (e) => {
+    if (e) e.preventDefault();
+    if (isGuest || !isAuthenticated) {
+      setAcaoTentada("enviar mensagem sobre esta obra");
+      setModalConversaoAberto(true);
+      return;
+    }
+    const autor = obraDetalhe?.autor || obraDetalhe?.usuario || {};
+    const textoDigitado =
+      mensagemDireta.trim() ||
+      `Olá ${autor.nome || "artista"}! Tenho interesse nesta obra e gostaria de conversar a respeito.`;
+
+    const imgPrincipal =
+      obraDetalhe.imagem ||
+      obraDetalhe.url_imagem ||
+      obraDetalhe.arquivoUrl ||
+      (Array.isArray(obraDetalhe.arquivos) && obraDetalhe.arquivos[0]?.url) ||
+      "";
+
+    // Estrutura de anexo para ser exibida nos balões de chat de ambos
+    const anexoObj = {
+      id: id,
+      titulo: tituloObra || "Obra de Arte",
+      imagem: imgPrincipal,
+      preco: precoBaseObra || "",
+    };
+
+    const msgCompleta = `[OBRA_ANEXO:${JSON.stringify(anexoObj)}]\n${textoDigitado}`;
+
+    navigate(
+      `/mensagens?artistaId=${autor.id}&destNome=${encodeURIComponent(
+        autor.nome || "Artista"
+      )}&destFoto=${encodeURIComponent(
+        autor.foto_perfil || autor.fotoPerfil || ""
+      )}&msg=${encodeURIComponent(msgCompleta)}&obraId=${id}&obraTitulo=${encodeURIComponent(
+        tituloObra || ""
+      )}&obraImagem=${encodeURIComponent(imgPrincipal)}&obraPreco=${encodeURIComponent(
+        precoBaseObra || ""
+      )}`
+    );
+  };
+
   const handleCompartilhar = () => {
     navigator.clipboard.writeText(window.location.href);
     mostrarAviso("Link da obra copiado para a área de transferência!", "success");
@@ -366,9 +432,25 @@ export default function DetalhesObra() {
     );
   }
 
-  const autor = obraDetalhe.autor || obraDetalhe.usuario || {};
-  const tituloObra = obraDetalhe.titulo || obraDetalhe.legenda || `Obra #${obraDetalhe.id}`;
-  const descricaoObra = obraDetalhe.descricao || obraDetalhe.legenda || "";
+  const handleToggleFixar = async () => {
+    try {
+      const res = await obrasService.alternarFixar(id);
+      setObraDetalhe((prev) => ({
+        ...prev,
+        fixado: res.fixado,
+        fixado_em: res.fixado_em,
+      }));
+      mostrarAviso(
+        res.fixado
+          ? "Obra fixada no topo do seu perfil com sucesso!"
+          : "Obra desafixada do topo do seu perfil.",
+        "success"
+      );
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao alterar fixação da obra.", "error");
+    }
+  };
+
   const imagemPrincipal = obraDetalhe.imagem_url || obraDetalhe.arquivoUrl || "";
   const dataPublicacao = obraDetalhe.data_criacao || obraDetalhe.dataPostagem;
 
@@ -379,16 +461,10 @@ export default function DetalhesObra() {
       ? [obraDetalhe.categoria]
       : [];
 
-  // Configuração visual do LED do Autor (Harmonizada com o Feed / PostCard)
+  // Configuração visual do LED do Autor com suporte a cor HEX customizada do Boost
+  const ledInfo = getAvatarLedStyle(autor);
   const usuarioPlano = (autor.plano || "").toLowerCase();
   const temLed = autor.mostrar_moldura_led !== false;
-  const ledClass = temLed
-    ? usuarioPlano === "boost"
-      ? "ring-2 ring-[#FF793F] shadow-[0_0_12px_#FF793F,0_0_24px_rgba(255,121,63,0.6)]"
-      : usuarioPlano === "pro"
-      ? "ring-2 ring-[#6C5CE7] shadow-[0_0_12px_#6C5CE7,0_0_24px_rgba(108,92,231,0.6)]"
-      : "ring-2 ring-[#00B894] shadow-[0_0_10px_#00B894,0_0_20px_rgba(0,184,148,0.55)]"
-    : "";
 
   return (
     <div className="w-full pb-16">
@@ -400,11 +476,27 @@ export default function DetalhesObra() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="bg-white border border-gray-200/80 text-gray-700 hover:text-artDark hover:border-gray-400 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
+              className="bg-white border border-gray-200/80 text-gray-700 hover:text-artDark hover:border-gray-400 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <i className="fa-solid fa-arrow-left text-[11px]"></i>
               <span>{isOwner ? "Voltar às minhas obras" : "Voltar ao Feed"}</span>
             </button>
+
+            {isOwner && (
+              <button
+                type="button"
+                onClick={handleToggleFixar}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 border cursor-pointer ${
+                  obraDetalhe.fixado
+                    ? "bg-artOrange text-white border-artOrange shadow-md shadow-artOrange/20"
+                    : "bg-white border-gray-200/80 text-gray-700 hover:text-artOrange hover:border-artOrange"
+                }`}
+                title={obraDetalhe.fixado ? "Desafixar do topo do perfil" : "Fixar no topo do perfil (máximo 3)"}
+              >
+                <i className={`fa-solid fa-thumbtack text-[11px] ${obraDetalhe.fixado ? "rotate-[-20deg]" : ""}`}></i>
+                <span>{obraDetalhe.fixado ? "Fixada no Perfil" : "Fixar no Perfil"}</span>
+              </button>
+            )}
 
             {categoriasLista.length > 0 && (
               <span className="text-xs text-gray-400 font-medium hidden sm:inline-block">
@@ -446,88 +538,147 @@ export default function DetalhesObra() {
               const imgAtual = listaImagens[slideIndex] || imagemPrincipal;
 
               const ext = (imgAtual || "").split("?")[0].split(".").pop().toLowerCase();
-              const isVideo = ["mp4", "webm", "ogg", "mov"].includes(ext);
-              const isPdf = ["pdf", "doc", "docx"].includes(ext);
+              const isVideo = ["mp4", "webm", "ogg", "mov", "avi", "mkv"].includes(ext);
+              const isPdf = ["pdf"].includes(ext);
+              const isDoc = ["doc", "docx", "txt", "odt", "rtf", "ppt", "pptx"].includes(ext);
+              const is3D = ["obj", "fbx", "gltf", "glb", "stl", "blend", "dae"].includes(ext);
+              const isArchive = ["zip", "rar", "7z", "psd", "ai", "eps"].includes(ext);
+              const isOutroArquivo = isPdf || isDoc || is3D || isArchive;
 
               return (
-                <div>
+                <div className="relative">
+                  {/* Glow Atmosférico da Obra (Ateliê / Galeria Imersiva Radiante) */}
                   <div
-                    onClick={() => !isVideo && !isPdf && setModalZoomAberto(true)}
-                    className={`bg-neutral-950 rounded-2xl overflow-hidden shadow-md relative group ${
-                      !isVideo && !isPdf ? "cursor-zoom-in" : ""
-                    } min-h-[340px] max-h-[540px] flex items-center justify-center border border-black/10`}
+                    className="absolute -inset-8 sm:-inset-16 rounded-[3rem] opacity-60 blur-3xl pointer-events-none transition-all duration-1000 -z-10"
+                    style={{
+                      background: `radial-gradient(ellipse at 50% 40%, ${ambientColors[0] || "#FF793F"}88 0%, ${
+                        ambientColors[1] || ambientColors[0] || "#6C5CE7"
+                      }55 40%, transparent 75%)`,
+                    }}
+                  />
+
+                  <ProtectedImageWrapper
+                    marcaDagua={marcaDaguaObra}
+                    bloquearDownload={bloquearDownloadObra}
+                    bloquearPrint={bloquearPrintObra}
+                    nomeArtista={autor.nome}
+                    isLiked={isCurtido}
+                    onCurtir={handleToggleLike}
+                    onConversar={handleEnviarMensagemDireta}
+                    className="rounded-2xl overflow-hidden shadow-xl border border-black/10 relative z-10"
                   >
-                    {isVideo ? (
-                      <video
-                        src={getMediaUrl(imgAtual)}
-                        controls
-                        className="w-full h-auto max-h-[540px] object-contain bg-black"
-                      />
-                    ) : isPdf ? (
-                      <div className="w-full aspect-[4/3] bg-gradient-to-br from-[#121212] to-gray-800 flex flex-col items-center justify-center text-white p-6 text-center">
-                        <div className="w-20 h-20 rounded-2xl bg-white/10 text-artOrange flex items-center justify-center text-4xl mb-4 shadow-inner">
-                          <i className="fa-solid fa-file-pdf"></i>
+                    <div
+                      onClick={() => !isVideo && !isOutroArquivo && setModalZoomAberto(true)}
+                      className={`bg-neutral-950 w-full overflow-hidden relative group ${
+                        !isVideo && !isOutroArquivo ? "cursor-zoom-in" : ""
+                      } min-h-[340px] max-h-[560px] flex items-center justify-center border border-black/10`}
+                    >
+                      {/* Preço Base na Imagem */}
+                      {precoBaseObra && (
+                        <div className="absolute top-3 left-3 z-30 pointer-events-none">
+                          <PriceBadge preco={precoBaseObra} />
                         </div>
-                        <span className="font-serif font-editorial italic text-xl text-white/90 truncate max-w-sm">
-                          {tituloObra}
-                        </span>
-                        <span className="text-xs text-gray-400 uppercase font-bold tracking-widest mt-2">
-                          Documento Digital PDF
-                        </span>
-                        <a
-                          href={getMediaUrl(imgAtual)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-4 inline-flex items-center gap-2 bg-artOrange text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-orange-600 transition-all shadow-md"
-                        >
-                          <i className="fa-solid fa-download"></i>
-                          <span>Abrir Documento</span>
-                        </a>
-                      </div>
-                    ) : (
-                      <ArtCanvasViewer
-                        imageUrl={obraDetalhe.imagem || obraDetalhe.url_imagem || imgAtual}
-                        titulo={obraDetalhe.titulo || tituloObra}
-                        nomeArtista={obraDetalhe.autor?.nome || obraDetalhe.usuario?.nome || autor.nome}
-                        onClick={() => setModalZoomAberto(true)}
-                      />
-                    )}
+                      )}
 
-                    {/* Navegação de Carrossel */}
-                    {listaImagens.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSlideIndex((prev) =>
-                              prev === 0 ? listaImagens.length - 1 : prev - 1
-                            );
-                          }}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center text-xs transition-all shadow-lg z-30"
-                        >
-                          <i className="fa-solid fa-chevron-left"></i>
-                        </button>
+                      {/* Selo de Redução de Qualidade se ativado */}
+                      {dadosEstruturados.reduzirQualidade && (
+                        <div className="absolute top-3 right-3 z-30 pointer-events-none">
+                          <div className="bg-amber-500/95 backdrop-blur-md px-2.5 py-1 rounded-xl text-white text-[10px] font-bold shadow-lg border border-amber-400/30 flex items-center gap-1.5">
+                            <i className="fa-solid fa-compress text-[9px]"></i>
+                            <span>Modo Prévia Compactado</span>
+                          </div>
+                        </div>
+                      )}
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSlideIndex((prev) =>
-                              prev === listaImagens.length - 1 ? 0 : prev + 1
-                            );
-                          }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center text-xs transition-all shadow-lg z-30"
-                        >
-                          <i className="fa-solid fa-chevron-right"></i>
-                        </button>
+                      {isVideo ? (
+                        <video
+                          src={getMediaUrl(imgAtual)}
+                          controls
+                          controlsList={bloquearDownloadObra ? "nodownload" : undefined}
+                          disablePictureInPicture={bloquearDownloadObra}
+                          className="w-full h-auto max-h-[560px] object-contain bg-black"
+                        />
+                      ) : isOutroArquivo ? (
+                        <div className="w-full aspect-[4/3] bg-gradient-to-br from-[#121212] via-neutral-900 to-gray-900 flex flex-col items-center justify-center text-white p-6 text-center">
+                          <div className="w-20 h-20 rounded-3xl bg-white/10 text-artOrange border border-white/15 flex items-center justify-center text-4xl mb-4 shadow-xl shadow-artOrange/10 backdrop-blur-md">
+                            <i className={
+                              isPdf ? "fa-solid fa-file-pdf" :
+                              isDoc ? "fa-solid fa-file-lines" :
+                              is3D ? "fa-solid fa-cube" :
+                              isArchive ? "fa-solid fa-file-zipper" :
+                              "fa-solid fa-file"
+                            }></i>
+                          </div>
+                          <span className="font-editorial text-xl sm:text-2xl text-white/95 font-bold truncate max-w-sm">
+                            {tituloObra}
+                          </span>
+                          <span className="text-[11px] text-artOrange uppercase font-bold tracking-widest mt-2 bg-artOrange/15 px-3 py-1 rounded-full border border-artOrange/30">
+                            {ext.toUpperCase()} • {isPdf ? "Documento PDF" : is3D ? "Modelo/Asset 3D" : isDoc ? "Documento de Texto" : "Arquivo/Pacote Digital"}
+                          </span>
 
-                        <span className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full z-30">
-                          {slideIndex + 1} / {listaImagens.length}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                          {!bloquearDownloadObra ? (
+                            <a
+                              href={getMediaUrl(imgAtual)}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                              className="mt-5 inline-flex items-center gap-2 bg-artOrange hover:bg-orange-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-md shadow-artOrange/25"
+                            >
+                              <i className="fa-solid fa-download text-xs"></i>
+                              <span>Baixar Arquivo ({ext.toUpperCase()})</span>
+                            </a>
+                          ) : (
+                            <div className="mt-5 inline-flex items-center gap-2 bg-neutral-800/90 text-gray-300 border border-white/10 text-[11px] font-semibold px-4 py-2 rounded-xl">
+                              <i className="fa-solid fa-shield-halved text-artOrange"></i>
+                              <span>Download protegido pelo autor</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <ArtCanvasViewer
+                          imageUrl={obraDetalhe.imagem || obraDetalhe.url_imagem || imgAtual}
+                          titulo={obraDetalhe.titulo || tituloObra}
+                          nomeArtista={obraDetalhe.autor?.nome || obraDetalhe.usuario?.nome || autor.nome}
+                          onClick={() => setModalZoomAberto(true)}
+                        />
+                      )}
+
+                      {/* Navegação de Carrossel */}
+                      {listaImagens.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSlideIndex((prev) =>
+                                prev === 0 ? listaImagens.length - 1 : prev - 1
+                              );
+                            }}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center text-xs transition-all shadow-lg z-30"
+                          >
+                            <i className="fa-solid fa-chevron-left"></i>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSlideIndex((prev) =>
+                                prev === listaImagens.length - 1 ? 0 : prev + 1
+                              );
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center text-xs transition-all shadow-lg z-30"
+                          >
+                            <i className="fa-solid fa-chevron-right"></i>
+                          </button>
+
+                          <span className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full z-30">
+                            {slideIndex + 1} / {listaImagens.length}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </ProtectedImageWrapper>
 
                   {/* Miniaturas de slides do carrossel */}
                   {listaImagens.length > 1 && (
@@ -555,6 +706,40 @@ export default function DetalhesObra() {
                 </div>
               );
             })()}
+
+            {/* PALETA CROMÁTICA DA OBRA (EXTRAÇÃO NATIVA CANVAS OU PALETA CUSTOMIZADA) */}
+            {dadosEstruturados.exibirPaleta !== false && (
+              <PaletteExtractor
+                imageUrl={imagemPrincipal}
+                customColors={dadosEstruturados.coresCustomizadas}
+                onColorsExtracted={(hexes) => setAmbientColors(hexes)}
+              />
+            )}
+
+            {/* AVISO DE QUALIDADE REDUZIDA (OPÇÃO DO AUTOR) */}
+            {dadosEstruturados.reduzirQualidade && (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <i className="fa-solid fa-compress"></i>
+                  </div>
+                  <div>
+                    <span className="font-bold block text-amber-900">Prévia com Resolução Compactada</span>
+                    <span className="text-[11px] text-amber-700/90 font-medium">Obra protegida em resolução reduzida. Entre em contato com o artista para obter a versão original em alta qualidade.</span>
+                  </div>
+                </div>
+                {!isDono && (
+                  <button
+                    type="button"
+                    onClick={handleEnviarMensagemDireta}
+                    className="px-3.5 py-1.5 rounded-full bg-amber-600 text-white font-bold text-[11px] hover:bg-amber-700 transition-colors shrink-0 shadow-xs flex items-center gap-1.5"
+                  >
+                    <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                    Solicitar Original em Alta
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* BARRA DE ENGAJAMENTO E MÉTRICAS REAIS (ABAIXO DA IMAGEM) */}
             <div className="bg-white border border-gray-100 rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm mt-1">
@@ -590,7 +775,7 @@ export default function DetalhesObra() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Botão Salvar nos Favoritos (Disponível apenas para visitantes, não para o próprio autor) */}
+                {/* Botão Salvar nos Favoritos */}
                 {!isDono && (
                   <button
                     type="button"
@@ -624,12 +809,13 @@ export default function DetalhesObra() {
           <div className="lg:col-span-5 sticky top-8 self-start space-y-4">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-5">
               
-              {/* CARD DO ARTISTA (ALINHADO À ESTÉTICA DO FEED) */}
+              {/* CARD DO ARTISTA COM LED NEON DINÂMICO */}
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <Link
                     to={isOwner ? "/perfil" : `/artista/${autor.id}`}
-                    className={`w-11 h-11 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-all ${ledClass}`}
+                    style={ledInfo.style}
+                    className={`w-11 h-11 rounded-full bg-artPurple overflow-hidden shrink-0 block hover:opacity-85 transition-all ${ledInfo.className}`}
                   >
                     {autor.foto_perfil || autor.fotoPerfil ? (
                       <img
@@ -653,7 +839,7 @@ export default function DetalhesObra() {
                         {autor.nome || "Artista"}
                       </Link>
 
-                      {temLed && (
+                      {temLed && autor.mostrar_badge_plano !== false && (
                         <>
                           {usuarioPlano === "boost" && (
                             <span className="bg-artOrange text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded-full shadow-xs">
@@ -710,11 +896,19 @@ export default function DetalhesObra() {
 
               <hr className="border-gray-100" />
 
-              {/* TÍTULO COM TIPOGRAFIA EDITORIAL DO FEED & METADADOS */}
+              {/* TÍTULO E PREÇO BASE SEPARADOS DE FORMA EDITORIAL */}
               <div className="space-y-3">
-                <h1 className="font-serif font-editorial italic text-2xl md:text-3xl font-bold text-gray-900 mb-2 leading-tight">
-                  {tituloObra}
-                </h1>
+                <div className="flex items-start justify-between gap-3">
+                  <h1 className="font-serif font-editorial italic text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
+                    {tituloObra}
+                  </h1>
+
+                  {precoBaseObra && (
+                    <div className="shrink-0 pt-0.5">
+                      <PriceBadge preco={precoBaseObra} />
+                    </div>
+                  )}
+                </div>
 
                 {/* Data formatada em português */}
                 <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
@@ -726,10 +920,17 @@ export default function DetalhesObra() {
                   </span>
                 </p>
 
-                {/* Descrição legível com fallback elegante */}
-                <p className="text-sm md:text-base text-gray-700 leading-relaxed mb-6 font-light whitespace-pre-line">
-                  {descricaoObra.trim() || "Nenhuma descrição fornecida pelo artista."}
-                </p>
+                {/* LEGENDA / HISTÓRIA SEPARADA */}
+                {descricaoObra.trim() && (
+                  <div className="bg-[#FAF9F6] border border-black/5 rounded-2xl p-4 mt-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-artOrange block mb-1">
+                      História & Legenda
+                    </span>
+                    <p className="text-sm md:text-base text-gray-700 leading-relaxed font-light whitespace-pre-line">
+                      {descricaoObra.trim()}
+                    </p>
+                  </div>
+                )}
 
                 {/* Badges de Categorias Oficiais */}
                 {categoriasLista.length > 0 && (
@@ -748,6 +949,42 @@ export default function DetalhesObra() {
                   </div>
                 )}
               </div>
+
+              {/* CAIXA DE ENVIAR MENSAGEM DIRETA AO ARTISTA SOBRE A OBRA */}
+              {!isOwner && autor.id && (
+                <>
+                  <hr className="border-gray-100" />
+                  <div className="bg-gradient-to-br from-purple-50/50 via-white to-orange-50/50 rounded-2xl p-4 border border-artPurple/15 shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
+                        <i className="fa-solid fa-paper-plane text-artOrange text-xs"></i>
+                        <span>Falar com o artista sobre esta arte</span>
+                      </span>
+                      <span className="text-[9px] bg-artPurple/10 text-artPurple font-bold px-2 py-0.5 rounded-full">
+                        Chat Direto
+                      </span>
+                    </div>
+
+                    <form onSubmit={handleEnviarMensagemDireta} className="space-y-2">
+                      <textarea
+                        rows={2}
+                        value={mensagemDireta}
+                        onChange={(e) => setMensagemDireta(e.target.value)}
+                        placeholder={`Olá ${autor.nome || "artista"}! Gostei muito desta obra e gostaria de saber mais...`}
+                        className="w-full bg-white border border-artPurple/20 focus:border-artPurple rounded-xl p-2.5 text-xs text-artDark placeholder:text-gray-400 outline-none resize-none transition-all focus:ring-2 focus:ring-artPurple/10"
+                      />
+
+                      <button
+                        type="submit"
+                        className="w-full bg-artDark hover:bg-gradient-to-r hover:from-artPurple hover:via-artOrange hover:to-artBlue text-white py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 shadow-md shadow-artDark/10 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                      >
+                        <i className="fa-solid fa-paper-plane text-[11px]"></i>
+                        <span>Enviar Mensagem</span>
+                      </button>
+                    </form>
+                  </div>
+                </>
+              )}
 
               {/* AÇÕES DO PROPRIETÁRIO DA OBRA */}
               {isOwner && (

@@ -182,17 +182,24 @@ export default function Cadastro() {
       <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <main className="min-h-screen grid grid-cols-1 lg:grid-cols-12">
-        {/* Coluna Esquerda - Apresentação Artística */}
-        <section className="lg:col-span-4 bg-artDark text-white p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
-          <div>
+        {/* Coluna Esquerda - Apresentação Artística com Filtro Roxo */}
+        <section className="lg:col-span-4 bg-artPurple text-white p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200&auto=format&fit=crop"
+            alt="Arte de fundo"
+            className="absolute inset-0 w-full h-full object-cover mix-blend-multiply opacity-80 scale-105 pointer-events-none"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/50 pointer-events-none"></div>
+
+          <div className="relative z-10">
             <Link
               to="/"
-              className="font-editorial text-3xl font-black text-artOrange inline-block mb-10"
+              className="font-editorial text-4xl font-black text-white inline-block mb-10"
             >
               Artfolio
             </Link>
 
-            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-3 block">
+            <span className="text-white/80 font-bold tracking-widest uppercase text-[10px] mb-3 block">
               Comunidade Artística
             </span>
 
@@ -200,29 +207,17 @@ export default function Cadastro() {
               Crie sua conta de <span className="italic text-artOrange block">Artista.</span>
             </h1>
 
-            <p className="text-sm text-gray-400 mt-5 leading-relaxed max-w-sm font-light">
+            <p className="text-sm text-white/80 mt-5 leading-relaxed max-w-sm font-light">
               Publique suas obras, monte seu portfólio profissional, interaja com apreciadores de arte e receba solicitações de encomendas em uma plataforma feita para valorizar o seu talento.
             </p>
-          </div>
 
-          <div className="mt-8 space-y-4 relative z-10">
-            <div className="flex items-center gap-4">
+            <div className="mt-8 flex items-center gap-4">
               <div className="w-9 h-9 rounded-2xl bg-artOrange/20 border border-artOrange/40 text-artOrange flex items-center justify-center text-xs font-bold">
                 <i className="fa-solid fa-palette"></i>
               </div>
               <div>
                 <p className="text-xs uppercase font-bold tracking-wider">CONTA DE ARTISTA - Dados principais</p>
-                <p className="text-[11px] text-gray-400">Pessoa Física (PF) ou Pessoa Jurídica (PJ)</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 opacity-80">
-              <div className="w-9 h-9 rounded-2xl bg-white/10 border border-white/10 text-white flex items-center justify-center text-xs font-bold">
-                <i className="fa-solid fa-gear"></i>
-              </div>
-              <div>
-                <p className="text-xs uppercase font-bold tracking-wider">Configuração da Conta</p>
-                <p className="text-[11px] text-gray-400">Credenciais de acesso e privacidade</p>
+                <p className="text-[11px] text-white/70">Pessoa Física (PF) ou Pessoa Jurídica (PJ)</p>
               </div>
             </div>
           </div>
@@ -436,25 +431,27 @@ export default function Cadastro() {
               <div className="flex-grow border-t border-gray-200"></div>
             </div>
 
-            {/* Botão Oficial do Google */}
-            <div className="flex justify-center my-2">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => mostrarAviso("Falha no cadastro/login com o Google.", "error")}
-                theme="outline"
-                shape="pill"
-                text="continue_with"
-                locale="pt-BR"
-              />
-            </div>
+            {/* Linha com Botão Oficial do Google e Voltar para início lado a lado */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+              <Link
+                to="/"
+                className="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-artOrange transition-colors flex items-center gap-2"
+              >
+                <i className="fa-solid fa-arrow-left"></i>
+                Voltar para início
+              </Link>
 
-            <Link
-              to="/"
-              className="inline-block mt-8 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-artDark transition-colors"
-            >
-              <i className="fa-solid fa-arrow-left mr-2"></i>
-              Voltar para início
-            </Link>
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => mostrarAviso("Falha no cadastro/login com o Google.", "error")}
+                  theme="outline"
+                  shape="pill"
+                  text="continue_with"
+                  locale="pt-BR"
+                />
+              </div>
+            </div>
           </div>
         </section>
       </main>

@@ -159,16 +159,17 @@ export const NotificationProvider = ({ children }) => {
     );
   }, []);
 
-  // 4. Conexão WebSocket Persistente
+  // 4. Conexão WebSocket Persistente Blindada com JWT
   useEffect(() => {
-    if (!user?.id) return;
+    const token = getToken();
+    if (!user?.id || !token) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsHost =
       window.location.port === "5173" || window.location.port === "3000"
         ? "127.0.0.1:8000"
         : window.location.host;
-    const socket = new WebSocket(`${protocol}//${wsHost}/ws/notificacoes/${user.id}`);
+    const socket = new WebSocket(`${protocol}//${wsHost}/ws?token=${encodeURIComponent(token)}`);
 
     const pingInterval = setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {

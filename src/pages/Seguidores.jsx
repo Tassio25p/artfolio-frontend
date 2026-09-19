@@ -93,15 +93,15 @@ export default function Seguidores() {
       <div className="max-w-6xl mx-auto">
           <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
             <div>
-              <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-2 block">
+              <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm mb-2.5 block">
                 Comunidade artística
               </span>
 
-              <h1 className="font-editorial text-4xl sm:text-5xl lg:text-6xl leading-none">
+              <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl leading-[1.05]">
                 Seguidores<span className="italic text-artOrange">.</span>
               </h1>
 
-              <p className="text-sm text-gray-500 mt-3 max-w-xl leading-relaxed">
+              <p className="text-base text-gray-500 mt-4 max-w-xl leading-relaxed font-light">
                 {isOwner
                   ? "Veja quem acompanha seu trabalho, descubra novas conexões e fortaleça sua presença dentro do Artfolio."
                   : "Veja pessoas que acompanham este perfil dentro da comunidade Artfolio."}

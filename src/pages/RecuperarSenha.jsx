@@ -24,32 +24,41 @@ export default function RecuperarSenha() {
 
       <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-10">
         <section className="w-full max-w-5xl bg-white rounded-[2.5rem] border border-black/5 shadow-2xl shadow-black/10 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-          <div className="lg:col-span-5 bg-artDark text-white p-8 lg:p-10 relative overflow-hidden">
-            <Link
-              to="/"
-              className="font-editorial text-3xl font-black text-artOrange inline-block mb-12"
-            >
-              Artfolio
-            </Link>
+          <div className="lg:col-span-5 bg-artPurple text-white p-8 lg:p-10 relative overflow-hidden flex flex-col justify-between">
+            <img
+              src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200&auto=format&fit=crop"
+              alt="Arte de fundo"
+              className="absolute inset-0 w-full h-full object-cover mix-blend-multiply opacity-80 scale-105 pointer-events-none"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/50 pointer-events-none"></div>
 
-            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] mb-3 block">
-              Recuperação de acesso
-            </span>
+            <div className="relative z-10">
+              <Link
+                to="/"
+                className="font-editorial text-3xl font-black text-artOrange inline-block mb-12"
+              >
+                Artfolio
+              </Link>
 
-            <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
-              Recuperar{" "}
-              <span className="italic text-artPurple block">senha.</span>
-            </h1>
+              <span className="text-white/80 font-bold tracking-widest uppercase text-[10px] mb-3 block">
+                Recuperação de acesso
+              </span>
 
-            <p className="text-sm text-gray-400 mt-5 leading-relaxed">
-              Informe o e-mail usado no cadastro. Quando o backend estiver
-              integrado, o sistema enviará instruções seguras para redefinir sua
-              senha.
-            </p>
+              <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
+                Recuperar{" "}
+                <span className="italic text-artOrange block">senha.</span>
+              </h1>
+
+              <p className="text-sm text-white/80 mt-5 leading-relaxed font-light">
+                Informe o e-mail usado no cadastro. Quando o backend estiver
+                integrado, o sistema enviará instruções seguras para redefinir sua
+                senha.
+              </p>
+            </div>
 
             <div className="mt-8 space-y-5 relative z-10">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full border border-artPurple text-artPurple flex items-center justify-center text-xs font-bold">
+                <div className="w-10 h-10 rounded-full border border-artOrange text-artOrange flex items-center justify-center text-xs font-bold">
                   01
                 </div>
 
@@ -61,16 +70,6 @@ export default function RecuperarSenha() {
               <div className="flex items-center gap-4 opacity-70">
                 <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-xs font-bold">
                   02
-                </div>
-
-                <p className="text-xs uppercase font-bold tracking-widest">
-                  Backend valida a conta
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 opacity-40">
-                <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-xs font-bold">
-                  03
                 </div>
 
                 <p className="text-xs uppercase font-bold tracking-widest">
@@ -144,18 +143,6 @@ export default function RecuperarSenha() {
                     className="w-full bg-[#F9F8F6] rounded-2xl px-5 py-4 outline-none focus:ring-2 ring-artOrange/20 text-sm"
                     required
                   />
-                </div>
-
-                <div className="bg-artOrange/5 border border-artOrange/10 rounded-[1.5rem] p-4">
-                  <h3 className="text-sm font-bold mb-1">
-                    Próximo passo
-                  </h3>
-
-                  <p className="text-sm text-gray-500 leading-relaxed">
-                    Por enquanto, esta tela mostra apenas o fluxo visual. Depois,
-                    o backend verificará se o e-mail existe e enviará as
-                    instruções de recuperação.
-                  </p>
                 </div>
 
                 <button

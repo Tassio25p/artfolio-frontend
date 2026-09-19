@@ -90,14 +90,21 @@ export default function Inicio() {
 
   return (
     <div className="bg-[#F9F8F6] text-artDark min-h-screen antialiased overflow-x-hidden font-sans flex flex-col justify-between">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      {/* Degrades e bordas laterais marcantes (Laranja / Roxo / Azul com efeito fumê/blur) */}
+      {/* Lateral Esquerda */}
+      <div className="fixed left-0 top-0 bottom-0 w-[36px] bg-gradient-to-b from-artOrange via-artPurple to-artBlue shadow-2xl shadow-artPurple/30 pointer-events-none z-40 hidden sm:block"></div>
+      <div className="fixed -left-10 top-1/4 w-96 h-[650px] bg-gradient-to-b from-artOrange/30 via-artPurple/25 to-artBlue/15 rounded-full blur-3xl pointer-events-none z-0"></div>
+
+      {/* Lateral Direita */}
+      <div className="fixed right-0 top-0 bottom-0 w-[36px] bg-gradient-to-b from-artBlue via-artPurple to-artOrange shadow-2xl shadow-artPurple/30 pointer-events-none z-40 hidden sm:block"></div>
+      <div className="fixed -right-10 top-1/3 w-96 h-[650px] bg-gradient-to-b from-artBlue/25 via-artPurple/25 to-artOrange/30 rounded-full blur-3xl pointer-events-none z-0"></div>
 
       {/* Header com Navegação Focada: "Como funciona" e "Modos de Acesso" */}
       <header className="relative z-10 px-5 lg:px-10 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <Link
             to="/"
-            className="font-editorial text-3xl font-black text-artOrange tracking-tight"
+            className="font-editorial text-[2.65rem] sm:text-5xl font-black text-artOrange tracking-tight"
           >
             Artfolio
           </Link>
@@ -105,12 +112,12 @@ export default function Inicio() {
           <nav className="hidden md:flex items-center gap-8 text-[10px] font-bold uppercase tracking-widest text-gray-400">
             <a
               href="#como-funciona"
-              className="hover:text-artDark transition-colors"
+              className="hover:text-artOrange transition-colors"
             >
               Como funciona
             </a>
 
-            <a href="#perfis" className="hover:text-artDark transition-colors">
+            <a href="#perfis" className="hover:text-artOrange transition-colors">
               Modos de Acesso
             </a>
           </nav>
@@ -222,7 +229,7 @@ export default function Inicio() {
               </div>
             </div>
 
-            {/* Destaque Visual Hero — Ao clicar motiva login/visitante em vez de ativar visitante direto */}
+            {/* Destaque Visual Hero — Card de demonstração visual */}
             <div className="lg:col-span-5">
               <div className="relative">
                 <div className="bg-white rounded-[2.5rem] p-4 border border-black/5 shadow-2xl shadow-black/10 rotate-2 hover:rotate-0 transition-transform duration-500">
@@ -239,46 +246,18 @@ export default function Inicio() {
                       <span className="text-artPurple text-[10px] font-black uppercase tracking-widest">
                         Obra em destaque
                       </span>
-
-                      <span className="bg-artBlue/10 text-artBlue px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">
-                        Curadoria
-                      </span>
                     </div>
 
                     <h2 className="font-editorial text-3xl italic leading-none mt-2">
-                      Abstração em Tons de Púrpura
+                      Minha arte
                     </h2>
 
                     <div className="flex items-center justify-between mt-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-artPurple overflow-hidden">
-                          <img
-                            src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100"
-                            alt="Artista"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-
-                        <span className="text-xs font-bold">Marina Silva</span>
+                        <span className="text-xs font-bold text-gray-700">Você</span>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleInteracaoRestrita("acessar a obra de Marina Silva")}
-                        className="w-9 h-9 rounded-full bg-artDark text-white hover:bg-artOrange transition-all flex items-center justify-center"
-                        title="Ver detalhes"
-                      >
-                        <i className="fa-solid fa-arrow-right text-xs"></i>
-                      </button>
                     </div>
                   </div>
-                </div>
-
-                <div className="absolute -left-4 top-8 bg-artOrange text-white rounded-2xl px-4 py-3 shadow-xl rotate-[-6deg] hidden md:block">
-                  <p className="text-xl font-black">OK</p>
-                  <span className="text-[9px] font-bold uppercase tracking-widest">
-                    Moderada
-                  </span>
                 </div>
               </div>
             </div>

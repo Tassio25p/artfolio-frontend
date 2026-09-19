@@ -3,9 +3,12 @@ import { Link } from "react-router-dom";
 import MenuOpcoes from "./MenuOpcoes";
 import ModalDenuncia from "./ModalDenuncia";
 import ModalConversao from "./ModalConversao";
+import PriceBadge from "./PriceBadge";
+import WatermarkOverlay from "./WatermarkOverlay";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, usuarioService, getMediaUrl } from "../services/api";
 import { getEstiloCategoria } from "../constants/categories";
+import { desempacotarDadosObra, getAvatarLedStyle } from "../utils/obraHelper";
 
 const colorClasses = {
   artPurple: "bg-artPurple",
@@ -18,11 +21,16 @@ export default function PostCard(props) {
   const post = props.post || {};
   const { user: authUser, isGuest: authIsGuest } = useAuth();
 
-  // Mapeamento defensivo de dados da postagem
+  // Mapeamento estruturado de dados da postagem
   const id = props.id ?? post.id ?? 1;
-  const title = props.title ?? post.titulo ?? post.legenda ?? `Obra #${id}`;
+  const dadosObra = desempacotarDadosObra(post);
+  const title = props.title ?? dadosObra.titulo ?? `Obra #${id}`;
+  const description = props.description ?? dadosObra.descricao ?? "";
+  const precoBase = props.precoBase ?? post.preco_base ?? post.precoBase ?? dadosObra.precoBase;
+  const marcaDagua = props.marcaDagua ?? post.marca_dagua ?? post.marcaDagua ?? dadosObra.marcaDagua;
+  const bloquearDownload = props.bloquearDownload ?? post.bloquear_download ?? post.bloquearDownload ?? dadosObra.bloquearDownload;
+
   const image = props.image ?? props.imagem ?? props.url_imagem ?? post.arquivoUrl ?? post.arquivo_url ?? post.imagem ?? post.url_imagem ?? "";
-  const description = props.description ?? post.descricao ?? "";
   const dataPostagem = post.dataPostagem ?? props.dataPostagem ?? null;
 
   // Autor da postagem
@@ -62,6 +70,7 @@ export default function PostCard(props) {
   const [seguidoresAuthor, setSeguidoresAuthor] = useState(
     Number(props.seguidores ?? post.seguidores ?? autor.total_seguidores ?? autor.seguidores ?? 0)
   );
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   // Modais de suporte
   const [modalDenunciaAberto, setModalDenunciaAberto] = useState(false);
@@ -264,72 +273,104 @@ export default function PostCard(props) {
     }
   };
 
-  // Moldura LED do Avatar conforme plano
-  const ledClass = temLed
-    ? planoAutor === "boost"
-      ? "ring-2 ring-[#FF793F] shadow-[0_0_12px_#FF793F,0_0_24px_rgba(255,121,63,0.6)]"
-      : planoAutor === "pro"
-      ? "ring-2 ring-[#6C5CE7] shadow-[0_0_12px_#6C5CE7,0_0_24px_rgba(108,92,231,0.6)]"
-      : "ring-2 ring-[#00B894] shadow-[0_0_10px_#00B894,0_0_20px_rgba(0,184,148,0.55)]"
-    : "";
+  // Moldura LED do Avatar conforme plano com suporte a Boost HEX
+  const ledInfo = getAvatarLedStyle(autor);
 
   return (
     <>
-      <article className="break-inside-avoid bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all group mb-6 relative">
-        {/* Mídia da Obra */}
-        <div className="relative overflow-hidden bg-gray-100">
-          <Link to={`/obra/${id}`} className="block">
+      <article className="bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all group flex flex-col justify-between h-full relative">
+        {/* Mídia da Obra com Proporção Uniforme e Proteções */}
+        <div
+          onContextMenu={(e) => {
+            if (bloquearDownload) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+          className="relative overflow-hidden bg-neutral-950 flex items-center justify-center w-full h-60 sm:h-64"
+        >
+          <Link to={`/obra/${id}`} className="w-full h-full flex items-center justify-center relative">
             {(() => {
               const ext = (image || "").split("?")[0].split(".").pop().toLowerCase();
-              const isVideo = ["mp4", "webm", "ogg", "mov"].includes(ext);
-              const isPdf = ["pdf", "doc", "docx"].includes(ext);
+              const isVideo = ["mp4", "webm", "ogg", "mov", "avi", "mkv"].includes(ext);
+              const isPdf = ["pdf"].includes(ext);
+              const isDoc = ["doc", "docx", "txt", "odt", "rtf", "ppt", "pptx"].includes(ext);
+              const is3D = ["obj", "fbx", "gltf", "glb", "stl", "blend", "dae"].includes(ext);
+              const isArchive = ["zip", "rar", "7z", "psd", "ai", "eps"].includes(ext);
+              const isOutroArquivo = isPdf || isDoc || is3D || isArchive;
 
               if (isVideo) {
                 return (
                   <video
                     src={getMediaUrl(image)}
-                    controls
-                    className="w-full h-auto max-h-[500px] object-cover bg-black"
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
                   />
                 );
               }
 
-              if (isPdf) {
+              if (isOutroArquivo) {
                 return (
-                  <div className="w-full aspect-[4/3] bg-gradient-to-br from-[#121212] to-gray-800 flex flex-col items-center justify-center text-white p-6 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-white/10 text-artOrange flex items-center justify-center text-3xl mb-3 shadow-inner">
-                      <i className="fa-solid fa-file-pdf"></i>
+                  <div className="w-full h-full bg-gradient-to-br from-neutral-900 to-neutral-800 flex flex-col items-center justify-center text-white p-4 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-white/10 text-artOrange border border-white/10 flex items-center justify-center text-2xl mb-2 shadow-inner">
+                      <i className={
+                        isPdf ? "fa-solid fa-file-pdf" :
+                        isDoc ? "fa-solid fa-file-lines" :
+                        is3D ? "fa-solid fa-cube" :
+                        isArchive ? "fa-solid fa-file-zipper" :
+                        "fa-solid fa-file"
+                      }></i>
                     </div>
-                    <span className="font-editorial text-lg italic text-white/90 truncate max-w-xs">{title}</span>
-                    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-1">Documento PDF</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-artOrange bg-artOrange/20 px-2.5 py-0.5 rounded-full border border-artOrange/30 truncate max-w-[140px]">
+                      {ext.toUpperCase()}
+                    </span>
                   </div>
                 );
               }
 
               return (
-                <img
-                  src={getMediaUrl(image) || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
-                  alt={title || "Obra"}
-                  onError={(e) => {
-                    e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
-                  }}
-                  className="w-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
+                <div className="relative w-full h-full flex items-center justify-center bg-neutral-950 overflow-hidden">
+                  <img
+                    src={getMediaUrl(image) || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
+                    alt={title || "Obra"}
+                    draggable={!bloquearDownload}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={(e) => {
+                      e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                      setImageLoaded(true);
+                    }}
+                    className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${
+                      imageLoaded ? "filter-none opacity-100" : "blur-md opacity-60 scale-105"
+                    }`}
+                  />
+
+                  {/* Marca d'água no card se ativa */}
+                  {marcaDagua && (
+                    <WatermarkOverlay nomeUsuario={user} />
+                  )}
+                </div>
               );
             })()}
           </Link>
 
-          {/* Badges de Destaque Boost e Múltiplos Arquivos */}
-          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+          {/* Badges de Destaque Boost, Preço Base e Múltiplos Arquivos */}
+          <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-1.5 pointer-events-none">
             {post.destaque_boost && (
-              <div className="bg-gradient-to-r from-artOrange to-amber-500 text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-artOrange/30">
+              <div className="bg-gradient-to-r from-artOrange to-amber-500 text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-artOrange/30 pointer-events-auto">
                 <i className="fa-solid fa-bolt text-[9px] animate-pulse"></i>
                 <span>Em Alta</span>
               </div>
             )}
 
+            {precoBase && (
+              <div className="pointer-events-auto">
+                <PriceBadge preco={precoBase} />
+              </div>
+            )}
+
             {Array.isArray(post.arquivos) && post.arquivos.length > 1 && (
-              <div className="bg-black/60 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-[9px] font-bold flex items-center gap-1 shadow-sm">
+              <div className="bg-black/60 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-[9px] font-bold flex items-center gap-1 shadow-sm pointer-events-auto">
                 <i className="fa-solid fa-layer-group text-[8px]"></i>
                 <span>{post.arquivos.length}</span>
               </div>
@@ -350,46 +391,63 @@ export default function PostCard(props) {
         </div>
 
         {/* Conteúdo e Metadados */}
-        <div className="p-5">
-          {/* Categorias e Data de Publicação */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="flex flex-wrap gap-1.5">
-              {cats.map((c, i) => {
-                const catNome = c?.nomeCategoria || c?.nome || (typeof c === "string" ? c : "Arte");
-                const estilo = getEstiloCategoria(catNome) || { corTag: "bg-artPurple/10 text-artPurple" };
-                return (
-                  <span
-                    key={c?.id || i}
-                    className={`${estilo.corTag || "bg-artPurple/10 text-artPurple"} px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest border`}
-                  >
-                    {catNome}
-                  </span>
-                );
-              })}
+        <div className="p-5 flex-1 flex flex-col justify-between">
+          <div>
+            {/* Categorias e Data de Publicação */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+              <div className="flex flex-wrap gap-1.5 min-w-0 max-w-[70%]">
+                {cats.map((c, i) => {
+                  const catNome = c?.nomeCategoria || c?.nome || (typeof c === "string" ? c : "Arte");
+                  const estilo = getEstiloCategoria(catNome) || { corTag: "bg-artPurple/10 text-artPurple" };
+                  return (
+                    <span
+                      key={c?.id || i}
+                      className={`${estilo.corTag || "bg-artPurple/10 text-artPurple"} px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border truncate max-w-[120px]`}
+                      title={catNome}
+                    >
+                      {catNome}
+                    </span>
+                  );
+                })}
+              </div>
+
+              {dataPostagem && (
+                <span className="text-[10px] text-gray-400 font-bold shrink-0">
+                  {new Date(dataPostagem).toLocaleDateString("pt-BR")}
+                </span>
+              )}
             </div>
 
-            {dataPostagem && (
-              <span className="text-[10px] text-gray-400 font-bold">
-                {new Date(dataPostagem).toLocaleDateString("pt-BR")}
-              </span>
+            {/* Título com Tipografia Editorial e Truncamento com Ellipsis */}
+            {title && (
+              <Link to={`/obra/${id}`} className="block">
+                <h2
+                  className="font-editorial text-lg sm:text-xl italic font-bold leading-snug mb-1.5 text-artDark hover:text-artPurple transition-colors truncate block w-full"
+                  title={title}
+                >
+                  {title}
+                </h2>
+              </Link>
+            )}
+
+            {/* Descrição resumida com line-clamp-2 e quebra segura */}
+            {description && (
+              <p
+                className="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-3 font-light break-words overflow-hidden"
+                title={description}
+              >
+                {description}
+              </p>
             )}
           </div>
 
-          {/* Título com Tipografia Editorial */}
-          {title && (
-            <Link to={`/obra/${id}`} className="block">
-              <h2 className="font-editorial text-xl italic font-bold leading-snug mb-3 text-artDark hover:text-artPurple transition-colors">
-                {title}
-              </h2>
-            </Link>
-          )}
-
           {/* Autor */}
-          <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-black/5">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-black/5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <Link
                 to={isMe ? "/perfil" : (userId ? `/artista/${userId}` : "/feed")}
-                className={`w-9 h-9 rounded-full bg-artPurple ${ledClass} overflow-hidden shrink-0 block hover:opacity-85 transition-opacity`}
+                style={ledInfo.style}
+                className={`w-8 h-8 rounded-full bg-artPurple ${ledInfo.className} overflow-hidden shrink-0 block hover:opacity-85 transition-all`}
                 title={`Ver perfil de ${user}`}
               >
                 {avatar ? (
@@ -405,15 +463,16 @@ export default function PostCard(props) {
                 )}
               </Link>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <Link
                   to={isMe ? "/perfil" : (userId ? `/artista/${userId}` : "/feed")}
-                  className="text-sm font-bold truncate block hover:text-artPurple transition-colors"
+                  className="text-xs sm:text-sm font-bold truncate block hover:text-artPurple transition-colors max-w-[140px]"
+                  title={user}
                 >
                   {user}
                 </Link>
-                <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">
-                  Artista • {seguidoresAuthor} seguidores
+                <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 truncate">
+                  Artista • {seguidoresAuthor} seg.
                 </p>
               </div>
             </div>
@@ -422,7 +481,7 @@ export default function PostCard(props) {
               <button
                 type="button"
                 onClick={handleFollowClick}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all shrink-0 ${
                   isFollowing
                     ? "bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-500"
                     : "bg-artDark text-white hover:bg-artPurple"
@@ -434,7 +493,7 @@ export default function PostCard(props) {
           </div>
 
           {/* Barra de Interação (Curtir, Salvar, Comentários, Link) */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/5">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5">
             <div className="flex items-center gap-4 text-xs font-bold">
               <button
                 type="button"
@@ -473,7 +532,7 @@ export default function PostCard(props) {
 
             <Link
               to={`/obra/${id}`}
-              className="w-8 h-8 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center"
+              className="w-8 h-8 rounded-full bg-artDark text-white hover:bg-artPurple transition-all flex items-center justify-center shrink-0 shadow-sm"
               title="Ver detalhes da obra"
             >
               <i className="fa-solid fa-arrow-right text-xs"></i>

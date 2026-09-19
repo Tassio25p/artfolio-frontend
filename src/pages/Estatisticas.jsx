@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usuarioService, obrasService, getMediaUrl } from "../services/api";
+import { desempacotarDadosObra } from "../utils/obraHelper";
 
 export default function Estatisticas() {
   const { user, isGuest } = useAuth();
@@ -318,55 +319,67 @@ export default function Estatisticas() {
           </div>
         ) : (
           <div className="space-y-4">
-            {obrasPopulares.map((obra, index) => (
-              <Link
-                key={obra.id}
-                to={`/obra/${obra.id}`}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-[#F9F8F6] rounded-2xl border border-black/5 hover:bg-white hover:shadow-md transition-all group"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <span className="text-lg font-black text-gray-300 w-6 text-center">
-                    #{index + 1}
-                  </span>
+            {obrasPopulares.map((obra, index) => {
+              const dados = desempacotarDadosObra(obra);
+              const tituloObra = dados.titulo || obra.titulo || `Obra #${obra.id}`;
+              const imagemObra = obra.arquivoUrl || obra.imagem_url || obra.imagemUrl || obra.arquivo_url || "";
+              const totalCurtidas = obra.totalCurtidas ?? obra.total_curtidas ?? 0;
+              const totalComentarios = obra.totalComentarios ?? obra.total_comentarios ?? 0;
+              const totalViews = obra.visualizacoes ?? obra.total_visualizacoes ?? 0;
 
-                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-black/5">
-                    <img
-                      src={getMediaUrl(obra.arquivoUrl)}
-                      alt={obra.legenda || "Obra"}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
+              return (
+                <Link
+                  key={obra.id}
+                  to={`/obra/${obra.id}`}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-[#F9F8F6] rounded-2xl border border-black/5 hover:bg-white hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <span className="text-lg font-black text-gray-300 w-6 text-center shrink-0">
+                      #{index + 1}
+                    </span>
+
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-black/5">
+                      <img
+                        src={getMediaUrl(imagemObra)}
+                        alt={tituloObra}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+
+                    <div className="min-w-0 max-w-[200px] sm:max-w-xs md:max-w-sm lg:max-w-md">
+                      <h3 className="font-bold text-sm text-artDark group-hover:text-artPurple transition-colors truncate" title={tituloObra}>
+                        {tituloObra}
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">
+                        {obra.categoria?.nomeCategoria || (obra.categorias?.[0]?.nomeCategoria) || "Arte"} • {obra.dataPostagem ? new Date(obra.dataPostagem).toLocaleDateString("pt-BR") : ""}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-sm text-artDark group-hover:text-artPurple transition-colors truncate">
-                      {obra.legenda || `Obra #${obra.id}`}
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {obra.categoria?.nomeCategoria || (obra.categorias?.[0]?.nomeCategoria) || "Arte"} • {obra.dataPostagem ? new Date(obra.dataPostagem).toLocaleDateString("pt-BR") : ""}
-                    </p>
+                  <div className="flex items-center gap-5 shrink-0 text-xs font-bold text-gray-500 sm:justify-end">
+                    <span className="flex items-center gap-1.5" title="Visualizações">
+                      <i className="fa-solid fa-eye text-artPurple"></i>
+                      {totalViews}
+                    </span>
+
+                    <span className="flex items-center gap-1.5" title="Curtidas">
+                      <i className="fa-solid fa-heart text-red-500"></i>
+                      {totalCurtidas}
+                    </span>
+
+                    <span className="flex items-center gap-1.5" title="Comentários">
+                      <i className="fa-solid fa-comment text-artBlue"></i>
+                      {totalComentarios}
+                    </span>
+
+                    <i className="fa-solid fa-arrow-right text-gray-300 group-hover:text-artDark group-hover:translate-x-1 transition-transform ml-2"></i>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-5 shrink-0 text-xs font-bold text-gray-500 sm:justify-end">
-                  <span className="flex items-center gap-1.5" title="Visualizações">
-                    <i className="fa-solid fa-eye text-artPurple"></i>
-                    {obra.visualizacoes || 0}
-                  </span>
-
-                  <span className="flex items-center gap-1.5" title="Curtidas">
-                    <i className="fa-solid fa-heart text-red-500"></i>
-                    {obra.totalCurtidas || 0}
-                  </span>
-
-                  <span className="flex items-center gap-1.5" title="Comentários">
-                    <i className="fa-solid fa-comment text-artBlue"></i>
-                    {obra.totalComentarios || 0}
-                  </span>
-
-                  <i className="fa-solid fa-arrow-right text-gray-300 group-hover:text-artDark transition-colors"></i>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
@@ -379,12 +392,12 @@ export default function Estatisticas() {
           {/* 1. PRESERVAÇÃO DO TOPO (100% NÍTIDO E NAVEGÁVEL) */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-artPurple font-bold tracking-widest uppercase text-[10px]">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm">
                   Painel de Criador
                 </span>
                 <span
-                  className={`text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full ${planoNome === "boost"
+                  className={`text-[10px] font-bold uppercase px-3 py-1 rounded-full ${planoNome === "boost"
                       ? "bg-artOrange text-white shadow-xs"
                       : planoNome === "pro"
                         ? "bg-artPurple text-white shadow-xs"
@@ -394,10 +407,10 @@ export default function Estatisticas() {
                   Plano {planoNome.toUpperCase()}
                 </span>
               </div>
-              <h1 className="font-editorial text-4xl sm:text-5xl italic leading-none">
-                Métricas & Estatísticas
+              <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl italic leading-[1.05]">
+                Métricas & Estatísticas<span className="text-artOrange not-italic">.</span>
               </h1>
-              <p className="text-sm text-gray-500 mt-2 font-light">
+              <p className="text-base text-gray-500 mt-3 font-light">
                 Acompanhe o engajamento das suas obras, o pódio de categorias e o crescimento de seguidores.
               </p>
             </div>

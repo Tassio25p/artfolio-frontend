@@ -8,6 +8,7 @@ import ModalPortfolioApresentacao from "../components/ModalPortfolioApresentacao
 import ModalCompartilhar from "../components/ModalCompartilhar";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, usuarioService, getMediaUrl } from "../services/api";
+import { getAvatarLedStyle, desempacotarDadosObra } from "../utils/obraHelper";
 
 export default function ArtistProfile() {
   const { id } = useParams();
@@ -18,6 +19,19 @@ export default function ArtistProfile() {
   const [modalPortfolioAberto, setModalPortfolioAberto] = useState(false);
   const [modalCompartilharAberto, setModalCompartilharAberto] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
+
+  const [blockedUsers, setBlockedUsers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("artfolio_blocked_users")) || [];
+    } catch {
+      return [];
+    }
+  });
+
+  const mostrarAviso = (msg) => {
+    setNoticeMessage(msg);
+    setTimeout(() => setNoticeMessage(""), 4000);
+  };
 
   const [acaoTentada, setAcaoTentada] = useState("interagir");
   const [abaAtiva, setAbaAtiva] = useState("obras"); // "obras" | "favoritos"
@@ -82,6 +96,24 @@ export default function ArtistProfile() {
       const souDono = !isGuest && (isProprioPerfil || dadosPerfil?.relacionamento?.isMe || (authUser && String(authUser.id) === String(dadosPerfil?.id)));
       setIsOwner(souDono);
 
+      const localBadge = localStorage.getItem("artfolio_mostrar_badge_plano");
+      const localLed = localStorage.getItem("artfolio_mostrar_moldura_led");
+      const localCorLed = localStorage.getItem("artfolio_boost_led_color");
+
+      const finalMostrarBadge = dadosPerfil.mostrar_badge_plano !== undefined
+        ? dadosPerfil.mostrar_badge_plano
+        : (souDono && localBadge !== null ? localBadge === "true" : true);
+
+      const finalMostrarLed = dadosPerfil.mostrar_moldura_led !== undefined
+        ? dadosPerfil.mostrar_moldura_led
+        : (souDono && localLed !== null ? localLed === "true" : true);
+
+      const finalCorLed = dadosPerfil.cor_led_hex || dadosPerfil.cor_led || dadosPerfil.corLed || (souDono && localCorLed ? localCorLed : "#FF793F");
+      const localBg = localStorage.getItem(`artfolio_boost_profile_bg_${dadosPerfil.id || targetId}`);
+      const finalFundoPerfil = dadosPerfil.fundo_perfil || dadosPerfil.fundoPerfil || (localBg ? localBg : "");
+      const localNickColor = localStorage.getItem(`artfolio_profile_nick_color_${dadosPerfil.id || targetId}`);
+      const finalCorNome = dadosPerfil.cor_nome_hex || dadosPerfil.corNomeHex || (souDono && localNickColor ? localNickColor : "");
+
       setPerfil({
         id: dadosPerfil.id || targetId,
         nome: dadosPerfil.nome || (isProprioPerfil ? authUser?.nome : `Artista #${targetId}`) || "Artista",
@@ -101,7 +133,16 @@ export default function ArtistProfile() {
         seguindo: dadosPerfil.seguindoCount || 0,
         obras: dadosPerfil.obrasCount || 0,
         plano: dadosPerfil.plano || "Free",
-        mostrarMolduraLed: dadosPerfil.mostrar_moldura_led !== false,
+        corLed: finalCorLed,
+        cor_led_hex: finalCorLed,
+        corNomeHex: finalCorNome,
+        cor_nome_hex: finalCorNome,
+        fundoPerfil: finalFundoPerfil,
+        fundo_perfil: finalFundoPerfil,
+        mostrarMolduraLed: finalMostrarLed,
+        mostrar_moldura_led: finalMostrarLed,
+        mostrarBadgePlano: finalMostrarBadge,
+        mostrar_badge_plano: finalMostrarBadge,
         mensagemCta: dadosPerfil.mensagem_cta || "",
         relacionamento: dadosPerfil.relacionamento || {},
       });
@@ -113,16 +154,34 @@ export default function ArtistProfile() {
         const obras = await obrasService.listarObras({ usuario_id: targetId });
         if (Array.isArray(obras) && obras.length > 0) {
           setObrasPublicas(
-            obras.map((obra) => ({
-              ...obra,
-              id: obra.id,
-              titulo: obra.legenda || "Sem título",
-              imagemUrl: obra.arquivoUrl,
-              destaque_boost: obra.destaque_boost || false,
-              total_curtidas: obra.total_curtidas || 0,
-              total_comentarios: obra.total_comentarios || 0,
-              dataPostagem: obra.dataPostagem,
-            }))
+            obras.map((obra) => {
+              const dados = desempacotarDadosObra(obra);
+              const imgUrl = obra.arquivoUrl || obra.imagem_url || obra.imagemUrl || obra.arquivo_url || "";
+              return {
+                ...obra,
+                id: obra.id,
+                titulo: dados.titulo || obra.titulo || `Obra #${obra.id}`,
+                legenda: obra.legenda,
+                descricao: dados.descricao,
+                precoBase: dados.precoBase,
+                marcaDagua: dados.marcaDagua,
+                bloquearDownload: dados.bloquearDownload,
+                bloquearPrint: dados.bloquearPrint,
+                arquivoUrl: imgUrl,
+                imagem_url: imgUrl,
+                imagemUrl: imgUrl,
+                destaque_boost: obra.destaque_boost || false,
+                total_curtidas: obra.total_curtidas ?? obra.totalCurtidas ?? 0,
+                totalCurtidas: obra.totalCurtidas ?? obra.total_curtidas ?? 0,
+                total_comentarios: obra.total_comentarios ?? obra.totalComentarios ?? 0,
+                totalComentarios: obra.totalComentarios ?? obra.total_comentarios ?? 0,
+                total_salvos: obra.total_salvos ?? obra.totalSalvos ?? 0,
+                totalSalvos: obra.totalSalvos ?? obra.total_salvos ?? 0,
+                dataPostagem: obra.dataPostagem || obra.data_criacao,
+                fixado: obra.fixado || false,
+                fixado_em: obra.fixado_em,
+              };
+            })
           );
         } else {
           setObrasPublicas([]);
@@ -176,6 +235,51 @@ export default function ArtistProfile() {
     window.addEventListener("artfolio_sync", handleSync);
     return () => window.removeEventListener("artfolio_sync", handleSync);
   }, [id, perfil?.id, authUser?.id]);
+
+  // Sincronização imediata de preferências (cor LED e exibição de selo do plano)
+  useEffect(() => {
+    const handlePrefs = (e) => {
+      if (isOwner && e.detail) {
+        setPerfil((prev) =>
+          prev
+            ? {
+                ...prev,
+                corLed: e.detail.corLedHex || prev.corLed,
+                cor_led_hex: e.detail.corLedHex || prev.cor_led_hex,
+                corNomeHex: e.detail.corNomeHex !== undefined ? e.detail.corNomeHex : prev.corNomeHex,
+                cor_nome_hex: e.detail.corNomeHex !== undefined ? e.detail.corNomeHex : prev.cor_nome_hex,
+                fundoPerfil:
+                  e.detail.fundoPerfil !== undefined
+                    ? e.detail.fundoPerfil
+                    : prev.fundoPerfil,
+                fundo_perfil:
+                  e.detail.fundoPerfil !== undefined
+                    ? e.detail.fundoPerfil
+                    : prev.fundo_perfil,
+                mostrarBadgePlano:
+                  e.detail.mostrarBadgePlano !== undefined
+                    ? e.detail.mostrarBadgePlano
+                    : prev.mostrarBadgePlano,
+                mostrar_badge_plano:
+                  e.detail.mostrarBadgePlano !== undefined
+                    ? e.detail.mostrarBadgePlano
+                    : prev.mostrar_badge_plano,
+                mostrarMolduraLed:
+                  e.detail.mostrarMolduraLed !== undefined
+                    ? e.detail.mostrarMolduraLed
+                    : prev.mostrarMolduraLed,
+                mostrar_moldura_led:
+                  e.detail.mostrarMolduraLed !== undefined
+                    ? e.detail.mostrarMolduraLed
+                    : prev.mostrar_moldura_led,
+              }
+            : prev
+        );
+      }
+    };
+    window.addEventListener("artfolio_profile_prefs_changed", handlePrefs);
+    return () => window.removeEventListener("artfolio_profile_prefs_changed", handlePrefs);
+  }, [isOwner]);
 
   const handleToggleFollow = async () => {
     if (isGuest || !isAuthenticated) {
@@ -233,19 +337,6 @@ export default function ArtistProfile() {
     return false;
   };
 
-  const mostrarAviso = (msg) => {
-    setNoticeMessage(msg);
-    setTimeout(() => setNoticeMessage(""), 4000);
-  };
-
-  const [blockedUsers, setBlockedUsers] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("artfolio_blocked_users")) || [];
-    } catch {
-      return [];
-    }
-  });
-
   const isBlocked = perfil?.id ? blockedUsers.includes(perfil.id) : false;
 
   const handleToggleBlockUser = () => {
@@ -280,6 +371,56 @@ export default function ArtistProfile() {
         msgImutavel
       )}`
     );
+  };
+
+  const handleToggleFixarObra = async (obraId) => {
+    try {
+      const res = await obrasService.alternarFixar(obraId);
+      mostrarAviso(
+        res.fixado
+          ? "Obra fixada no topo do seu perfil com sucesso!"
+          : "Obra desafixada do topo do perfil."
+      );
+      // Recarrega as obras para sincronizar a ordenação LIFO oficial do backend
+      const targetId = id || authUser?.id;
+      if (targetId) {
+        const obras = await obrasService.listarObras({ usuario_id: targetId });
+        if (Array.isArray(obras)) {
+          setObrasPublicas(
+            obras.map((obra) => {
+              const dados = desempacotarDadosObra(obra);
+              const imgUrl = obra.arquivoUrl || obra.imagem_url || obra.imagemUrl || obra.arquivo_url || "";
+              return {
+                ...obra,
+                id: obra.id,
+                titulo: dados.titulo || obra.titulo || `Obra #${obra.id}`,
+                legenda: obra.legenda,
+                descricao: dados.descricao,
+                precoBase: dados.precoBase,
+                marcaDagua: dados.marcaDagua,
+                bloquearDownload: dados.bloquearDownload,
+                bloquearPrint: dados.bloquearPrint,
+                arquivoUrl: imgUrl,
+                imagem_url: imgUrl,
+                imagemUrl: imgUrl,
+                destaque_boost: obra.destaque_boost || false,
+                total_curtidas: obra.total_curtidas ?? obra.totalCurtidas ?? 0,
+                totalCurtidas: obra.totalCurtidas ?? obra.total_curtidas ?? 0,
+                total_comentarios: obra.total_comentarios ?? obra.totalComentarios ?? 0,
+                totalComentarios: obra.totalComentarios ?? obra.total_comentarios ?? 0,
+                total_salvos: obra.total_salvos ?? obra.totalSalvos ?? 0,
+                totalSalvos: obra.totalSalvos ?? obra.total_salvos ?? 0,
+                dataPostagem: obra.dataPostagem || obra.data_criacao,
+                fixado: obra.fixado || false,
+                fixado_em: obra.fixado_em,
+              };
+            })
+          );
+        }
+      }
+    } catch (err) {
+      mostrarAviso(err.message || "Não foi possível alterar a fixação da obra.");
+    }
   };
 
   // Se o visitante acessou /perfil (sem ID de artista)
@@ -349,9 +490,40 @@ export default function ArtistProfile() {
   const nomeParts = (perfil.nome || "Artista").trim().split(" ");
   const primeiroNome = nomeParts[0];
   const sobrenome = nomeParts.slice(1).join(" ");
+  const ledInfo = getAvatarLedStyle(perfil, isOwner);
+
+  const totalCurtidasPerfil = obrasPublicas.reduce(
+    (acc, o) => acc + Number(o.total_curtidas ?? o.totalCurtidas ?? 0),
+    0
+  );
+  const totalComentariosPerfil = obrasPublicas.reduce(
+    (acc, o) => acc + Number(o.total_comentarios ?? o.totalComentarios ?? 0),
+    0
+  );
+  const totalSalvosPerfil = obrasPublicas.reduce(
+    (acc, o) => acc + Number(o.total_salvos ?? o.totalSalvos ?? 0),
+    0
+  );
+
+  const isProOuBoost = ["boost", "pro"].includes((perfil.plano || "").toLowerCase());
+  const temFundoPersonalizado = isProOuBoost && Boolean(perfil.fundoPerfil);
+
+  const estiloFundoGeral = temFundoPersonalizado
+    ? perfil.fundoPerfil.startsWith("http") || perfil.fundoPerfil.startsWith("data:") || perfil.fundoPerfil.startsWith("/")
+      ? {
+          backgroundImage: `linear-gradient(to bottom, rgba(255,255,255,0.78), rgba(255,255,255,0.96)), url(${getMediaUrl(perfil.fundoPerfil)})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+        }
+      : { background: perfil.fundoPerfil }
+    : {};
 
   return (
-    <div className="w-full">
+    <div
+      className={`w-full min-h-screen transition-all duration-500 ${!temFundoPersonalizado ? "bg-white" : ""}`}
+      style={estiloFundoGeral}
+    >
       {/* Banner Alerta de Mensagem */}
         {noticeMessage && (
           <div className="fixed top-5 right-5 z-50 bg-artDark text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold animate-fadeIn">
@@ -360,35 +532,28 @@ export default function ArtistProfile() {
           </div>
         )}
 
-        <section className="bg-white border-b border-black/5 px-4 sm:px-6 lg:px-10 py-7">
+        <section
+          className={`border-b border-black/5 px-4 sm:px-6 lg:px-10 py-7 relative transition-all duration-500 ${
+            !temFundoPersonalizado ? "bg-white" : ""
+          }`}
+        >
+
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
               <div className="lg:col-span-2 flex justify-center lg:justify-start">
                 <div className="relative group w-fit">
                   {/* Aura Difusa LED Neon Vibrante Espalhada ao Redor do Perfil */}
-                  {perfil.mostrarMolduraLed && (
+                  {ledInfo.ativo && (
                     <div
-                      className={`absolute -inset-2.5 sm:-inset-3 rounded-[2.5rem] blur-xl opacity-80 animate-pulse -z-10 transition-all duration-700 pointer-events-none ${
-                        (perfil.plano || "").toLowerCase() === "boost"
-                          ? "bg-gradient-to-tr from-[#FF793F] via-amber-400 to-[#FF793F]"
-                          : (perfil.plano || "").toLowerCase() === "pro"
-                          ? "bg-gradient-to-tr from-[#6C5CE7] via-fuchsia-500 to-[#0984E3]"
-                          : "bg-gradient-to-tr from-[#00B894] via-emerald-300 to-[#00B894]"
-                      }`}
+                      className={`absolute -inset-2.5 sm:-inset-3 rounded-[2.5rem] blur-xl opacity-80 animate-pulse -z-10 transition-all duration-700 pointer-events-none ${ledInfo.className}`}
+                      style={{ background: ledInfo.cor || (ledInfo.style?.borderColor || '#FF793F') }}
                     />
                   )}
 
                   {/* Moldura LED Neon Intensa e Brilhante Baseada no Plano */}
                   <div
-                    className={`w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-[2rem] overflow-hidden border-4 border-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 bg-gray-100 relative ${
-                      perfil.mostrarMolduraLed
-                        ? (perfil.plano || "").toLowerCase() === "boost"
-                          ? "ring-4 ring-[#FF793F] shadow-[0_0_25px_#FF793F,0_0_50px_rgba(255,121,63,0.8),0_0_75px_rgba(255,121,63,0.4)]"
-                          : (perfil.plano || "").toLowerCase() === "pro"
-                          ? "ring-4 ring-[#6C5CE7] shadow-[0_0_25px_#6C5CE7,0_0_50px_rgba(108,92,231,0.8),0_0_75px_rgba(108,92,231,0.4)]"
-                          : "ring-4 ring-[#00B894] shadow-[0_0_25px_#00B894,0_0_50px_rgba(0,184,148,0.8),0_0_75px_rgba(0,184,148,0.4)]"
-                        : ""
-                    }`}
+                    className={`w-28 h-28 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-[2rem] overflow-hidden border-4 border-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 bg-gray-100 relative ${ledInfo.className}`}
+                    style={ledInfo.style}
                   >
                     {perfil.avatar ? (
                       <img
@@ -423,15 +588,24 @@ export default function ArtistProfile() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-3">
-                  <h1 className="font-editorial text-4xl sm:text-5xl lg:text-5xl leading-none">
+                  <h1
+                    className="font-editorial text-4xl sm:text-5xl lg:text-5xl leading-none transition-colors duration-300"
+                    style={{ color: perfil.corNomeHex || perfil.cor_nome_hex || undefined }}
+                  >
                     {primeiroNome} {sobrenome && <span className="italic">{sobrenome}</span>}
                   </h1>
 
-                  {/* Subtítulo / Tag Sólida do Plano ao lado do Nome (Sincronizado com o toggle da moldura LED) */}
-                  {perfil.mostrarMolduraLed && (
+                  {/* Subtítulo / Tag Sólida do Plano ao lado do Nome (Sincronizado com o toggle de exibir badge do plano) */}
+                  {perfil.mostrarBadgePlano !== false && perfil.mostrar_badge_plano !== false && (
                     <>
                       {(perfil.plano || "").toLowerCase() === "boost" && (
-                        <span className="bg-artOrange text-white text-[11px] font-bold uppercase tracking-widest px-3.5 py-1 rounded-full shadow-md shadow-artOrange/30 flex items-center gap-1.5">
+                        <span
+                          className="text-white text-[11px] font-bold uppercase tracking-widest px-3.5 py-1 rounded-full shadow-md flex items-center gap-1.5"
+                          style={{
+                            backgroundColor: ledInfo.cor || perfil.corLed || "#FF793F",
+                            boxShadow: `0 4px 14px ${(ledInfo.cor || perfil.corLed || "#FF793F")}55`,
+                          }}
+                        >
                           <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
                           Boost
                         </span>
@@ -700,7 +874,10 @@ export default function ArtistProfile() {
                     <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
                       Galeria de Obras
                     </span>
-                    <h2 className="font-editorial text-3xl italic">
+                    <h2
+                      className="font-editorial text-3xl italic transition-colors duration-300"
+                      style={{ color: perfil.corNomeHex || perfil.cor_nome_hex || undefined }}
+                    >
                       Produções de {primeiroNome}
                     </h2>
                   </div>
@@ -731,7 +908,13 @@ export default function ArtistProfile() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {obrasPublicas.map((obra) => (
-                      <PortfolioCard key={obra.id} obra={obra} />
+                      <PortfolioCard
+                        key={obra.id}
+                        obra={obra}
+                        isOwner={isOwner}
+                        onToggleFixar={handleToggleFixarObra}
+                        fixado={obra.fixado}
+                      />
                     ))}
                   </div>
                 )}
@@ -744,7 +927,10 @@ export default function ArtistProfile() {
                     <span className="text-amber-500 font-bold tracking-widest uppercase text-[10px] block mb-1">
                       Coleção Pessoal
                     </span>
-                    <h2 className="font-editorial text-3xl italic">
+                    <h2
+                      className="font-editorial text-3xl italic transition-colors duration-300"
+                      style={{ color: perfil.corNomeHex || perfil.cor_nome_hex || undefined }}
+                    >
                       Minhas Obras Favoritadas
                     </h2>
                   </div>
