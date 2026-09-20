@@ -108,11 +108,21 @@ export default function ArtistProfile() {
         ? dadosPerfil.mostrar_moldura_led
         : (souDono && localLed !== null ? localLed === "true" : true);
 
-      const finalCorLed = dadosPerfil.cor_led_hex || dadosPerfil.cor_led || dadosPerfil.corLed || (souDono && localCorLed ? localCorLed : "#FF793F");
+      const planoAtual = (dadosPerfil.plano || "Free").toLowerCase();
+      const isBoostPlan = planoAtual === "boost";
+      const isPaidPlan = planoAtual === "pro" || planoAtual === "boost";
+
+      const finalCorLed = isPaidPlan
+        ? (dadosPerfil.cor_led_hex || dadosPerfil.cor_led || dadosPerfil.corLed || (souDono && localCorLed ? localCorLed : (isBoostPlan ? "#FF793F" : "#6C5CE7")))
+        : "#00B894";
       const localBg = localStorage.getItem(`artfolio_boost_profile_bg_${dadosPerfil.id || targetId}`);
-      const finalFundoPerfil = dadosPerfil.fundo_perfil || dadosPerfil.fundoPerfil || (localBg ? localBg : "");
+      const finalFundoPerfil = isBoostPlan
+        ? (dadosPerfil.fundo_perfil || dadosPerfil.fundoPerfil || (localBg ? localBg : ""))
+        : "";
       const localNickColor = localStorage.getItem(`artfolio_profile_nick_color_${dadosPerfil.id || targetId}`);
-      const finalCorNome = dadosPerfil.cor_nome_hex || dadosPerfil.corNomeHex || (souDono && localNickColor ? localNickColor : "");
+      const finalCorNome = isBoostPlan
+        ? (dadosPerfil.cor_nome_hex || dadosPerfil.corNomeHex || (souDono && localNickColor ? localNickColor : ""))
+        : "";
 
       setPerfil({
         id: dadosPerfil.id || targetId,

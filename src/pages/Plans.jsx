@@ -46,6 +46,20 @@ export default function Plans() {
       setAssinandoId(plano.id);
       const res = await planosService.assinarPlano(plano.id);
       setMeuPlano(res);
+      if (plano.tipo.toLowerCase() === "free") {
+        if (authUser?.id) {
+          localStorage.removeItem(`artfolio_profile_nick_color_${authUser.id}`);
+          localStorage.removeItem(`artfolio_boost_profile_bg_${authUser.id}`);
+        }
+        localStorage.removeItem("artfolio_boost_led_color");
+        window.dispatchEvent(new CustomEvent("artfolio:nick_color_updated", { detail: { corNomeHex: "" } }));
+      } else if (plano.tipo.toLowerCase() === "pro") {
+        if (authUser?.id) {
+          localStorage.removeItem(`artfolio_profile_nick_color_${authUser.id}`);
+          localStorage.removeItem(`artfolio_boost_profile_bg_${authUser.id}`);
+        }
+        window.dispatchEvent(new CustomEvent("artfolio:nick_color_updated", { detail: { corNomeHex: "" } }));
+      }
       if (refreshUser) {
         await refreshUser();
       }
@@ -127,62 +141,76 @@ export default function Plans() {
     },
   ];
 
-  // Tabela comparativa simétrica e rigorosamente alinhada linha por linha (8 funcionalidades oficiais)
+  // Tabela comparativa simétrica e rigorosamente alinhada linha por linha (10 funcionalidades oficiais)
   const comparativo = [
     {
       funcionalidade: "Portfólio",
-      free: "Bio e links externos",
-      pro: "Bio e links externos",
-      boost: "Bio e links externos",
+      free: "Biografia e links externos",
+      pro: "Biografia e links externos",
+      boost: "Biografia e links externos",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
       funcionalidade: "Resolução",
-      free: "Qualidade original",
-      pro: "Qualidade original",
-      boost: "Qualidade original",
+      free: "Qualidade original preservada",
+      pro: "Qualidade original preservada",
+      boost: "Qualidade original preservada",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
       funcionalidade: "Postagens",
       free: "Postagem simples (1 pág)",
-      pro: "Múltiplas páginas por post (Carrossel)",
-      boost: "Múltiplas páginas por post (Carrossel)",
+      pro: "Múltiplas páginas por post",
+      boost: "Múltiplas páginas por post",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
-      funcionalidade: "Armazenamento",
-      free: "Até 10 MB por arquivo",
-      pro: "Até 50 MB por arquivo",
-      boost: "Até 100 MB por arquivo",
+      funcionalidade: "Tamanho do Arquivo",
+      free: "Até 10 MB",
+      pro: "Até 50 MB",
+      boost: "Até 100 MB",
       isRiscado: { free: false, pro: false, boost: false },
     },
     {
-      funcionalidade: "Proteção Autoral",
-      free: "Sem proteções ativas",
-      pro: "Download, Print e Amostra",
-      boost: "Download, Print e Amostra",
+      funcionalidade: "Chat",
+      free: "Livre e ilimitado",
+      pro: "Livre e ilimitado",
+      boost: "Livre e ilimitado",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Identidade LED",
+      free: "Moldura LED verde fixa",
+      pro: "Moldura LED personalizável",
+      boost: "Moldura LED personalizável",
+      isRiscado: { free: false, pro: false, boost: false },
+    },
+    {
+      funcionalidade: "Segurança",
+      free: "Proteção e Direitos Autorais",
+      pro: "Proteção e Direitos Autorais",
+      boost: "Proteção e Direitos Autorais",
       isRiscado: { free: true, pro: false, boost: false },
     },
     {
-      funcionalidade: "Moldura LED",
-      free: "Tag e LED verde fixo",
-      pro: "Cor personalizável",
-      boost: "Cor personalizável",
-      isRiscado: { free: false, pro: false, boost: false },
-    },
-    {
-      funcionalidade: "Estética Perfil",
-      free: "Sem personalizações",
-      pro: "Cor do LED",
-      boost: "Fundo estático, Nick e Avatar GIF",
+      funcionalidade: "Estatísticas",
+      free: "Estatísticas completas da conta",
+      pro: "Estatísticas completas da conta",
+      boost: "Estatísticas completas da conta",
       isRiscado: { free: true, pro: false, boost: false },
     },
     {
-      funcionalidade: "Orçamentos",
-      free: "Indisponível no Free",
-      pro: "Indisponível no Pro",
-      boost: "Mensagem pronta (Tabela de preços)",
+      funcionalidade: "Personalização",
+      free: "Fundo, cor do nick e avatar GIF",
+      pro: "Fundo, cor do nick e avatar GIF",
+      boost: "Fundo, cor do nick e avatar GIF",
+      isRiscado: { free: true, pro: true, boost: false },
+    },
+    {
+      funcionalidade: "Mensagem CTA",
+      free: "Mensagem pronta para orçamentos",
+      pro: "Mensagem pronta para orçamentos",
+      boost: "Mensagem pronta para orçamentos",
       isRiscado: { free: true, pro: true, boost: false },
     },
   ];
