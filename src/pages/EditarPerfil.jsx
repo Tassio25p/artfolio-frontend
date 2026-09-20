@@ -399,7 +399,7 @@ function EditarPerfil() {
 
                       <input
                         type="file"
-                        accept="image/jpeg,image/png,image/webp"
+                        accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
                         onClick={(e) => { e.target.value = null; }}
                         onChange={handleFileChange}
                         disabled={uploadingPhoto}
