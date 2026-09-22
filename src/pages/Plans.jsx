@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { planosService } from "../services/api";
+import { planosService, pagamentoService } from "../services/api";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -29,6 +29,29 @@ export default function Plans() {
 
   useEffect(() => {
     carregarMeuPlano();
+
+    // Verificação de retorno do Stripe Checkout
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("sucesso") === "true") {
+      addToast(
+        "Pagamento confirmado pelo Stripe! Sua assinatura foi ativada com sucesso e os recursos já estão liberados.",
+        "Assinatura Ativada",
+        "sucesso"
+      );
+      if (refreshUser) {
+        refreshUser();
+      }
+      carregarMeuPlano();
+      // Limpa os parâmetros da URL sem recarregar
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (searchParams.get("cancelado") === "true") {
+      addToast(
+        "O processo de pagamento no Stripe foi cancelado. Nenhuma cobrança foi efetuada.",
+        "Checkout Cancelado",
+        "aviso"
+      );
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   const handleAssinar = async (plano) => {
@@ -42,31 +65,53 @@ export default function Plans() {
       return;
     }
 
-    try {
-      setAssinandoId(plano.id);
-      const res = await planosService.assinarPlano(plano.id);
-      setMeuPlano(res);
-      if (plano.tipo.toLowerCase() === "free") {
+    // Downgrade direto para o plano Free (gratuito)
+    if (plano.tipo.toLowerCase() === "free") {
+      try {
+        setAssinandoId(plano.id);
+        const res = await planosService.assinarPlano(plano.id);
+        setMeuPlano(res);
         if (authUser?.id) {
           localStorage.removeItem(`artfolio_profile_nick_color_${authUser.id}`);
           localStorage.removeItem(`artfolio_boost_profile_bg_${authUser.id}`);
         }
         localStorage.removeItem("artfolio_boost_led_color");
         window.dispatchEvent(new CustomEvent("artfolio:nick_color_updated", { detail: { corNomeHex: "" } }));
-      } else if (plano.tipo.toLowerCase() === "pro") {
-        if (authUser?.id) {
-          localStorage.removeItem(`artfolio_profile_nick_color_${authUser.id}`);
-          localStorage.removeItem(`artfolio_boost_profile_bg_${authUser.id}`);
+        if (refreshUser) {
+          await refreshUser();
         }
-        window.dispatchEvent(new CustomEvent("artfolio:nick_color_updated", { detail: { corNomeHex: "" } }));
+        addToast("Você retornou ao plano Artfolio Free.", "Plano Atualizado", "sucesso");
+      } catch (err) {
+        addToast(err.message || "Não foi possível alterar de plano. Tente novamente.", "Erro", "erro");
+      } finally {
+        setAssinandoId(null);
       }
-      if (refreshUser) {
-        await refreshUser();
+      return;
+    }
+
+    // Planos Pagos (Pro e Boost) -> Fluxo oficial de Checkout Stripe
+    try {
+      setAssinandoId(plano.id);
+      addToast(`Iniciando checkout seguro do ${plano.nome}...`, "Aguarde", "info");
+
+      const res = await pagamentoService.criarCheckoutSessao({
+        price_id: plano.priceId,
+        plano_id: plano.id,
+        plano_tipo: plano.tipo,
+      });
+
+      if (res && res.checkout_url) {
+        // Redireciona o navegador do usuário para o Stripe Checkout oficial
+        window.location.href = res.checkout_url;
+      } else {
+        throw new Error("URL de checkout não foi retornada pelo servidor.");
       }
-      addToast(`Parabéns! Seu plano agora é ${plano.nome}. Os novos recursos já estão liberados!`, "Sucesso!", "sucesso");
     } catch (err) {
-      addToast(err.message || "Não foi possível alterar de plano. Tente novamente.", "Erro", "erro");
-    } finally {
+      addToast(
+        err.message || "Não foi possível conectar com o Stripe Checkout. Tente novamente.",
+        "Erro no Pagamento",
+        "erro"
+      );
       setAssinandoId(null);
     }
   };
@@ -106,6 +151,7 @@ export default function Plans() {
       preco: "R$ 29,90",
       periodo: "por mês",
       destaque: true,
+      priceId: import.meta.env.VITE_STRIPE_PRICE_ID_PRO || "",
       corNome: "text-artPurple",
       corBorda: "border-artPurple shadow-xl shadow-artPurple/15",
       corBadge: "bg-artPurple text-white shadow-md shadow-artPurple/30",
@@ -128,6 +174,7 @@ export default function Plans() {
       preco: "R$ 49,90",
       periodo: "por mês",
       destaque: false,
+      priceId: import.meta.env.VITE_STRIPE_PRICE_ID_BOOST || "",
       corNome: "text-artOrange",
       corBorda: "border-artOrange/40 hover:border-artOrange",
       corBadge: "bg-artOrange text-white shadow-md shadow-artOrange/30",
@@ -327,7 +374,7 @@ export default function Plans() {
                     {estaAssinando ? (
                       <>
                         <i className="fa-solid fa-spinner fa-spin"></i>
-                        Atualizando...
+                        {plano.id === 1 ? "Atualizando..." : "Conectando ao Stripe..."}
                       </>
                     ) : ehPlanoAtual ? (
                       <>
@@ -337,7 +384,7 @@ export default function Plans() {
                     ) : plano.id === 1 ? (
                       "Voltar para Free"
                     ) : (
-                      `Mudar para ${plano.nome}`
+                      `Assinar ${plano.nome}`
                     )}
                   </button>
                 </div>

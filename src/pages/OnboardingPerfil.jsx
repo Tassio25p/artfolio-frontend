@@ -106,7 +106,7 @@ export default function OnboardingPerfil() {
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased py-10 px-4">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <div className="max-w-3xl mx-auto relative z-10">
         {/* Header */}

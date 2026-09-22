@@ -129,19 +129,19 @@ export default function Sidebar() {
   };
 
   return (
-    <nav className="fixed left-0 top-0 h-screen w-20 border-r border-black/5 bg-[#F9F8F6] z-50 flex flex-col items-center justify-between py-6 shadow-xs select-none">
+    <nav className="sidebar-container fixed left-0 top-0 h-screen max-h-screen w-20 border-r border-black/5 bg-[#F9F8F6] z-50 flex flex-col items-center justify-between py-6 shadow-xs select-none overflow-y-auto overflow-x-hidden no-scrollbar">
       {/* Linha gradiente de borda lateral do Início com espessura marcante (6px) */}
       <div className="absolute right-0 top-0 bottom-0 w-[6px] bg-gradient-to-b from-artOrange via-artPurple to-artBlue shadow-sm shadow-artPurple/20 pointer-events-none z-10"></div>
 
       <NavLink
         to="/feed"
         title="Artfolio"
-        className="font-editorial text-2xl font-black text-artOrange rotate-180 [writing-mode:vertical-rl] uppercase tracking-wider hover:scale-105 transition-transform duration-300 py-1"
+        className="sidebar-logo shrink-0 font-editorial text-2xl font-black text-artOrange rotate-180 [writing-mode:vertical-rl] uppercase tracking-wider hover:scale-105 transition-transform duration-300 py-1 focus:outline-none"
       >
         Artfolio
       </NavLink>
 
-      <div className="flex flex-col items-center gap-2.5">
+      <div className="sidebar-menu shrink-0 my-auto flex flex-col items-center gap-2.5">
         {menuItems.map((item) => (
           <NavLink
             key={item.to}
@@ -153,7 +153,7 @@ export default function Sidebar() {
               }
             }}
             className={({ isActive }) =>
-              `group relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all duration-300 ${isActive ? item.active : `${item.inactive} hover:-translate-y-0.5`
+              `sidebar-item group relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all duration-300 focus:outline-none ${isActive ? item.active : `${item.inactive} hover:-translate-y-0.5`
               }`
             }
           >
@@ -169,7 +169,7 @@ export default function Sidebar() {
                 ></i>
 
                 {item.isNotificacao && naoLidas > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-artOrange text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#F9F8F6] animate-pulse">
+                  <span className="sidebar-badge absolute -top-1 -right-1 w-5 h-5 rounded-full bg-artOrange text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#F9F8F6] animate-pulse">
                     {naoLidas > 9 ? "9+" : naoLidas}
                   </span>
                 )}
@@ -184,11 +184,11 @@ export default function Sidebar() {
       </div>
 
       {isGuest ? (
-        <div className="flex flex-col items-center gap-3">
+        <div className="sidebar-footer shrink-0 flex flex-col items-center gap-3">
           <Link
             to="/login"
             title="Entrar ou Cadastrar"
-            className="group relative w-11 h-11 rounded-2xl bg-artPurple text-white flex items-center justify-center text-sm font-bold hover:bg-artDark transition-all duration-300 shadow-md shadow-artPurple/20 hover:-translate-y-0.5"
+            className="sidebar-avatar group relative w-11 h-11 rounded-2xl bg-artPurple text-white flex items-center justify-center text-sm font-bold hover:bg-artDark transition-all duration-300 shadow-md shadow-artPurple/20 hover:-translate-y-0.5 focus:outline-none"
           >
             <i className="fa-solid fa-right-to-bracket"></i>
             <span className="absolute left-24 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-artDark text-white text-[10px] font-bold uppercase tracking-widest opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-md">
@@ -198,7 +198,7 @@ export default function Sidebar() {
 
           <div
             title={user?.nome || "Convidado"}
-            className="group relative w-10 h-10 rounded-full bg-artBlue/10 text-artBlue border border-artBlue/30 flex items-center justify-center text-sm font-bold"
+            className="sidebar-action-btn group relative w-10 h-10 rounded-full bg-artBlue/10 text-artBlue border border-artBlue/30 flex items-center justify-center text-sm font-bold focus:outline-none"
           >
             <i className="fa-solid fa-eye text-sm"></i>
             <span className="absolute left-24 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-artDark text-white text-[10px] font-bold uppercase tracking-widest opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-md">
@@ -207,7 +207,7 @@ export default function Sidebar() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3">
+        <div className="sidebar-footer shrink-0 flex flex-col items-center gap-3">
           <NavLink
             to="/perfil"
             title="Perfil"
@@ -217,7 +217,7 @@ export default function Sidebar() {
             })()}
             className={({ isActive }) => {
               const led = getAvatarLedStyle(user, true);
-              return `group relative w-11 h-11 rounded-full border border-white hover:scale-110 transition-all duration-300 overflow-hidden ${led.className} ${
+              return `sidebar-avatar group relative w-11 h-11 rounded-full border border-white hover:scale-110 transition-all duration-300 overflow-hidden focus:outline-none ${led.className} ${
                 fotoPerfil ? "" : "bg-artPurple"
               }`;
             }}
@@ -243,7 +243,7 @@ export default function Sidebar() {
             to="/configuracoes"
             title="Configurações"
             className={({ isActive }) =>
-              `group relative w-10 h-10 rounded-xl flex items-center justify-center text-sm transition-all duration-300 ${isActive
+              `sidebar-action-btn group relative w-10 h-10 rounded-xl flex items-center justify-center text-sm transition-all duration-300 focus:outline-none ${isActive
                 ? "bg-white text-artBlue shadow-md ring-2 ring-artBlue/20"
                 : "text-gray-500 hover:text-artBlue hover:bg-artBlue/10 hover:-translate-y-0.5"
               }`
@@ -260,7 +260,7 @@ export default function Sidebar() {
             type="button"
             onClick={handleLogout}
             title="Sair da conta"
-            className="group relative w-10 h-10 rounded-xl flex items-center justify-center text-sm text-gray-400 hover:text-artOrange hover:bg-artOrange/10 hover:-translate-y-0.5 transition-all duration-300"
+            className="sidebar-action-btn group relative w-10 h-10 rounded-xl flex items-center justify-center text-sm text-gray-400 hover:text-artOrange hover:bg-artOrange/10 hover:-translate-y-0.5 transition-all duration-300 focus:outline-none"
           >
             <i className="fa-solid fa-right-from-bracket text-base transition-colors duration-300"></i>
 

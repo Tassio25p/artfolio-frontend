@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 export default function TermosUso() {
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       {/* Header */}
       <header className="relative z-10 px-6 lg:px-12 py-6 border-b border-black/5 bg-white/80 backdrop-blur-md sticky top-0">

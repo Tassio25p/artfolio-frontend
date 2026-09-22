@@ -240,8 +240,33 @@ async function apiRequest(endpoint, options = {}, isRetry = false) {
       throw new Error(msg);
     }
 
-    const errorMsg = data?.detail || data?.message || `Erro ${response.status}: Falha na requisição`;
-    throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+    let errorMsg = `Erro ${response.status}: Falha na requisição`;
+    if (typeof data?.detail === "string") {
+      errorMsg = data.detail;
+    } else if (data?.detail?.mensagem) {
+      errorMsg = data.detail.mensagem;
+    } else if (data?.detail?.detail) {
+      errorMsg = data.detail.detail;
+    } else if (typeof data?.mensagem === "string") {
+      errorMsg = data.mensagem;
+    } else if (typeof data?.message === "string") {
+      errorMsg = data.message;
+    }
+
+    const err = new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+    err.status = response.status;
+    err.data = data;
+    err.nao_verificado = Boolean(
+      data?.nao_verificado ||
+      data?.detail?.nao_verificado ||
+      (response.status === 403 && (
+        String(errorMsg).toLowerCase().includes("não verificado") ||
+        String(errorMsg).toLowerCase().includes("nao verificado") ||
+        String(errorMsg).toLowerCase().includes("ativ")
+      ))
+    );
+    err.response = { status: response.status, data };
+    throw err;
   }
 
   return data;
@@ -265,6 +290,54 @@ export const authService = {
 
   async getMe() {
     return await apiRequest("/auth/me");
+  },
+
+  async verificarEmail(email, codigo) {
+    return await apiRequest("/auth/verificar-email", {
+      method: "POST",
+      body: JSON.stringify({ email, codigo }),
+    });
+  },
+
+  async reenviarCodigo(email) {
+    return await apiRequest("/auth/reenviar-codigo", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async esqueciSenha(email) {
+    try {
+      return await apiRequest("/auth/esqueci-senha", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+    } catch (err) {
+      if (err.status === 404) {
+        return await apiRequest("/auth/reenviar-codigo", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        });
+      }
+      throw err;
+    }
+  },
+
+  async atualizarSenha(email, codigo, nova_senha) {
+    try {
+      return await apiRequest("/auth/atualizar-senha", {
+        method: "POST",
+        body: JSON.stringify({ email, codigo, nova_senha }),
+      });
+    } catch (err) {
+      if (err.status === 404) {
+        return await apiRequest("/auth/redefinir-senha", {
+          method: "POST",
+          body: JSON.stringify({ email, codigo, nova_senha }),
+        });
+      }
+      throw err;
+    }
   },
 
   logout() {
@@ -918,6 +991,16 @@ export const planosService = {
   },
 };
 
+// --- Serviços de Pagamentos (Stripe) ---
+export const pagamentoService = {
+  async criarCheckoutSessao(dados) {
+    return await apiRequest("/pagamentos/criar-checkout-sessao", {
+      method: "POST",
+      body: JSON.stringify(dados),
+    });
+  },
+};
+
 // --- Serviços de Categorias ---
 export const categoriaService = {
   async listar() {
@@ -942,5 +1025,6 @@ export default {
   adminService,
   mensagemService,
   planosService,
+  pagamentoService,
   getMediaUrl,
 };

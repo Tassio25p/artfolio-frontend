@@ -124,20 +124,15 @@ export default function Cadastro() {
 
       await authService.cadastrar(dados);
 
-      // Login automático pós-cadastro
-      try {
-        const loginRes = await authService.login({ email: dados.email, senha });
-        if (loginRes && loginRes.access_token) {
-          setAuthLogin(loginRes.usuario, loginRes.access_token);
-        }
-      } catch {
-        // Se falhar o login automático, segue normalmente
-      }
-
-      mostrarAviso("Cadastro realizado com sucesso! Redirecionando para personalizar seu perfil...", "success");
+      mostrarAviso("Cadastro realizado com sucesso! Enviamos um código de verificação para o seu e-mail.", "success");
       setTimeout(() => {
-        navigate("/editar-perfil");
-      }, 1200);
+        navigate("/verificar-email", {
+          state: {
+            email,
+            mensagem: "Conta criada com sucesso! Introduza o código de 6 dígitos enviado para o seu e-mail para ativá-la.",
+          },
+        });
+      }, 1000);
     } catch (err) {
       // Tratamento humanizado de erros (eliminando "failed to fetch")
       let mensagemAmigavel = "Erro ao realizar cadastro.";
@@ -179,7 +174,7 @@ export default function Cadastro() {
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased overflow-x-hidden">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <main className="min-h-screen grid grid-cols-1 lg:grid-cols-12">
         {/* Coluna Esquerda - Apresentação Artística com Filtro Roxo */}

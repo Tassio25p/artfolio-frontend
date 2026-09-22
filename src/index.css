@@ -20,3 +20,103 @@
 .animate-slide-in-right {
   animation: slideInRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ==========================================================================
+   RESPONSIVIDADE INTELIGENTE DA SIDEBAR PARA DIVERSAS RESOLUÇÕES
+   Preserva o visual original e adapta perfeitamente para 1920x1080, 1366x768, 720p etc.
+   ========================================================================== */
+
+/* Previne contorno preto padrão de foco do navegador ao clicar nos botões */
+.sidebar-container button:focus,
+.sidebar-container a:focus {
+  outline: none !important;
+}
+
+/* Resolução 1366x768, 1440x900 e laptops com altura <= 800px */
+@media (max-height: 800px) {
+  .sidebar-container {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+
+  .sidebar-logo {
+    font-size: 1.15rem !important;
+    letter-spacing: 0.05em !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .sidebar-menu {
+    gap: 0.375rem !important;
+  }
+
+  .sidebar-item {
+    width: 2.625rem !important;
+    height: 2.625rem !important;
+    font-size: 1rem !important;
+    border-radius: 0.875rem !important;
+  }
+
+  .sidebar-badge {
+    width: 1rem !important;
+    height: 1rem !important;
+    font-size: 0.55rem !important;
+  }
+
+  .sidebar-footer {
+    gap: 0.375rem !important;
+  }
+
+  .sidebar-avatar {
+    width: 2.375rem !important;
+    height: 2.375rem !important;
+  }
+
+  .sidebar-action-btn {
+    width: 2.125rem !important;
+    height: 2.125rem !important;
+    font-size: 0.875rem !important;
+    border-radius: 0.625rem !important;
+  }
+}
+
+/* Resoluções compactas com altura <= 660px (ex: 1280x720, janelas redimensionadas) */
+@media (max-height: 660px) {
+  .sidebar-container {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .sidebar-logo {
+    font-size: 1rem !important;
+    letter-spacing: 0.03em !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .sidebar-menu {
+    gap: 0.25rem !important;
+  }
+
+  .sidebar-item {
+    width: 2.375rem !important;
+    height: 2.375rem !important;
+    font-size: 0.9rem !important;
+    border-radius: 0.75rem !important;
+  }
+
+  .sidebar-footer {
+    gap: 0.25rem !important;
+  }
+
+  .sidebar-avatar {
+    width: 2.125rem !important;
+    height: 2.125rem !important;
+  }
+
+  .sidebar-action-btn {
+    width: 1.875rem !important;
+    height: 1.875rem !important;
+    font-size: 0.75rem !important;
+  }
+}

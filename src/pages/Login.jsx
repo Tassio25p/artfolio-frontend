@@ -73,16 +73,59 @@ export default function Login() {
     event.preventDefault();
     setLoading(true);
 
+    const emailLimpo = email.trim().toLowerCase();
+
     try {
-      await login(email, senha, lembrarAcesso);
+      await login(emailLimpo, senha, lembrarAcesso);
       mostrarAviso("Login realizado com sucesso! Redirecionando...", "success");
       setTimeout(() => {
         navigate(rotaOrigem, { replace: true });
       }, 800);
     } catch (err) {
+      // Identifica se o erro é decorrente de e-mail pendente de verificação
+      const isNaoVerificado = Boolean(
+        err?.nao_verificado ||
+        err?.data?.nao_verificado ||
+        err?.response?.data?.nao_verificado ||
+        err?.data?.detail?.nao_verificado ||
+        (err?.status === 403 && (
+          err?.message?.toLowerCase().includes("não verificado") ||
+          err?.message?.toLowerCase().includes("nao verificado") ||
+          err?.message?.toLowerCase().includes("ativ")
+        )) ||
+        (err?.response?.status === 403 && (
+          JSON.stringify(err?.response?.data || "").toLowerCase().includes("não verificado") ||
+          JSON.stringify(err?.response?.data || "").toLowerCase().includes("nao verificado")
+        ))
+      );
+
+      if (isNaoVerificado) {
+        const mensagemAviso =
+          err?.data?.mensagem ||
+          err?.response?.data?.mensagem ||
+          err?.message ||
+          "A sua conta ainda não foi ativada. Enviamos um novo código de verificação para o seu e-mail.";
+
+        mostrarAviso(mensagemAviso, "warning");
+
+        setTimeout(() => {
+          navigate("/verificar-email", {
+            state: {
+              email: emailLimpo,
+              mensagem: mensagemAviso,
+            },
+          });
+        }, 1200);
+        return;
+      }
+
       let msg = "Erro ao realizar login. Verifique suas credenciais.";
       if (err.message) {
-        if (err.message.toLowerCase().includes("failed to fetch") || err.message.toLowerCase().includes("networkerror") || err.message.toLowerCase().includes("não foi possível conectar")) {
+        if (
+          err.message.toLowerCase().includes("failed to fetch") ||
+          err.message.toLowerCase().includes("networkerror") ||
+          err.message.toLowerCase().includes("não foi possível conectar")
+        ) {
           msg = "Não foi possível conectar ao servidor backend (FastAPI na porta 8000). Verifique se o servidor está em execução.";
         } else {
           msg = err.message;
@@ -103,7 +146,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased overflow-hidden">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <main className="h-screen max-h-screen overflow-hidden grid grid-cols-1 lg:grid-cols-12">
         {/* Coluna Esquerda - Formulário de Login Perfeitamente Centralizado e Sem Rolagem */}
