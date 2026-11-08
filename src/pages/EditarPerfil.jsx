@@ -2,16 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { authService, usuarioService, obrasService, getMediaUrl } from "../services/api";
-
-const categorias = [
-  { value: "pintura-digital", label: "Pintura Digital" },
-  { value: "modelagem-3d", label: "Modelagem 3D" },
-  { value: "textil", label: "Têxtil" },
-  { value: "artesanato", label: "Artesanato" },
-  { value: "desenho", label: "Desenho Manual" },
-  { value: "ilustracao", label: "Ilustração" },
-  { value: "arte-conceitual", label: "Arte Conceitual" },
-];
+import EmojiPicker from "../components/EmojiPicker";
 
 function EditarPerfil() {
   const navigate = useNavigate();
@@ -37,11 +28,10 @@ function EditarPerfil() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [uploadingBg, setUploadingBg] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
   const [noticeType, setNoticeType] = useState("info"); // "info" | "success" | "error"
 
-  const isArtista = tipoConta === "artista";
+  const isArtista = tipoConta === "artista" || tipoConta === "admin" || tipoConta === "moderador";
 
   const nomeSeparado = nome.trim().split(" ");
   const primeiroNome = nomeSeparado[0] || "Perfil";
@@ -49,7 +39,7 @@ function EditarPerfil() {
 
   // Carregar dados do usuário ao montar o componente
   const { user: authUser, refreshUser } = useAuth();
-  const planoUsuario = (authUser?.plano || "").toLowerCase();
+  const [planoUsuario, setPlanoUsuario] = useState(() => (authUser?.plano || "").toLowerCase());
   const isProOuBoost = planoUsuario === "boost" || planoUsuario === "pro";
   const isBoost = planoUsuario === "boost";
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -68,9 +58,18 @@ function EditarPerfil() {
   };
 
   useEffect(() => {
+    if (authUser?.plano) {
+      setPlanoUsuario(authUser.plano.toLowerCase());
+    }
+  }, [authUser]);
+
+  useEffect(() => {
     const carregarPerfil = async () => {
       try {
         const usuario = await authService.getMe();
+        if (usuario?.plano) {
+          setPlanoUsuario(usuario.plano.toLowerCase());
+        }
         setNome(usuario.nome || "");
         setTelefone(usuario.telefone || "");
         setBiografia(usuario.biografia || "");
@@ -863,12 +862,15 @@ function EditarPerfil() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                      Biografia
-                      <span className="text-gray-300 ml-2 normal-case tracking-normal font-normal">
-                        {biografia.length}/1000
-                      </span>
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                        Biografia
+                        <span className="text-gray-300 ml-2 normal-case tracking-normal font-normal">
+                          {biografia.length}/1000
+                        </span>
+                      </label>
+                      <EmojiPicker onSelectEmoji={(emoji) => setBiografia((prev) => (prev || "") + emoji)} />
+                    </div>
 
                     <textarea
                       rows="4"
@@ -886,7 +888,7 @@ function EditarPerfil() {
                   Redes sociais e contato
                 </h2>
 
-                <div className="grid grid-cols-1 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
                       Instagram <span className="text-artOrange font-normal">(ex: @seuusuario)</span>
@@ -900,6 +902,24 @@ function EditarPerfil() {
                         value={instagram}
                         onChange={(event) => setInstagram(event.target.value)}
                         placeholder="usuario ou https://instagram.com/usuario"
+                        className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                      Link de Portfólio / Certificados Externos
+                    </label>
+
+                    <div className="relative">
+                      <i className="fa-solid fa-link absolute left-5 top-1/2 -translate-y-1/2 text-artPurple"></i>
+
+                      <input
+                        type="text"
+                        value={portfolio}
+                        onChange={(event) => setPortfolio(event.target.value)}
+                        placeholder="https://seuportfolio.com"
                         className="w-full bg-[#F9F8F6] rounded-2xl pl-12 pr-5 py-4 outline-none focus:ring-2 ring-artPurple/20 text-sm"
                       />
                     </div>

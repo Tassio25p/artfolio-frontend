@@ -240,8 +240,33 @@ async function apiRequest(endpoint, options = {}, isRetry = false) {
       throw new Error(msg);
     }
 
-    const errorMsg = data?.detail || data?.message || `Erro ${response.status}: Falha na requisição`;
-    throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+    let errorMsg = `Erro ${response.status}: Falha na requisição`;
+    if (typeof data?.detail === "string") {
+      errorMsg = data.detail;
+    } else if (data?.detail?.mensagem) {
+      errorMsg = data.detail.mensagem;
+    } else if (data?.detail?.detail) {
+      errorMsg = data.detail.detail;
+    } else if (typeof data?.mensagem === "string") {
+      errorMsg = data.mensagem;
+    } else if (typeof data?.message === "string") {
+      errorMsg = data.message;
+    }
+
+    const err = new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+    err.status = response.status;
+    err.data = data;
+    err.nao_verificado = Boolean(
+      data?.nao_verificado ||
+      data?.detail?.nao_verificado ||
+      (response.status === 403 && (
+        String(errorMsg).toLowerCase().includes("não verificado") ||
+        String(errorMsg).toLowerCase().includes("nao verificado") ||
+        String(errorMsg).toLowerCase().includes("ativ")
+      ))
+    );
+    err.response = { status: response.status, data };
+    throw err;
   }
 
   return data;
@@ -265,6 +290,54 @@ export const authService = {
 
   async getMe() {
     return await apiRequest("/auth/me");
+  },
+
+  async verificarEmail(email, codigo) {
+    return await apiRequest("/auth/verificar-email", {
+      method: "POST",
+      body: JSON.stringify({ email, codigo }),
+    });
+  },
+
+  async reenviarCodigo(email) {
+    return await apiRequest("/auth/reenviar-codigo", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async esqueciSenha(email) {
+    try {
+      return await apiRequest("/auth/esqueci-senha", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+    } catch (err) {
+      if (err.status === 404) {
+        return await apiRequest("/auth/reenviar-codigo", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        });
+      }
+      throw err;
+    }
+  },
+
+  async atualizarSenha(email, codigo, nova_senha) {
+    try {
+      return await apiRequest("/auth/atualizar-senha", {
+        method: "POST",
+        body: JSON.stringify({ email, codigo, nova_senha }),
+      });
+    } catch (err) {
+      if (err.status === 404) {
+        return await apiRequest("/auth/redefinir-senha", {
+          method: "POST",
+          body: JSON.stringify({ email, codigo, nova_senha }),
+        });
+      }
+      throw err;
+    }
   },
 
   logout() {
@@ -446,7 +519,9 @@ export const obrasService = {
 };
 
 // --- Helper de mídia / URL ---
-export const getMediaUrl = (path, fallback = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800") => {
+export const DEFAULT_FALLBACK_ART = "/default-art.png";
+
+export const getMediaUrl = (path, fallback = DEFAULT_FALLBACK_ART) => {
   if (!path) return fallback;
   if (path.startsWith("data:") || path.startsWith("blob:")) {
     return path;
@@ -476,38 +551,20 @@ export const usuarioService = {
   },
 
   async obterPerfil(id) {
-    try {
-      return await apiRequest(`/usuarios/${id}`);
-    } catch {
-      return {
-        id: Number(id) || null,
-        nome: "Usuário",
-        email: "",
-        biografia: "",
-        fotoPerfil: "",
-        portfolio: "",
-        instagram: "",
-        behance: "",
-        website: "",
-        trajetoria: "",
-        especializacoes: "",
-        certificados: "[]",
-        tipo_conta: "artista",
-        tipo_usuario: "PF",
-        seguidoresCount: 0,
-        seguindoCount: 0,
-        obrasCount: 0,
-        curtidasTotais: 0,
-        visualizacoesTotais: 0,
-        relacionamento: { isMe: false, seguindo: false },
-      };
-    }
+    return await apiRequest(`/usuarios/${id}`);
   },
 
   async atualizarPerfil(dados) {
     return await apiRequest("/usuarios/me", {
       method: "PUT",
       body: JSON.stringify(dados),
+    });
+  },
+
+  async alternarComissoes(statusComissao = null) {
+    const url = statusComissao !== null ? `/usuarios/me/comissoes?status_comissao=${statusComissao}` : "/usuarios/me/comissoes";
+    return await apiRequest(url, {
+      method: "PATCH",
     });
   },
 
@@ -750,6 +807,21 @@ export const adminService = {
       body: JSON.stringify({ acao: "rejeitar", motivo }),
     });
   },
+  async banirObraEAutor(id, motivo = "Banimento administrativo da publicação e do autor.") {
+    return await apiRequest(`/admin/obras/${id}/julgar`, {
+      method: "PATCH",
+      body: JSON.stringify({ acao: "banir", motivo }),
+    });
+  },
+  async removerObraAdmin(id, { banir_autor = true, motivo = "Banimento administrativo da publicação e do autor." } = {}) {
+    const query = new URLSearchParams({
+      banir_autor: String(Boolean(banir_autor)),
+      motivo,
+    }).toString();
+    return await apiRequest(`/admin/obras/${id}?${query}`, {
+      method: "DELETE",
+    });
+  },
   async listarDenunciasChat(status) {
     const query = status ? `?status=${encodeURIComponent(status)}` : "";
     return await apiRequest(`/admin/denuncias${query}`);
@@ -782,8 +854,43 @@ export const adminService = {
   async listarLogs(limit = 50, offset = 0) {
     return await apiRequest(`/admin/logs?limit=${limit}&offset=${offset}`);
   },
-  async listarUsuariosSinalizados() {
-    return await apiRequest("/admin/usuarios/sinalizados");
+  async listarUsuariosSinalizados(q = "") {
+    const query = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+    return await apiRequest(`/admin/usuarios/sinalizados${query}`);
+  },
+  async listarDesafios() {
+    return await apiRequest("/admin/desafios");
+  },
+  async criarDesafio({ nomeCategoria, prazo_dias = 7, ativar_agora = false }) {
+    return await apiRequest("/admin/desafios", {
+      method: "POST",
+      body: JSON.stringify({ nomeCategoria, prazo_dias: Number(prazo_dias), ativar_agora: Boolean(ativar_agora) }),
+    });
+  },
+  async atualizarDesafio(categoriaId, { nomeCategoria, prazo_dias, reiniciar_prazo = false }) {
+    return await apiRequest(`/admin/desafios/${categoriaId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        nomeCategoria,
+        prazo_dias: prazo_dias !== undefined ? Number(prazo_dias) : undefined,
+        reiniciar_prazo: Boolean(reiniciar_prazo),
+      }),
+    });
+  },
+  async removerDesafio(categoriaId) {
+    return await apiRequest(`/admin/desafios/${categoriaId}`, {
+      method: "DELETE",
+    });
+  },
+  async ativarDesafio(categoriaId) {
+    return await apiRequest(`/admin/desafios/${categoriaId}/ativar`, {
+      method: "POST",
+    });
+  },
+  async rotacionarDesafio() {
+    return await apiRequest("/admin/desafios/rotacionar", {
+      method: "POST",
+    });
   },
 };
 
@@ -799,6 +906,12 @@ export const mensagemService = {
   async obterOuCriarConversa(destinatarioId) {
     return await apiRequest(`/conversas/usuario/${destinatarioId}`, {
       method: "POST",
+    });
+  },
+  async criarConversaGrupo({ destinatarios_ids, nome_grupo }) {
+    return await apiRequest("/conversas/grupo", {
+      method: "POST",
+      body: JSON.stringify({ destinatarios_ids, nome_grupo }),
     });
   },
   async uploadAnexo(file) {
@@ -864,6 +977,62 @@ export const mensagemService = {
       body: JSON.stringify({ conteudo }),
     });
   },
+  async atualizarGrupo(conversaId, dados) {
+    return await apiRequest(`/conversas/${conversaId}/grupo`, {
+      method: "PATCH",
+      body: JSON.stringify(dados),
+    });
+  },
+  async uploadFotoGrupo(conversaId, file) {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append("arquivo", file);
+
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    let response;
+    try {
+      response = await fetch(`${API_BASE_URL}/conversas/${conversaId}/foto`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+    } catch {
+      throw new Error("Não foi possível conectar ao servidor backend para enviar a foto do grupo.");
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      const errorMsg = data?.detail || data?.message || "Erro ao atualizar foto do grupo.";
+      throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+    }
+
+    return data;
+  },
+  async removerMembroGrupo(conversaId, membroId) {
+    return await apiRequest(`/conversas/${conversaId}/membros/${membroId}`, {
+      method: "DELETE",
+    });
+  },
+  async sairDoGrupo(conversaId) {
+    return await apiRequest(`/conversas/${conversaId}/sair`, {
+      method: "POST",
+    });
+  },
+  async excluirGrupo(conversaId) {
+    return await apiRequest(`/conversas/${conversaId}/grupo`, {
+      method: "DELETE",
+    });
+  },
   async denunciarConversa({ denunciado_id, conversa_id, motivo, descricao }) {
     return await apiRequest("/chat/denuncias", {
       method: "POST",
@@ -918,13 +1087,30 @@ export const planosService = {
   },
 };
 
+// --- Serviços de Pagamentos (Stripe) ---
+export const pagamentoService = {
+  async criarCheckoutSessao(dados) {
+    return await apiRequest("/pagamentos/criar-checkout-sessao", {
+      method: "POST",
+      body: JSON.stringify(dados),
+    });
+  },
+};
+
 // --- Serviços de Categorias ---
 export const categoriaService = {
-  async listar() {
+  async listar(incluirInativos = false) {
     try {
-      return await apiRequest("/categorias");
+      return await apiRequest(`/categorias${incluirInativos ? "?incluir_inativos=true" : ""}`);
     } catch {
       return [];
+    }
+  },
+  async obterDesafioAtual() {
+    try {
+      return await apiRequest("/categorias/desafio-atual");
+    } catch {
+      return null;
     }
   },
 };
@@ -942,5 +1128,6 @@ export default {
   adminService,
   mensagemService,
   planosService,
+  pagamentoService,
   getMediaUrl,
 };

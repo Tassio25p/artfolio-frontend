@@ -175,8 +175,33 @@ export function AuthProvider({ children }) {
     }
 
     if (!response.ok) {
-      const errorMsg = data?.detail || data?.message || "Erro ao realizar login.";
-      throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+      let errorMsg = "Erro ao realizar login.";
+      if (typeof data?.detail === "string") {
+        errorMsg = data.detail;
+      } else if (data?.detail?.mensagem) {
+        errorMsg = data.detail.mensagem;
+      } else if (data?.detail?.detail) {
+        errorMsg = data.detail.detail;
+      } else if (typeof data?.mensagem === "string") {
+        errorMsg = data.mensagem;
+      } else if (typeof data?.message === "string") {
+        errorMsg = data.message;
+      }
+
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      error.data = data;
+      error.nao_verificado = Boolean(
+        data?.nao_verificado ||
+        data?.detail?.nao_verificado ||
+        (response.status === 403 && (
+          errorMsg.toLowerCase().includes("não verificado") ||
+          errorMsg.toLowerCase().includes("nao verificado") ||
+          errorMsg.toLowerCase().includes("ativ")
+        ))
+      );
+      error.response = { status: response.status, data };
+      throw error;
     }
 
     if (!data.access_token) {

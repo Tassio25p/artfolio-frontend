@@ -16,7 +16,9 @@ import Notificacoes from "./pages/Notificacoes";
 import Configuracoes from "./pages/Configuracoes";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
+import VerificarEmail from "./pages/VerificarEmail";
 import RecuperarSenha from "./pages/RecuperarSenha";
+import RedefinirSenha from "./pages/RedefinirSenha";
 import TermosUso from "./pages/TermosUso";
 import OnboardingPerfil from "./pages/OnboardingPerfil";
 import Seguidores from "./pages/Seguidores";
@@ -36,7 +38,11 @@ function App() {
         <Route path="/" element={<Inicio />} />
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Cadastro />} />
+        <Route path="/verificar-email" element={<VerificarEmail />} />
+        <Route path="/verificar-codigo" element={<VerificarEmail />} />
         <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+        <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+        <Route path="/atualizar-senha" element={<RedefinirSenha />} />
         <Route path="/termos" element={<TermosUso />} />
 
         {/* Onboarding exclusivo do Artista recém-cadastrado (fora do layout) */}

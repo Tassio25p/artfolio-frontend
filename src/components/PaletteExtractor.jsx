@@ -12,15 +12,18 @@ export default function PaletteExtractor({ imageUrl, onColorsExtracted, customCo
   const [isProcessing, setIsProcessing] = useState(false);
   const canvasRef = useRef(null);
 
+  const onColorsExtractedRef = useRef(onColorsExtracted);
+  useEffect(() => {
+    onColorsExtractedRef.current = onColorsExtracted;
+  });
+
   useEffect(() => {
     let isMounted = true;
 
     // Se o autor definiu cores customizadas manualmente, usa diretamente
     if (Array.isArray(customColors) && customColors.length > 0) {
       setColors(customColors);
-      if (onColorsExtracted) {
-        onColorsExtracted(customColors);
-      }
+      onColorsExtractedRef.current?.(customColors);
       return;
     }
 
@@ -168,16 +171,12 @@ export default function PaletteExtractor({ imageUrl, onColorsExtracted, customCo
               : ["#E74C3C", "#FF793F", "#0984E3", "#00B894", "#2D3436"];
 
           setColors(finalHexes);
-          if (onColorsExtracted) {
-            onColorsExtracted(finalHexes);
-          }
+          onColorsExtractedRef.current?.(finalHexes);
         } catch (err) {
           console.warn("PaletteExtractor: Erro ao ler buffer do canvas:", err);
           const fallbackHexes = ["#FF793F", "#E74C3C", "#0984E3", "#00B894", "#2D3436"];
           setColors(fallbackHexes);
-          if (onColorsExtracted) {
-            onColorsExtracted(fallbackHexes);
-          }
+          onColorsExtractedRef.current?.(fallbackHexes);
         } finally {
           if (isMounted) setIsProcessing(false);
         }
@@ -197,7 +196,7 @@ export default function PaletteExtractor({ imageUrl, onColorsExtracted, customCo
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [imageUrl]);
+  }, [imageUrl, customColors]);
 
   const handleCopyHex = (hex) => {
     if (!navigator.clipboard) return;

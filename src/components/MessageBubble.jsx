@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getMediaUrl } from "../services/api";
+import { renderTextWithEmojis } from "../utils/artfolioEmojis";
 
 export default function MessageBubble({
   text,
@@ -10,6 +11,9 @@ export default function MessageBubble({
   deletado_em = null,
   editado_em = null,
   podeEditar = false,
+  isGroup = false,
+  senderName = null,
+  senderAvatar = null,
   onEditar = null,
   onExcluir = null,
 }) {
@@ -51,8 +55,35 @@ export default function MessageBubble({
     }
   }
 
+  // Helper para renderizar menções @ e emojis
+  const renderizarTextoFormatado = (conteudo) => {
+    if (!conteudo || typeof conteudo !== "string") return conteudo;
+
+    // Regex para encontrar menções (@Nome ou @Nome_Sobrenome)
+    const mentionRegex = /(@[a-zA-Z0-9_À-ÿ]+)/g;
+    const parts = conteudo.split(mentionRegex);
+
+    return parts.map((part, i) => {
+      if (part.startsWith("@") && part.length > 1) {
+        return (
+          <span
+            key={`mention-${i}`}
+            className={`font-bold px-1.5 py-0.5 rounded-lg inline-block text-[12px] my-0.5 transition-colors ${
+              sent
+                ? "bg-white/20 text-purple-200"
+                : "bg-artPurple/15 text-artPurple"
+            }`}
+          >
+            {part}
+          </span>
+        );
+      }
+      return renderTextWithEmojis(part);
+    });
+  };
+
   return (
-    <div className={`flex ${sent ? "justify-end" : "justify-start"} group/bubble relative`}>
+    <div className={`flex ${sent ? "justify-end" : "justify-start"} group/bubble relative animate-soft-message-in`}>
       <div className="max-w-md relative flex items-start gap-1">
         {/* Menu de ações para mensagens enviadas (lado esquerdo do balão) */}
         {sent && !isApagada && (onEditar || onExcluir) && (
@@ -126,6 +157,20 @@ export default function MessageBubble({
                   : "bg-white text-gray-700 rounded-tl-none border border-black/5"
               }`}
             >
+              {isGroup && !sent && senderName && (
+                <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-black/5">
+                  <div className="w-5 h-5 rounded-full bg-artPurple/20 text-artPurple font-bold flex items-center justify-center text-[10px] shrink-0 overflow-hidden">
+                    {senderAvatar ? (
+                      <img src={getMediaUrl(senderAvatar)} alt={senderName} className="w-full h-full object-cover" />
+                    ) : (
+                      senderName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <span className="text-[11px] font-bold text-artPurple truncate">
+                    {senderName}
+                  </span>
+                </div>
+              )}
               {/* Card de Referência da Obra Anexada */}
               {obraAnexo && (
                 <Link
@@ -167,7 +212,7 @@ export default function MessageBubble({
 
               {textoExibicao && (
                 <p className="text-sm leading-relaxed opacity-90 break-words whitespace-pre-wrap">
-                  {textoExibicao}
+                  {renderizarTextoFormatado(textoExibicao)}
                 </p>
               )}
             </div>

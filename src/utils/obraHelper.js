@@ -71,14 +71,14 @@ export function desempacotarDadosObra(obra) {
   // Se uma string foi passada diretamente
   const obj = typeof obra === "string" ? { legenda: obra } : obra;
 
-  let textoLegenda = obj.legenda || obj.descricao || "";
-  let parteMeta = null;
+  const textoLegendaRaw = obj.legenda || obj.descricao || "";
+  let textoLegenda = textoLegendaRaw;
 
   // 1. Tentar extrair do bloco de metadados se existir
-  if (typeof textoLegenda === "string" && textoLegenda.includes(DELIMITADOR_META)) {
-    const partes = textoLegenda.split(DELIMITADOR_META);
+  if (typeof textoLegendaRaw === "string" && textoLegendaRaw.includes(DELIMITADOR_META)) {
+    const partes = textoLegendaRaw.split(DELIMITADOR_META);
     textoLegenda = partes[0].trim();
-    parteMeta = partes[1]?.trim();
+    const parteMeta = partes[1]?.trim();
     if (parteMeta) {
       try {
         const metaParsed = JSON.parse(parteMeta);

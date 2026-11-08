@@ -9,6 +9,7 @@ export default function MenuOpcoes({
   onBloquear,
   isBloqueado = false,
   onDenunciar,
+  onBanirAdmin,
   onCompartilhar,
   onCopiarLinkSuccess,
 }) {
@@ -132,6 +133,22 @@ export default function MenuOpcoes({
             <i className="fa-solid fa-flag w-4"></i>
             {tipo === "perfil" ? "Denunciar perfil" : "Denunciar obra"}
           </button>
+
+          {onBanirAdmin && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setAberto(false);
+                onBanirAdmin();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-red-50/70 hover:bg-red-600 text-red-600 hover:text-white transition-colors text-left mt-1"
+            >
+              <i className="fa-solid fa-gavel w-4"></i>
+              Banir obra e autor
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import PortfolioCard from "../components/PortfolioCard";
 import MenuOpcoes from "../components/MenuOpcoes";
@@ -9,6 +9,7 @@ import ModalCompartilhar from "../components/ModalCompartilhar";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, usuarioService, getMediaUrl } from "../services/api";
 import { getAvatarLedStyle, desempacotarDadosObra } from "../utils/obraHelper";
+import { renderTextWithEmojis } from "../utils/artfolioEmojis";
 
 export default function ArtistProfile() {
   const { id } = useParams();
@@ -28,19 +29,22 @@ export default function ArtistProfile() {
     }
   });
 
-  const mostrarAviso = (msg) => {
+  const mostrarAviso = useCallback((msg) => {
     setNoticeMessage(msg);
     setTimeout(() => setNoticeMessage(""), 4000);
-  };
+  }, []);
 
   const [acaoTentada, setAcaoTentada] = useState("interagir");
   const [abaAtiva, setAbaAtiva] = useState("obras"); // "obras" | "favoritos"
   const [loading, setLoading] = useState(true);
+  const [naoEncontrado, setNaoEncontrado] = useState(false);
 
   // Dados do perfil
   const [perfil, setPerfil] = useState(null);
   const [seguidoresCount, setSeguidoresCount] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
+  const [comissoesAbertas, setComissoesAbertas] = useState(true);
+  const [salvandoComissao, setSalvandoComissao] = useState(false);
 
   // Obras do artista e Obras salvas
   const [obrasPublicas, setObrasPublicas] = useState([]);
@@ -49,7 +53,35 @@ export default function ArtistProfile() {
 
   const { user: authUser, isGuest, isAuthenticated } = useAuth();
 
-  const carregarPerfil = async () => {
+  const handleToggleComissoes = async () => {
+    if (!isOwner || salvandoComissao) return;
+    setSalvandoComissao(true);
+    try {
+      const res = await usuarioService.alternarComissoes();
+      const novoStatus = res.comissoes_abertas;
+      setComissoesAbertas(novoStatus);
+      setPerfil((prev) => (prev ? { ...prev, comissoes_abertas: novoStatus, comissoesAbertas: novoStatus } : prev));
+      mostrarAviso(novoStatus ? "Comissões abertas para novos pedidos!" : "Comissões pausadas temporariamente.");
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao alternar status de comissões.");
+    } finally {
+      setSalvandoComissao(false);
+    }
+  };
+
+  const carregarObrasSalvas = useCallback(async () => {
+    setCarregandoSalvas(true);
+    try {
+      const salvas = await obrasService.listarSalvas();
+      setObrasSalvas(Array.isArray(salvas) ? salvas : []);
+    } catch {
+      setObrasSalvas([]);
+    } finally {
+      setCarregandoSalvas(false);
+    }
+  }, []);
+
+  const carregarPerfil = useCallback(async () => {
     try {
       setLoading(true);
       if (!id && isGuest) {
@@ -67,30 +99,26 @@ export default function ArtistProfile() {
 
       let dadosPerfil = null;
       try {
+        setNaoEncontrado(false);
         dadosPerfil = await usuarioService.obterPerfil(targetId);
       } catch {
         if (isProprioPerfil && authUser) {
           dadosPerfil = authUser;
         } else {
-          dadosPerfil = {
-            id: targetId,
-            nome: `Artista #${targetId}`,
-            biografia: "",
-            email: "",
-            tipo_conta: "artista",
-            fotoPerfil: "",
-            instagram: "",
-            behance: "",
-            website: "",
-            portfolio: "",
-            trajetoria: "",
-            especializacoes: "",
-            certificados: "[]",
-            seguidoresCount: 0,
-            seguindoCount: 0,
-            obrasCount: 0,
-          };
+          setNaoEncontrado(true);
+          setPerfil(null);
+          setObrasPublicas([]);
+          setLoading(false);
+          return;
         }
+      }
+
+      if (!dadosPerfil || !dadosPerfil.id) {
+        setNaoEncontrado(true);
+        setPerfil(null);
+        setObrasPublicas([]);
+        setLoading(false);
+        return;
       }
 
       const souDono = !isGuest && (isProprioPerfil || dadosPerfil?.relacionamento?.isMe || (authUser && String(authUser.id) === String(dadosPerfil?.id)));
@@ -154,8 +182,15 @@ export default function ArtistProfile() {
         mostrarBadgePlano: finalMostrarBadge,
         mostrar_badge_plano: finalMostrarBadge,
         mensagemCta: dadosPerfil.mensagem_cta || "",
+        comissoes_abertas: dadosPerfil.comissoes_abertas !== undefined ? dadosPerfil.comissoes_abertas !== false : (dadosPerfil.comissoesAbertas !== undefined ? dadosPerfil.comissoesAbertas !== false : true),
+        comissoesAbertas: dadosPerfil.comissoes_abertas !== undefined ? dadosPerfil.comissoes_abertas !== false : (dadosPerfil.comissoesAbertas !== undefined ? dadosPerfil.comissoesAbertas !== false : true),
+        perfil_publico: dadosPerfil.perfil_publico !== undefined ? dadosPerfil.perfil_publico : true,
+        perfilPublico: dadosPerfil.perfil_publico !== undefined ? dadosPerfil.perfil_publico : true,
         relacionamento: dadosPerfil.relacionamento || {},
       });
+
+      const comissoesVal = dadosPerfil.comissoes_abertas !== undefined ? dadosPerfil.comissoes_abertas !== false : (dadosPerfil.comissoesAbertas !== undefined ? dadosPerfil.comissoesAbertas !== false : true);
+      setComissoesAbertas(comissoesVal);
 
       setSeguidoresCount(Number(dadosPerfil.seguidoresCount || dadosPerfil.seguidores || 0));
 
@@ -209,23 +244,11 @@ export default function ArtistProfile() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const carregarObrasSalvas = async () => {
-    setCarregandoSalvas(true);
-    try {
-      const salvas = await obrasService.listarSalvas();
-      setObrasSalvas(Array.isArray(salvas) ? salvas : []);
-    } catch {
-      setObrasSalvas([]);
-    } finally {
-      setCarregandoSalvas(false);
-    }
-  };
+  }, [id, authUser, isGuest, mostrarAviso, carregarObrasSalvas]);
 
   useEffect(() => {
     carregarPerfil();
-  }, [id, authUser, isGuest]);
+  }, [carregarPerfil]);
 
   // Sincronização reativa em tempo real de seguidores via WebSocket
   useEffect(() => {
@@ -243,7 +266,24 @@ export default function ArtistProfile() {
     };
 
     window.addEventListener("artfolio_sync", handleSync);
-    return () => window.removeEventListener("artfolio_sync", handleSync);
+    const handleModerationSync = (e) => {
+      const { obraId, usuarioId } = e.detail || {};
+      const artistaId = id || perfil?.id || authUser?.id;
+      if (usuarioId && Number(usuarioId) === Number(artistaId)) {
+        setNaoEncontrado(true);
+        setPerfil(null);
+        setObrasPublicas([]);
+        return;
+      }
+      if (obraId) {
+        setObrasPublicas((prev) => prev.filter((o) => Number(o.id) !== Number(obraId)));
+      }
+    };
+    window.addEventListener("artfolio_moderation_sync", handleModerationSync);
+    return () => {
+      window.removeEventListener("artfolio_sync", handleSync);
+      window.removeEventListener("artfolio_moderation_sync", handleModerationSync);
+    };
   }, [id, perfil?.id, authUser?.id]);
 
   // Sincronização imediata de preferências (cor LED e exibição de selo do plano)
@@ -484,7 +524,7 @@ export default function ArtistProfile() {
     );
   }
 
-  if (loading || !perfil) {
+  if (loading) {
     return (
       <div className="w-full text-artDark antialiased min-h-screen font-sans flex items-center justify-center">
         <div className="text-center">
@@ -497,23 +537,65 @@ export default function ArtistProfile() {
     );
   }
 
+  if (naoEncontrado || !perfil) {
+    return (
+      <div className="w-full min-h-screen bg-[#F9F8F6] p-6 lg:p-12 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-8 text-center shadow-xl border border-black/5 animate-fadeIn">
+          <div className="w-20 h-20 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-3xl mx-auto mb-4">
+            <i className="fa-solid fa-user-slash"></i>
+          </div>
+          <span className="inline-block bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3">
+            Erro 404 • Usuário Indisponível
+          </span>
+          <h2 className="font-editorial text-3xl italic font-bold text-artDark mb-2">
+            Perfil não encontrado
+          </h2>
+          <p className="text-xs text-gray-500 leading-relaxed font-light mb-6">
+            O perfil solicitado não existe mais, foi excluído ou teve a conta banida pela moderação da plataforma.
+          </p>
+          <Link
+            to="/feed"
+            className="inline-block bg-artDark text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-artOrange transition-all shadow-md"
+          >
+            ← Voltar para o Feed
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Se o perfil for privado e quem estiver acessando não for o próprio dono
+  if (perfil.perfil_publico === false && !isOwner) {
+    return (
+      <div className="w-full min-h-screen bg-[#F9F8F6] p-6 lg:p-12 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-8 text-center shadow-xl border border-black/5 animate-fadeIn">
+          <div className="w-20 h-20 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center text-3xl mx-auto mb-4">
+            <i className="fa-solid fa-lock"></i>
+          </div>
+          <h2 className="font-editorial text-3xl italic font-bold text-artDark mb-2">
+            {perfil.nome || "Artista"}
+          </h2>
+          <span className="inline-block bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4">
+            🔒 Perfil Privado
+          </span>
+          <p className="text-xs text-gray-500 leading-relaxed font-light mb-6">
+            Este criador configurou sua conta como uma <strong>galeria pessoal privada</strong>. Suas obras, biografia e histórico artístico estão visíveis apenas para o próprio artista.
+          </p>
+          <Link
+            to="/feed"
+            className="inline-block bg-artDark text-white px-6 py-3 rounded-full text-xs font-bold hover:bg-artOrange transition-all shadow-md"
+          >
+            ← Voltar para o Feed
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const nomeParts = (perfil.nome || "Artista").trim().split(" ");
   const primeiroNome = nomeParts[0];
   const sobrenome = nomeParts.slice(1).join(" ");
   const ledInfo = getAvatarLedStyle(perfil, isOwner);
-
-  const totalCurtidasPerfil = obrasPublicas.reduce(
-    (acc, o) => acc + Number(o.total_curtidas ?? o.totalCurtidas ?? 0),
-    0
-  );
-  const totalComentariosPerfil = obrasPublicas.reduce(
-    (acc, o) => acc + Number(o.total_comentarios ?? o.totalComentarios ?? 0),
-    0
-  );
-  const totalSalvosPerfil = obrasPublicas.reduce(
-    (acc, o) => acc + Number(o.total_salvos ?? o.totalSalvos ?? 0),
-    0
-  );
 
   const isProOuBoost = ["boost", "pro"].includes((perfil.plano || "").toLowerCase());
   const temFundoPersonalizado = isProOuBoost && Boolean(perfil.fundoPerfil);
@@ -547,6 +629,28 @@ export default function ArtistProfile() {
             !temFundoPersonalizado ? "bg-white" : ""
           }`}
         >
+          {/* Banner de Aviso de Perfil Privado para o Dono */}
+          {perfil.perfil_publico === false && isOwner && (
+            <div className="max-w-6xl mx-auto mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-fadeIn">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm shrink-0">
+                  <i className="fa-solid fa-eye-slash"></i>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900">Modo Galeria Pessoal Ativo (Perfil Privado)</h4>
+                  <p className="text-[11px] text-amber-800 font-light">
+                    Suas obras e perfil estão visíveis somente para você. Para torná-los visíveis para a comunidade no feed e busca, ative em Configurações.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/configuracoes"
+                className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-4 py-2 rounded-full transition-all shadow-xs"
+              >
+                Gerenciar Privacidade
+              </Link>
+            </div>
+          )}
 
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
@@ -634,11 +738,46 @@ export default function ArtistProfile() {
                       )}
                     </>
                   )}
+
+                  {/* Badge de Comissões (Quick Toggle interativo para o dono / Informativo para visitantes) */}
+                  {comissoesAbertas ? (
+                    <button
+                      type="button"
+                      onClick={isOwner ? handleToggleComissoes : undefined}
+                      disabled={!isOwner || salvandoComissao}
+                      title={isOwner ? "Clique para pausar/fechar encomendas" : "Este artista está aceitando novos pedidos de encomenda"}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 transition-all duration-300 ${
+                        isOwner ? "cursor-pointer hover:bg-emerald-500/20 active:scale-95 hover:border-emerald-500/50 shadow-2xs" : "cursor-default"
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-artGreen animate-pulse"></span>
+                      <span>Comissões Abertas</span>
+                      {isOwner && (
+                        <i className={`fa-solid ${salvandoComissao ? "fa-spinner fa-spin" : "fa-arrows-rotate"} text-[8px] opacity-60 ml-0.5`}></i>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={isOwner ? handleToggleComissoes : undefined}
+                      disabled={!isOwner || salvandoComissao}
+                      title={isOwner ? "Clique para abrir encomendas" : "Este artista pausou encomendas no momento"}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/5 text-gray-500 border border-black/10 transition-all duration-300 ${
+                        isOwner ? "cursor-pointer hover:bg-black/10 active:scale-95 hover:border-black/20 hover:text-gray-700 shadow-2xs" : "cursor-default"
+                      }`}
+                    >
+                      <i className="fa-solid fa-lock text-[9px] text-gray-400"></i>
+                      <span>Comissões Fechadas</span>
+                      {isOwner && (
+                        <i className={`fa-solid ${salvandoComissao ? "fa-spinner fa-spin" : "fa-arrows-rotate"} text-[8px] opacity-60 ml-0.5`}></i>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {perfil.biografia && (
                   <p className="max-w-2xl mx-auto lg:mx-0 text-gray-500 leading-relaxed text-sm font-light">
-                    {perfil.biografia}
+                    {renderTextWithEmojis(perfil.biografia)}
                   </p>
                 )}
 
@@ -826,6 +965,18 @@ export default function ArtistProfile() {
               >
                 <i className="fa-solid fa-globe text-sm text-artPurple"></i>
                 <span>Website</span>
+              </a>
+            )}
+
+            {perfil.portfolio && (
+              <a
+                href={perfil.portfolio.startsWith("http") || perfil.portfolio.startsWith("/") ? getMediaUrl(perfil.portfolio) : `https://${perfil.portfolio}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-artOrange transition-colors bg-[#F9F8F6] border border-black/5 px-4 py-2 rounded-full"
+              >
+                <i className="fa-solid fa-link text-sm text-artOrange"></i>
+                <span>Portfólio Externo</span>
               </a>
             )}
 

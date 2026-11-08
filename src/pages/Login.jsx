@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
+import LoginArtFramesAnimation from "../components/animations/LoginArtFramesAnimation";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -73,16 +74,59 @@ export default function Login() {
     event.preventDefault();
     setLoading(true);
 
+    const emailLimpo = email.trim().toLowerCase();
+
     try {
-      await login(email, senha, lembrarAcesso);
+      await login(emailLimpo, senha, lembrarAcesso);
       mostrarAviso("Login realizado com sucesso! Redirecionando...", "success");
       setTimeout(() => {
         navigate(rotaOrigem, { replace: true });
       }, 800);
     } catch (err) {
+      // Identifica se o erro é decorrente de e-mail pendente de verificação
+      const isNaoVerificado = Boolean(
+        err?.nao_verificado ||
+        err?.data?.nao_verificado ||
+        err?.response?.data?.nao_verificado ||
+        err?.data?.detail?.nao_verificado ||
+        (err?.status === 403 && (
+          err?.message?.toLowerCase().includes("não verificado") ||
+          err?.message?.toLowerCase().includes("nao verificado") ||
+          err?.message?.toLowerCase().includes("ativ")
+        )) ||
+        (err?.response?.status === 403 && (
+          JSON.stringify(err?.response?.data || "").toLowerCase().includes("não verificado") ||
+          JSON.stringify(err?.response?.data || "").toLowerCase().includes("nao verificado")
+        ))
+      );
+
+      if (isNaoVerificado) {
+        const mensagemAviso =
+          err?.data?.mensagem ||
+          err?.response?.data?.mensagem ||
+          err?.message ||
+          "A sua conta ainda não foi ativada. Enviamos um novo código de verificação para o seu e-mail.";
+
+        mostrarAviso(mensagemAviso, "warning");
+
+        setTimeout(() => {
+          navigate("/verificar-email", {
+            state: {
+              email: emailLimpo,
+              mensagem: mensagemAviso,
+            },
+          });
+        }, 1200);
+        return;
+      }
+
       let msg = "Erro ao realizar login. Verifique suas credenciais.";
       if (err.message) {
-        if (err.message.toLowerCase().includes("failed to fetch") || err.message.toLowerCase().includes("networkerror") || err.message.toLowerCase().includes("não foi possível conectar")) {
+        if (
+          err.message.toLowerCase().includes("failed to fetch") ||
+          err.message.toLowerCase().includes("networkerror") ||
+          err.message.toLowerCase().includes("não foi possível conectar")
+        ) {
           msg = "Não foi possível conectar ao servidor backend (FastAPI na porta 8000). Verifique se o servidor está em execução.";
         } else {
           msg = err.message;
@@ -103,7 +147,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased overflow-hidden">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <main className="h-screen max-h-screen overflow-hidden grid grid-cols-1 lg:grid-cols-12">
         {/* Coluna Esquerda - Formulário de Login Perfeitamente Centralizado e Sem Rolagem */}
@@ -257,36 +301,33 @@ export default function Login() {
           </div>
         </section>
 
-        {/* Coluna Direita - Banner Artístico Inspirador com Filtro Roxo */}
-        <section className="hidden lg:block lg:col-span-7 relative overflow-hidden bg-artPurple">
-          <img
-            src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200&auto=format&fit=crop"
-            alt="Arte de fundo"
-            className="w-full h-full object-cover mix-blend-multiply opacity-80 scale-105"
-          />
+        {/* Coluna Direita - Banner Artístico com 3 Quadros Flutuantes e Brilho LED */}
+        <section className="hidden lg:flex lg:col-span-7 relative overflow-hidden bg-artPurple p-8 lg:p-12 flex-col justify-between text-white group cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/60 pointer-events-none"></div>
 
-          <div className="absolute inset-0 flex items-center p-16 text-white bg-gradient-to-t from-black/60 via-transparent to-transparent">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 block mb-4">
-                Plataforma Artística Digital
-              </span>
+          <div className="relative z-10">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 block mb-2">
+              Plataforma Artística Digital
+            </span>
 
-              <h2 className="font-editorial text-6xl italic leading-tight max-w-lg mb-6">
-                Acesse seu universo criativo.
-              </h2>
+            <h2 className="font-editorial text-4xl lg:text-5xl italic leading-tight max-w-xl">
+              Acesse seu universo criativo.
+            </h2>
+          </div>
 
-              <p className="text-sm text-white/80 max-w-md leading-relaxed font-light mb-8">
-                Descubra novas criações, compartilhe suas obras com admiradores do mundo inteiro e conecte-se com talentos autênticos da nossa comunidade.
-              </p>
+          {/* Animação dos 3 Quadros de Arte em Perspectiva com LED */}
+          <div className="relative z-10 my-auto py-2">
+            <LoginArtFramesAnimation />
+          </div>
 
-              <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 max-w-md">
-                <div className="w-10 h-10 rounded-xl bg-artOrange text-white flex items-center justify-center text-base shadow-md">
-                  <i className="fa-solid fa-palette"></i>
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider">Feito por e para Artistas</h4>
-                  <p className="text-[11px] text-white/70">Portfólios autênticos, sem intermediários.</p>
-                </div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 max-w-md">
+              <div className="w-10 h-10 rounded-xl bg-artOrange text-white flex items-center justify-center text-base shadow-md shrink-0">
+                <i className="fa-solid fa-palette"></i>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider">Feito por e para Artistas</h4>
+                <p className="text-[11px] text-white/75">Portfólios autênticos, sem intermediários.</p>
               </div>
             </div>
           </div>

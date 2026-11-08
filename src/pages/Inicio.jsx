@@ -3,36 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usuarioService } from "../services/api";
 import ModalConversao from "../components/ModalConversao";
+import FlowerDrawingHeroAnimation from "../components/animations/FlowerDrawingHeroAnimation";
 
-const obrasDestaque = [
-  {
-    id: 1,
-    titulo: "Fragmentos de Vidro",
-    artista: "Marina Silva",
-    categoria: "Pintura Digital",
-    status: "Aprovada",
-    imagem:
-      "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&q=80&w=800",
-  },
-  {
-    id: 2,
-    titulo: "Conexões de Algodão",
-    artista: "Helena Matos",
-    categoria: "Têxtil",
-    status: "Aprovada",
-    imagem:
-      "https://images.unsplash.com/photo-1549490349-8643362247b5?auto=format&fit=crop&q=80&w=800",
-  },
-  {
-    id: 3,
-    titulo: "Ecos da Metrópole",
-    artista: "Gabriel Duarte",
-    categoria: "3D Art",
-    status: "Aprovada",
-    imagem:
-      "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800",
-  },
-];
 
 const perfis = [
   {
@@ -229,32 +201,36 @@ export default function Inicio() {
               </div>
             </div>
 
-            {/* Destaque Visual Hero — Card de demonstração visual */}
-            <div className="lg:col-span-5">
-              <div className="relative">
-                <div className="bg-white rounded-[2.5rem] p-4 border border-black/5 shadow-2xl shadow-black/10 rotate-2 hover:rotate-0 transition-transform duration-500">
-                  <div className="rounded-[2rem] overflow-hidden h-[340px] lg:h-[430px]">
-                    <img
-                      src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1000&auto=format&fit=crop"
-                      alt="Arte em destaque"
-                      className="w-full h-full object-cover"
-                    />
+            {/* Destaque Visual Hero — Card de demonstração visual com moldura laranja elegante e flor animada */}
+            <div className="lg:col-span-5 flex justify-center items-center">
+              <div className="relative group w-full max-w-md animate-float-hero">
+                {/* Glow suave e sofisticado (menos neon, tons quentes e elegantes) */}
+                <div className="absolute -inset-1 bg-gradient-to-tr from-[#E6672E]/35 via-amber-600/20 to-artPurple/25 rounded-[2.8rem] blur-2xl opacity-45 group-hover:opacity-75 transition-all duration-700 pointer-events-none" />
+
+                {/* Moldura principal em Laranja Artfolio sofisticado */}
+                <div className="relative bg-gradient-to-br from-[#E6672E] to-[#C9531D] rounded-[2.5rem] p-4 sm:p-5 border border-white/20 shadow-xl shadow-artOrange/20 transition-all duration-500 text-white overflow-hidden">
+                  <div className="rounded-[2rem] overflow-hidden h-[340px] lg:h-[430px] bg-black/25 relative flex items-center justify-center">
+                    {/* Animação da Flor sendo Desenhada e Pintada em Tempo Real */}
+                    <FlowerDrawingHeroAnimation />
+
+                    {/* Gradiente de profundidade sutil */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
                   </div>
 
-                  <div className="p-4">
+                  <div className="p-4 pt-5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-artPurple text-[10px] font-black uppercase tracking-widest">
+                      <span className="text-white bg-black/25 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15">
                         Obra em destaque
                       </span>
                     </div>
 
-                    <h2 className="font-editorial text-3xl italic leading-none mt-2">
+                    <h2 className="font-editorial text-3xl italic leading-none mt-2.5 text-white">
                       Minha arte
                     </h2>
 
                     <div className="flex items-center justify-between mt-4">
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-gray-700">Você</span>
+                        <span className="text-xs font-bold text-white/90">Você</span>
                       </div>
                     </div>
                   </div>

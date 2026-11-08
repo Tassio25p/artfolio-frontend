@@ -11,7 +11,7 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark antialiased font-sans flex relative overflow-x-hidden">
       {/* Textura sutil global */}
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.035] pointer-events-none z-[99]" />
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.035] pointer-events-none z-[99]" />
 
       {/* Auras luminosas difusas e coloridas (mesma atmosfera estética do Início) */}
       <div className="fixed -left-10 top-1/4 w-96 h-[650px] bg-gradient-to-b from-artOrange/15 via-artPurple/10 to-artBlue/10 rounded-full blur-3xl pointer-events-none z-0"></div>

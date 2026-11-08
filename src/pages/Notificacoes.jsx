@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { notificacaoService, getMediaUrl } from "../services/api";
 
 const filtros = [
-  { id: "Todas", label: "Todas" },
-  { id: "LIKE", label: "Curtidas" },
-  { id: "COMMENT", label: "Comentários" },
-  { id: "FOLLOW", label: "Seguidores" },
-  { id: "MESSAGE", label: "Mensagens" },
+  { id: "Todas", label: "Todas", icon: "fa-solid fa-shapes", activeBg: "bg-artPurple text-white shadow-md shadow-artPurple/20", baseBg: "bg-artPurple/[0.08] text-artPurple hover:bg-artPurple/15" },
+  { id: "LIKE", label: "Curtidas", icon: "fa-solid fa-heart", activeBg: "bg-artOrange text-white shadow-md shadow-artOrange/20", baseBg: "bg-artOrange/[0.08] text-artOrange hover:bg-artOrange/15" },
+  { id: "COMMENT", label: "Comentários", icon: "fa-solid fa-comment", activeBg: "bg-artBlue text-white shadow-md shadow-artBlue/20", baseBg: "bg-artBlue/[0.08] text-artBlue hover:bg-artBlue/15" },
+  { id: "FOLLOW", label: "Seguidores", icon: "fa-solid fa-user-plus", activeBg: "bg-emerald-600 text-white shadow-md shadow-emerald-600/20", baseBg: "bg-emerald-500/[0.08] text-emerald-700 hover:bg-emerald-500/15" },
+  { id: "MESSAGE", label: "Mensagens", icon: "fa-solid fa-paper-plane", activeBg: "bg-artDark text-white shadow-md shadow-black/20", baseBg: "bg-black/[0.06] text-artDark hover:bg-black/10" },
 ];
 
 function getIconeETipo(tipo) {
@@ -35,10 +34,6 @@ export default function Notificacoes() {
   const [loading, setLoading] = useState(true);
   const [noticeMessage, setNoticeMessage] = useState("");
   const [noticeType, setNoticeType] = useState("info");
-
-  const { user } = useAuth();
-  const tipoUsuario = user?.tipo_conta || "cliente";
-
   const [selectedIds, setSelectedIds] = useState([]);
 
   const carregarNotificacoes = async () => {
@@ -303,12 +298,19 @@ export default function Notificacoes() {
                       key={btn.id}
                       type="button"
                       onClick={() => setFilter(btn.id)}
-                      className={`w-full px-4 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest text-left transition-all ${filter === btn.id
-                          ? "bg-artDark text-white shadow-md shadow-black/10"
-                          : "bg-[#F9F8F6] text-gray-400 hover:text-artDark hover:bg-[#eae7df]"
-                        }`}
+                      className={`w-full px-4 py-2.5 rounded-2xl text-[11px] font-bold uppercase tracking-wider text-left transition-all duration-300 flex items-center justify-between group cursor-pointer ${
+                        filter === btn.id
+                          ? `${btn.activeBg} scale-[1.02]`
+                          : `${btn.baseBg} hover:-translate-y-0.5 hover:shadow-2xs`
+                      }`}
                     >
-                      {btn.label}
+                      <span className="flex items-center gap-2.5">
+                        <i className={`${btn.icon} text-xs transition-transform duration-300 group-hover:scale-110`}></i>
+                        <span>{btn.label}</span>
+                      </span>
+                      {filter === btn.id && (
+                        <i className="fa-solid fa-check text-[10px]"></i>
+                      )}
                     </button>
                   ))}
                 </div>

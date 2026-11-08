@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { usuarioService, getMediaUrl } from "../services/api";
+import { renderTextWithEmojis } from "../utils/artfolioEmojis";
 
 export default function ModalPortfolioApresentacao({
   isOpen,
@@ -52,23 +53,32 @@ export default function ModalPortfolioApresentacao({
       const res = await usuarioService.uploadCertificado(file);
       setNovoCertArquivoUrl(res.url);
       setNovoCertNomeArquivo(res.nome || file.name);
-      setMsgFeedback("Arquivo anexado com sucesso!");
+      if (!novoCertTitulo.trim()) {
+        const nomeSemExt = (res.nome || file.name || "").replace(/\.[^/.]+$/, "");
+        if (nomeSemExt) setNovoCertTitulo(nomeSemExt);
+      }
+      setMsgFeedback("Arquivo anexado! Clique em 'Adicionar' ou direto em 'Salvar Alterações'.");
     } catch (err) {
       setMsgFeedback(err.message || "Erro ao fazer upload do documento.");
     } finally {
       setEnviandoCertificado(false);
+      e.target.value = "";
     }
   };
 
   const handleAdicionarCertificado = () => {
-    if (!novoCertTitulo.trim()) {
-      setMsgFeedback("Informe o título da formação/certificado.");
+    const tituloFinal =
+      novoCertTitulo.trim() ||
+      (novoCertNomeArquivo ? novoCertNomeArquivo.replace(/\.[^/.]+$/, "") : "");
+
+    if (!tituloFinal) {
+      setMsgFeedback("Informe o título da formação/certificado ou anexe um arquivo.");
       return;
     }
 
     const novo = {
       id: Date.now().toString(),
-      titulo: novoCertTitulo.trim(),
+      titulo: tituloFinal,
       instituicao: novoCertInstituicao.trim(),
       ano: novoCertAno.trim(),
       arquivoUrl: novoCertArquivoUrl,
@@ -88,14 +98,59 @@ export default function ModalPortfolioApresentacao({
     setCertificados((prev) => prev.filter((c) => c.id !== certId));
   };
 
+  const handleBaixarArquivo = async (e, cert) => {
+    e.preventDefault();
+    const urlCompleta = getMediaUrl(cert.arquivoUrl);
+    const nomeDownload = cert.nomeArquivo || `${cert.titulo || "portfolio"}.pdf`;
+    try {
+      const response = await fetch(urlCompleta);
+      if (!response.ok) throw new Error("Falha ao baixar arquivo");
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = nomeDownload;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(urlCompleta, "_blank", "noopener,noreferrer");
+    }
+  };
+
   const handleSalvarTudo = async () => {
     setSalvando(true);
     setMsgFeedback("");
     try {
+      let listaFinal = [...certificados];
+
+      if (novoCertArquivoUrl || novoCertTitulo.trim()) {
+        const tituloPendente =
+          novoCertTitulo.trim() ||
+          (novoCertNomeArquivo ? novoCertNomeArquivo.replace(/\.[^/.]+$/, "") : "Portfólio / Documento");
+
+        listaFinal.push({
+          id: Date.now().toString(),
+          titulo: tituloPendente,
+          instituicao: novoCertInstituicao.trim(),
+          ano: novoCertAno.trim(),
+          arquivoUrl: novoCertArquivoUrl,
+          nomeArquivo: novoCertNomeArquivo,
+        });
+
+        setCertificados(listaFinal);
+        setNovoCertTitulo("");
+        setNovoCertInstituicao("");
+        setNovoCertAno("");
+        setNovoCertArquivoUrl("");
+        setNovoCertNomeArquivo("");
+      }
+
       await usuarioService.atualizarPerfil({
         trajetoria: trajetoria.trim(),
         especializacoes: especializacoes.trim(),
-        certificados: JSON.stringify(certificados),
+        certificados: JSON.stringify(listaFinal),
       });
 
       setMsgFeedback("Portfólio e currículo artístico atualizados com sucesso!");
@@ -314,7 +369,7 @@ export default function ModalPortfolioApresentacao({
                   Trajetória Artística
                 </h3>
                 <p className="text-gray-600 leading-relaxed font-light whitespace-pre-line bg-[#F9F8F6] p-4 rounded-2xl border border-black/5">
-                  {perfil.trajetoria || perfil.biografia || "Nenhuma biografia profissional cadastrada ainda pelo artista."}
+                  {renderTextWithEmojis(perfil.trajetoria || perfil.biografia || "Nenhuma biografia profissional cadastrada ainda pelo artista.")}
                 </p>
               </div>
 
@@ -383,7 +438,8 @@ export default function ModalPortfolioApresentacao({
                             <a
                               href={getMediaUrl(cert.arquivoUrl)}
                               download={cert.nomeArquivo || `${cert.titulo}.pdf`}
-                              className="text-xs font-bold text-artOrange hover:underline flex items-center gap-1.5"
+                              onClick={(e) => handleBaixarArquivo(e, cert)}
+                              className="text-xs font-bold text-artOrange hover:underline flex items-center gap-1.5 cursor-pointer"
                             >
                               <i className="fa-solid fa-download text-[10px]"></i>
                               Baixar

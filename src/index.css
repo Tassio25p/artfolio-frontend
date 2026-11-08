@@ -20,3 +20,143 @@
 .animate-slide-in-right {
   animation: slideInRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes softMessageIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-soft-message-in {
+  animation: softMessageIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes textShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-shimmer {
+  background-size: 200% auto;
+  animation: textShimmer 4s ease-in-out infinite;
+}
+
+/* Animação de Fita de LED fluida com as 4 cores base do Artfolio (#6C5CE7, #FF793F, #0984E3, #00B894) com transição contínua */
+@keyframes ledFlowVertical {
+  0% {
+    background-position: 0% 0%;
+    box-shadow: 0 0 10px rgba(108, 92, 231, 0.45), 0 0 4px rgba(108, 92, 231, 0.3);
+  }
+  25% {
+    box-shadow: 0 0 10px rgba(255, 121, 63, 0.45), 0 0 4px rgba(255, 121, 63, 0.3);
+  }
+  50% {
+    background-position: 0% 100%;
+    box-shadow: 0 0 10px rgba(9, 132, 227, 0.45), 0 0 4px rgba(9, 132, 227, 0.3);
+  }
+  75% {
+    box-shadow: 0 0 10px rgba(0, 184, 148, 0.45), 0 0 4px rgba(0, 184, 148, 0.3);
+  }
+  100% {
+    background-position: 0% 200%;
+    box-shadow: 0 0 10px rgba(108, 92, 231, 0.45), 0 0 4px rgba(108, 92, 231, 0.3);
+  }
+}
+
+.animate-led-flow {
+  background: linear-gradient(
+    180deg,
+    #6C5CE7 0%,
+    #FF793F 25%,
+    #0984E3 50%,
+    #00B894 75%,
+    #6C5CE7 100%
+  ) !important;
+  background-size: 100% 200% !important;
+  animation: ledFlowVertical 6s linear infinite !important;
+}
+
+@keyframes pointBounce {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.18);
+  }
+  80% {
+    transform: translateY(-2px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-point-bounce {
+  display: inline-block;
+  animation: pointBounce 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s backwards;
+}
+
+@keyframes floatHero {
+  0%, 100% {
+    transform: translateY(0px) rotate(1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0deg);
+  }
+}
+
+.animate-float-hero {
+  animation: floatHero 5s ease-in-out infinite;
+}
+
+.animate-float-hero:hover {
+  animation-play-state: paused;
+}
+
+@keyframes flowerAlive {
+  0%, 100% {
+    transform: scale(1.02) rotate(0deg);
+    filter: brightness(1) saturate(1.05);
+  }
+  50% {
+    transform: scale(1.08) rotate(1deg);
+    filter: brightness(1.06) saturate(1.12);
+  }
+}
+
+.animate-flower-alive {
+  animation: flowerAlive 6s ease-in-out infinite;
+}
+
+@keyframes lightShimmer {
+  0% {
+    transform: translateX(-150%) translateY(-150%) rotate(45deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: translateX(150%) translateY(150%) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+.animate-shimmer-sweep {
+  animation: lightShimmer 6s ease-in-out infinite;
+}

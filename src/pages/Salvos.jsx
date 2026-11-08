@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import PostCard from "../components/PostCard";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
 import { useAuth } from "../contexts/AuthContext";
@@ -31,7 +30,7 @@ export default function Salvos() {
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const carregarObrasSalvas = async () => {
+  const carregarObrasSalvas = useCallback(async () => {
     try {
       setLoading(true);
       const lista = await obrasService.listarSalvas();
@@ -44,11 +43,11 @@ export default function Salvos() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     carregarObrasSalvas();
-  }, []);
+  }, [carregarObrasSalvas]);
 
   const handleRemoverSalvo = async (obraId) => {
     try {

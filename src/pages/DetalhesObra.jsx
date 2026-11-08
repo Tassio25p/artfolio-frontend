@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import MenuOpcoes from "../components/MenuOpcoes";
 import ModalDenuncia from "../components/ModalDenuncia";
@@ -7,13 +7,14 @@ import LightboxModal from "../components/LightboxModal";
 import ModalConfirmarExclusao from "../components/ModalConfirmarExclusao";
 import PriceBadge from "../components/PriceBadge";
 import ProtectedImageWrapper from "../components/ProtectedImageWrapper";
-import WatermarkOverlay from "../components/WatermarkOverlay";
 import { useAuth } from "../contexts/AuthContext";
-import { obrasService, usuarioService, getMediaUrl } from "../services/api";
+import { obrasService, usuarioService, adminService, getMediaUrl } from "../services/api";
 import { getEstiloCategoria } from "../constants/categories";
 import { desempacotarDadosObra, getAvatarLedStyle } from "../utils/obraHelper";
 import ArtCanvasViewer from "../components/ArtCanvasViewer";
 import PaletteExtractor from "../components/PaletteExtractor";
+import { renderTextWithEmojis } from "../utils/artfolioEmojis";
+import EmojiPicker from "../components/EmojiPicker";
 
 export default function DetalhesObra() {
   const { id } = useParams();
@@ -27,7 +28,6 @@ export default function DetalhesObra() {
 
   // Estado da mensagem direta contextualizada sobre a obra
   const [mensagemDireta, setMensagemDireta] = useState("");
-  const [enviandoMensagemDireta, setEnviandoMensagemDireta] = useState(false);
 
   // Estados de engajamento e métricas
   const [isSalvo, setIsSalvo] = useState(false);
@@ -68,6 +68,7 @@ export default function DetalhesObra() {
      autor.id === currentUser.id)
   );
   const isDono = isOwner;
+  const isAdmin = !isGuest && ["admin", "moderador"].includes((currentUser?.papel || currentUser?.role || "").toLowerCase());
 
   const dadosEstruturados = desempacotarDadosObra(obraDetalhe);
   const tituloObra = dadosEstruturados.titulo || (obraDetalhe ? `Obra #${obraDetalhe.id}` : "");
@@ -83,7 +84,7 @@ export default function DetalhesObra() {
     setTimeout(() => setNoticeMessage(""), 4000);
   };
 
-  const carregarDadosObra = async () => {
+  const carregarDadosObra = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
@@ -124,11 +125,11 @@ export default function DetalhesObra() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, isAuthenticated, isGuest]);
 
   useEffect(() => {
     carregarDadosObra();
-  }, [id, isAuthenticated]);
+  }, [carregarDadosObra]);
 
   // Sincronização reativa em tempo real para Detalhes da Obra
   useEffect(() => {
@@ -162,7 +163,21 @@ export default function DetalhesObra() {
     };
 
     window.addEventListener("artfolio_sync", handleSync);
-    return () => window.removeEventListener("artfolio_sync", handleSync);
+    const handleModerationSync = (e) => {
+      const { obraId, usuarioId } = e.detail || {};
+      const autorAtualId = obraDetalhe?.autor?.id || obraDetalhe?.usuario?.id || obraDetalhe?.idUsuario;
+      if (
+        (obraId && Number(obraId) === Number(id)) ||
+        (usuarioId && Number(usuarioId) === Number(autorAtualId))
+      ) {
+        setObraDetalhe(null);
+      }
+    };
+    window.addEventListener("artfolio_moderation_sync", handleModerationSync);
+    return () => {
+      window.removeEventListener("artfolio_sync", handleSync);
+      window.removeEventListener("artfolio_moderation_sync", handleModerationSync);
+    };
   }, [id, obraDetalhe]);
 
   // Ação de Seguir / Deixar de Seguir Artista
@@ -296,6 +311,11 @@ export default function DetalhesObra() {
     setDeleting(true);
     try {
       await obrasService.deletarObra(id);
+      window.dispatchEvent(
+        new CustomEvent("artfolio_moderation_sync", {
+          detail: { obraId: id },
+        })
+      );
       mostrarAviso("Obra excluída com sucesso! Redirecionando...", "success");
       setTimeout(() => {
         navigate("/meu-portfolio");
@@ -351,6 +371,34 @@ export default function DetalhesObra() {
   const handleCompartilhar = () => {
     navigator.clipboard.writeText(window.location.href);
     mostrarAviso("Link da obra copiado para a área de transferência!", "success");
+  };
+
+  const handleDownloadMedia = async () => {
+    const listaImagens =
+      Array.isArray(obraDetalhe?.arquivos) && obraDetalhe.arquivos.length > 0
+        ? obraDetalhe.arquivos
+        : [imagemPrincipal];
+    const targetUrl = listaImagens[slideIndex] || imagemPrincipal;
+    if (!targetUrl) return;
+
+    try {
+      const fullUrl = getMediaUrl(targetUrl);
+      const res = await fetch(fullUrl);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const ext = targetUrl.split("?")[0].split(".").pop() || "png";
+      const nomeLimpo = (tituloObra || "obra_artfolio").toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+      link.download = `${nomeLimpo}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      mostrarAviso("Download iniciado com sucesso!", "success");
+    } catch {
+      window.open(getMediaUrl(targetUrl), "_blank");
+    }
   };
 
   const abrirDenuncia = (tipo, alvo) => {
@@ -512,6 +560,28 @@ export default function DetalhesObra() {
               isSalvo={isSalvo}
               onSalvar={handleToggleSave}
               onDenunciar={() => abrirDenuncia("obra", tituloObra)}
+              onBanirAdmin={
+                isAdmin
+                  ? async () => {
+                      try {
+                        const res = await adminService.removerObraAdmin(obraDetalhe.id, {
+                          banir_autor: true,
+                          motivo: `Banimento administrativo da publicação #${obraDetalhe.id} e do seu autor.`,
+                        });
+                        const targetAutorId = res?.autor_id ?? autor?.id ?? obraDetalhe?.idUsuario;
+                        window.dispatchEvent(
+                          new CustomEvent("artfolio_moderation_sync", {
+                            detail: { obraId: obraDetalhe.id, usuarioId: targetAutorId },
+                          })
+                        );
+                        setObraDetalhe(null);
+                        navigate("/feed");
+                      } catch (err) {
+                        mostrarAviso(err.message || "Erro ao banir obra e autor.", "error");
+                      }
+                    }
+                  : undefined
+              }
               onCopiarLinkSuccess={(msg) => mostrarAviso(msg, "success")}
             />
           )}
@@ -629,7 +699,7 @@ export default function DetalhesObra() {
                             </a>
                           ) : (
                             <div className="mt-5 inline-flex items-center gap-2 bg-neutral-800/90 text-gray-300 border border-white/10 text-[11px] font-semibold px-4 py-2 rounded-xl">
-                              <i className="fa-solid fa-shield-halved text-artOrange"></i>
+                              <i className="fa-solid fa-lock text-artOrange"></i>
                               <span>Download protegido pelo autor</span>
                             </div>
                           )}
@@ -775,6 +845,19 @@ export default function DetalhesObra() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Botão Baixar Mídia (quando habilitado pelo autor) */}
+                {!bloquearDownloadObra && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadMedia}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 shadow-2xs transition-all cursor-pointer"
+                    title="Baixar arquivo da obra em alta resolução"
+                  >
+                    <i className="fa-solid fa-download text-[11px]"></i>
+                    <span className="hidden sm:inline">Baixar</span>
+                  </button>
+                )}
+
                 {/* Botão Salvar nos Favoritos */}
                 {!isDono && (
                   <button
@@ -796,7 +879,7 @@ export default function DetalhesObra() {
                 <button
                   type="button"
                   onClick={handleCompartilhar}
-                  className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-artDark flex items-center justify-center transition-colors text-xs border border-gray-200/60 shadow-xs"
+                  className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-artDark flex items-center justify-center transition-colors text-xs border border-gray-200/60 shadow-xs cursor-pointer"
                   title="Copiar link da obra"
                 >
                   <i className="fa-solid fa-share-nodes text-[11px]"></i>
@@ -900,7 +983,7 @@ export default function DetalhesObra() {
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <h1 className="font-serif font-editorial italic text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
-                    {tituloObra}
+                    {renderTextWithEmojis(tituloObra)}
                   </h1>
 
                   {precoBaseObra && (
@@ -927,7 +1010,7 @@ export default function DetalhesObra() {
                       História & Legenda
                     </span>
                     <p className="text-sm md:text-base text-gray-700 leading-relaxed font-light whitespace-pre-line">
-                      {descricaoObra.trim()}
+                      {renderTextWithEmojis(descricaoObra.trim())}
                     </p>
                   </div>
                 )}
@@ -960,9 +1043,12 @@ export default function DetalhesObra() {
                         <i className="fa-solid fa-paper-plane text-artOrange text-xs"></i>
                         <span>Falar com o artista sobre esta arte</span>
                       </span>
-                      <span className="text-[9px] bg-artPurple/10 text-artPurple font-bold px-2 py-0.5 rounded-full">
-                        Chat Direto
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <EmojiPicker onSelectEmoji={(emoji) => setMensagemDireta((prev) => prev + emoji)} />
+                        <span className="text-[9px] bg-artPurple/10 text-artPurple font-bold px-2 py-0.5 rounded-full">
+                          Chat Direto
+                        </span>
+                      </div>
                     </div>
 
                     <form onSubmit={handleEnviarMensagemDireta} className="space-y-2">
@@ -1045,7 +1131,7 @@ export default function DetalhesObra() {
               )}
             </div>
 
-            <div className="flex-1 flex gap-2">
+            <div className="flex-1 flex gap-2 items-center">
               <input
                 type="text"
                 value={novoComentario}
@@ -1056,10 +1142,12 @@ export default function DetalhesObra() {
                 className="flex-1 bg-gray-50 border border-gray-200 focus:border-artOrange focus:bg-white rounded-full px-4 py-2 text-xs text-artDark outline-none transition-all placeholder:text-gray-400"
               />
 
+              <EmojiPicker position="top" onSelectEmoji={(emoji) => setNovoComentario((prev) => (prev || "") + emoji)} />
+
               <button
                 type="submit"
                 disabled={submittingComment || !novoComentario.trim()}
-                className="bg-artOrange hover:bg-orange-600 text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5"
+                className="bg-artOrange hover:bg-orange-600 text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {submittingComment ? (
                   <i className="fa-solid fa-spinner fa-spin"></i>
@@ -1122,7 +1210,7 @@ export default function DetalhesObra() {
                     </div>
 
                     <p className="text-xs text-gray-700 leading-relaxed font-light break-words">
-                      {item.conteudo}
+                      {renderTextWithEmojis(item.conteudo)}
                     </p>
                   </div>
                 </div>

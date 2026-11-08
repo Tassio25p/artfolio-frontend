@@ -69,11 +69,11 @@ export default function PortfolioCard(props) {
             </div>
           ) : (
             <img
-              src={getMediaUrl(image) || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
+              src={getMediaUrl(image) || "/default-art.png"}
               alt={title}
               onLoad={() => setImageLoaded(true)}
               onError={(e) => {
-                e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                e.currentTarget.src = "/default-art.png";
                 setImageLoaded(true);
               }}
               className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${

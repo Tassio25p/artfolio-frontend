@@ -3,10 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { authService } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { GoogleLogin } from "@react-oauth/google";
+import CadastroMosaicoAnimation from "../components/animations/CadastroMosaicoAnimation";
 
 export default function Cadastro() {
   const navigate = useNavigate();
-  const { login: setAuthLogin, loginGoogle } = useAuth();
+  const { loginGoogle } = useAuth();
 
   // Estados dos campos
   const [nome, setNome] = useState("");
@@ -124,20 +125,15 @@ export default function Cadastro() {
 
       await authService.cadastrar(dados);
 
-      // Login automático pós-cadastro
-      try {
-        const loginRes = await authService.login({ email: dados.email, senha });
-        if (loginRes && loginRes.access_token) {
-          setAuthLogin(loginRes.usuario, loginRes.access_token);
-        }
-      } catch {
-        // Se falhar o login automático, segue normalmente
-      }
-
-      mostrarAviso("Cadastro realizado com sucesso! Redirecionando para personalizar seu perfil...", "success");
+      mostrarAviso("Cadastro realizado com sucesso! Enviamos um código de verificação para o seu e-mail.", "success");
       setTimeout(() => {
-        navigate("/editar-perfil");
-      }, 1200);
+        navigate("/verificar-email", {
+          state: {
+            email,
+            mensagem: "Conta criada com sucesso! Introduza o código de 6 dígitos enviado para o seu e-mail para ativá-la.",
+          },
+        });
+      }, 1000);
     } catch (err) {
       // Tratamento humanizado de erros (eliminando "failed to fetch")
       let mensagemAmigavel = "Erro ao realizar cadastro.";
@@ -179,50 +175,46 @@ export default function Cadastro() {
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased overflow-x-hidden">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <main className="min-h-screen grid grid-cols-1 lg:grid-cols-12">
-        {/* Coluna Esquerda - Apresentação Artística com Filtro Roxo */}
-        <section className="lg:col-span-4 bg-artPurple text-white p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
-          <img
-            src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200&auto=format&fit=crop"
-            alt="Arte de fundo"
-            className="absolute inset-0 w-full h-full object-cover mix-blend-multiply opacity-80 scale-105 pointer-events-none"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/50 pointer-events-none"></div>
+        {/* Coluna Esquerda - Apresentação Artística com Mosaico 'Construa seu espaço' */}
+        <section className="lg:col-span-4 bg-artPurple text-white p-6 lg:p-10 flex flex-col justify-between relative overflow-hidden group cursor-default">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/55 pointer-events-none"></div>
 
           <div className="relative z-10">
             <Link
               to="/"
-              className="font-editorial text-4xl font-black text-white inline-block mb-10"
+              className="font-editorial text-3xl lg:text-4xl font-black text-white inline-block mb-4 hover:opacity-90 transition-opacity"
             >
               Artfolio
             </Link>
 
-            <span className="text-white/80 font-bold tracking-widest uppercase text-[10px] mb-3 block">
+            <span className="text-white/80 font-bold tracking-widest uppercase text-[10px] mb-2 block">
               Comunidade Artística
             </span>
 
-            <h1 className="font-editorial text-5xl lg:text-6xl leading-none">
+            <h1 className="font-editorial text-4xl lg:text-5xl leading-none">
               Crie sua conta de <span className="italic text-artOrange block">Artista.</span>
             </h1>
+          </div>
 
-            <p className="text-sm text-white/80 mt-5 leading-relaxed max-w-sm font-light">
-              Publique suas obras, monte seu portfólio profissional, interaja com apreciadores de arte e receba solicitações de encomendas em uma plataforma feita para valorizar o seu talento.
-            </p>
+          {/* Animação Mosaico de Categorias 'Construa seu espaço' */}
+          <div className="relative z-10 my-auto py-2">
+            <CadastroMosaicoAnimation />
+          </div>
 
-            <div className="mt-8 flex items-center gap-4">
-              <div className="w-9 h-9 rounded-2xl bg-artOrange/20 border border-artOrange/40 text-artOrange flex items-center justify-center text-xs font-bold">
+          <div className="relative z-10">
+            <div className="flex items-center gap-3.5 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-3.5">
+              <div className="w-9 h-9 rounded-xl bg-artOrange/30 border border-artOrange/50 text-artOrange flex items-center justify-center text-xs font-bold shrink-0">
                 <i className="fa-solid fa-palette"></i>
               </div>
               <div>
-                <p className="text-xs uppercase font-bold tracking-wider">CONTA DE ARTISTA - Dados principais</p>
-                <p className="text-[11px] text-white/70">Pessoa Física (PF) ou Pessoa Jurídica (PJ)</p>
+                <p className="text-xs uppercase font-bold tracking-wider">Conta de Artista (PF ou PJ)</p>
+                <p className="text-[11px] text-white/70 font-light">Portfólio profissional & encomendas</p>
               </div>
             </div>
           </div>
-
-          <i className="fa-solid fa-palette absolute -right-10 -bottom-10 text-[13rem] text-white/5 rotate-12 pointer-events-none"></i>
         </section>
 
         {/* Coluna Direita - Formulário de Cadastro */}

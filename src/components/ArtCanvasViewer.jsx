@@ -167,8 +167,7 @@ export default function ArtCanvasViewer({
         onDragStart={(e) => e.preventDefault()}
         onError={(e) => {
           setImageError(true);
-          e.currentTarget.src =
-            "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=1200";
+          e.currentTarget.src = "/default-art.png";
         }}
         className="w-full h-full max-h-[540px] object-contain transition-transform duration-300 pointer-events-none mx-auto"
       />

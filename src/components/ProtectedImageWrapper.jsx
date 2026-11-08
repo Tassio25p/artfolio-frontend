@@ -23,7 +23,9 @@ export default function ProtectedImageWrapper({
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText("Esta arte possui proteção de direitos autorais no Artfolio.");
         }
-      } catch (_) {}
+      } catch {
+        // Ignora erros de permissão de clipboard em navegadores com restrições
+      }
     };
 
     const ativarEscudo = () => {
@@ -164,7 +166,7 @@ export default function ProtectedImageWrapper({
       {printShieldAtivo && (
         <div className="absolute inset-0 z-30 bg-neutral-950/95 backdrop-blur-3xl flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
           <div className="w-16 h-16 rounded-3xl bg-artOrange/15 text-artOrange flex items-center justify-center text-3xl mb-4 shadow-xl shadow-artOrange/20 border border-artOrange/30 backdrop-blur-md">
-            <i className="fa-solid fa-shield-halved"></i>
+            <i className="fa-solid fa-lock"></i>
           </div>
 
           <h4 className="font-editorial text-2xl font-bold text-white mb-2 tracking-tight">
@@ -181,7 +183,7 @@ export default function ProtectedImageWrapper({
         <div className="absolute inset-x-3 bottom-3 z-40 bg-neutral-900/95 backdrop-blur-xl border border-white/15 text-white p-4 rounded-2xl shadow-2xl animate-fadeIn flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-xl bg-artOrange/20 text-artOrange border border-artOrange/30 flex items-center justify-center shrink-0 mt-0.5">
-              <i className="fa-solid fa-shield-halved text-sm"></i>
+              <i className="fa-solid fa-lock text-sm"></i>
             </div>
             <div>
               <p className="text-xs text-gray-200 font-medium leading-snug">

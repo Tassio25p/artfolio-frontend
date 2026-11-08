@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usuarioService, getMediaUrl } from "../services/api";
@@ -22,7 +22,7 @@ export default function Seguidores() {
   const [termoBusca, setTermoBusca] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
 
-  const carregarSeguidores = async () => {
+  const carregarSeguidores = useCallback(async () => {
     if (!targetId) return;
     try {
       setLoading(true);
@@ -33,11 +33,11 @@ export default function Seguidores() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [targetId]);
 
   useEffect(() => {
     carregarSeguidores();
-  }, [targetId]);
+  }, [carregarSeguidores]);
 
   const mostrarAviso = (mensagem) => {
     setNoticeMessage(mensagem);
@@ -190,16 +190,35 @@ export default function Seguidores() {
                     </h2>
                   </div>
 
-                  <div className="relative w-full md:w-72">
-                    <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                    <div className="flex items-center gap-1 bg-[#F9F8F6] p-1 rounded-full border border-black/5 self-start sm:self-auto">
+                      {filtros.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setFiltroAtual(f.id)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                            filtroAtual === f.id
+                              ? "bg-artPurple text-white shadow-xs"
+                              : "text-gray-500 hover:text-artDark"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
 
-                    <input
-                      type="text"
-                      value={termoBusca}
-                      onChange={(event) => setTermoBusca(event.target.value)}
-                      placeholder="Buscar seguidor..."
-                      className="w-full bg-[#F9F8F6] rounded-full pl-11 pr-5 py-3 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                    />
+                    <div className="relative w-full sm:w-64">
+                      <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+
+                      <input
+                        type="text"
+                        value={termoBusca}
+                        onChange={(event) => setTermoBusca(event.target.value)}
+                        placeholder="Buscar seguidor..."
+                        className="w-full bg-[#F9F8F6] rounded-full pl-11 pr-5 py-2.5 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 

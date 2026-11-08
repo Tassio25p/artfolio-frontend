@@ -73,7 +73,70 @@ export default function Estatisticas() {
     obras: totalObrasAtivas,
   };
   const periodosReais = estatisticas?.periodos || { seguidoresSemana: 0, seguidoresMes: 0 };
-  const podioReal = estatisticas?.podioCategorias || [];
+  // Computar pódio dinâmico e real a partir das obras do artista caso o backend não forneça ou para garantir cálculo em tempo real
+  const categoriasMap = {};
+  obras.forEach((obra) => {
+    const dadosObra = desempacotarDadosObra ? desempacotarDadosObra(obra) : obra;
+    const cats =
+      Array.isArray(dadosObra.categorias) && dadosObra.categorias.length > 0
+        ? dadosObra.categorias
+        : Array.isArray(dadosObra.categoria) && dadosObra.categoria.length > 0
+        ? dadosObra.categoria
+        : dadosObra.categoria
+        ? [dadosObra.categoria]
+        : dadosObra.nomeCategoria
+        ? [{ nomeCategoria: dadosObra.nomeCategoria }]
+        : [];
+
+    const curtidas = Number(dadosObra.totalCurtidas ?? dadosObra.total_curtidas ?? dadosObra.curtidas ?? 0);
+    const salvos = Number(dadosObra.totalSalvos ?? dadosObra.total_salvos ?? dadosObra.salvos ?? 0);
+    const views = Number(dadosObra.visualizacoes ?? dadosObra.total_visualizacoes ?? dadosObra.views ?? 0);
+
+    cats.forEach((c) => {
+      const nomeCat = typeof c === "string" ? c : c.nomeCategoria || c.nome || c.categoria || "Arte Geral";
+      if (!categoriasMap[nomeCat]) {
+        categoriasMap[nomeCat] = {
+          nome: nomeCat,
+          categoria: nomeCat,
+          totalObras: 0,
+          totalCurtidas: 0,
+          totalSalvos: 0,
+          totalVisualizacoes: 0,
+        };
+      }
+      categoriasMap[nomeCat].totalObras += 1;
+      categoriasMap[nomeCat].totalCurtidas += curtidas;
+      categoriasMap[nomeCat].totalSalvos += salvos;
+      categoriasMap[nomeCat].totalVisualizacoes += views;
+    });
+  });
+
+  const podioCalculado = Object.values(categoriasMap)
+    .sort((a, b) => {
+      const pontuacaoB = b.totalCurtidas * 4 + b.totalSalvos * 3 + b.totalVisualizacoes * 0.2 + b.totalObras * 2;
+      const pontuacaoA = a.totalCurtidas * 4 + a.totalSalvos * 3 + a.totalVisualizacoes * 0.2 + a.totalObras * 2;
+      return pontuacaoB - pontuacaoA;
+    })
+    .slice(0, 3)
+    .map((cat, idx) => ({
+      ...cat,
+      posicao: idx + 1,
+    }));
+
+  const podioBruto =
+    estatisticas?.podioCategorias && estatisticas.podioCategorias.length > 0
+      ? estatisticas.podioCategorias
+      : podioCalculado;
+
+  const podioReal = podioBruto.map((cat, idx) => ({
+    posicao: cat.posicao || idx + 1,
+    nome: cat.nome || cat.categoria || `Categoria ${idx + 1}`,
+    categoria: cat.categoria || cat.nome || `Categoria ${idx + 1}`,
+    totalObras: cat.totalObras ?? cat.obras ?? 0,
+    totalCurtidas: cat.totalCurtidas ?? cat.curtidas ?? 0,
+    totalSalvos: cat.totalSalvos ?? cat.salvos ?? 0,
+    totalVisualizacoes: cat.totalVisualizacoes ?? cat.visualizacoes ?? 0,
+  }));
 
   // Dados mockados/estéticos para preenchimento de fundo dos usuários Free (evita aspecto de tela quebrada)
   const totaisSimulados = {
@@ -86,14 +149,14 @@ export default function Estatisticas() {
   };
   const periodosSimulados = { seguidoresSemana: 42, seguidoresMes: 168 };
   const podioSimulado = [
-    { posicao: 1, nome: "Ilustração Digital", totalObras: 18, totalCurtidas: 850, totalSalvos: 120 },
-    { posicao: 2, nome: "Arte Conceitual", totalObras: 12, totalCurtidas: 620, totalSalvos: 90 },
-    { posicao: 3, nome: "Pintura Tradicional", totalObras: 9, totalCurtidas: 410, totalSalvos: 65 },
+    { posicao: 1, nome: "Ilustração Digital", totalObras: 18, totalCurtidas: 850, totalSalvos: 120, totalVisualizacoes: 3200 },
+    { posicao: 2, nome: "Arte Conceitual", totalObras: 12, totalCurtidas: 620, totalSalvos: 90, totalVisualizacoes: 2100 },
+    { posicao: 3, nome: "Pintura Tradicional", totalObras: 9, totalCurtidas: 410, totalSalvos: 65, totalVisualizacoes: 1450 },
   ];
 
   const totaisExibidos = temAcesso ? totaisReais : totaisSimulados;
   const periodosExibidos = temAcesso ? periodosReais : periodosSimulados;
-  const podioExibido = temAcesso ? podioReal : podioSimulado;
+  const podioExibido = temAcesso ? (podioReal.length > 0 ? podioReal : podioSimulado) : podioSimulado;
 
   // Obras mais vistas ordenadas
   const obrasPopulares = [...obras]
@@ -115,7 +178,7 @@ export default function Estatisticas() {
               Pódio das Suas Melhores Categorias
             </h2>
             <p className="text-xs text-gray-400 mt-1">
-              As categorias que mais despertaram curtidas e obras salvas pelo seu público.
+              As categorias com maior desempenho em visualizações, curtidas, salvamentos e obras publicadas.
             </p>
           </div>
         </div>
@@ -152,31 +215,37 @@ export default function Estatisticas() {
                     >
                       {cat.posicao}º Lugar
                     </span>
-                    <h3 className="font-editorial text-2xl mt-2 text-artDark">
+                    <h3 className="font-editorial text-2xl mt-2 text-artDark line-clamp-1" title={cat.nome}>
                       {cat.nome}
                     </h3>
                   </div>
                   <i className={`fa-solid ${medalhaIcon}`}></i>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-4 border-t border-black/5 text-center">
-                  <div>
+                <div className="grid grid-cols-4 gap-1.5 pt-4 border-t border-black/5 text-center">
+                  <div className="bg-white/60 rounded-lg py-1.5 px-1 border border-black/5">
                     <span className="text-xs font-bold text-artDark block">
                       {cat.totalObras}
                     </span>
-                    <span className="text-[9px] text-gray-400 uppercase">Obras</span>
+                    <span className="text-[8px] text-gray-400 uppercase font-semibold">Obras</span>
                   </div>
-                  <div>
+                  <div className="bg-white/60 rounded-lg py-1.5 px-1 border border-black/5">
                     <span className="text-xs font-bold text-red-500 block">
                       {cat.totalCurtidas}
                     </span>
-                    <span className="text-[9px] text-gray-400 uppercase">Curtidas</span>
+                    <span className="text-[8px] text-gray-400 uppercase font-semibold">Curtidas</span>
                   </div>
-                  <div>
+                  <div className="bg-white/60 rounded-lg py-1.5 px-1 border border-black/5">
                     <span className="text-xs font-bold text-amber-600 block">
                       {cat.totalSalvos}
                     </span>
-                    <span className="text-[9px] text-gray-400 uppercase">Salvos</span>
+                    <span className="text-[8px] text-gray-400 uppercase font-semibold">Salvos</span>
+                  </div>
+                  <div className="bg-white/60 rounded-lg py-1.5 px-1 border border-black/5">
+                    <span className="text-xs font-bold text-artPurple block">
+                      {cat.totalVisualizacoes}
+                    </span>
+                    <span className="text-[8px] text-gray-400 uppercase font-semibold">Views</span>
                   </div>
                 </div>
               </div>
@@ -343,7 +412,7 @@ export default function Estatisticas() {
                         src={getMediaUrl(imagemObra)}
                         alt={tituloObra}
                         onError={(e) => {
-                          e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                          e.currentTarget.src = "/default-art.png";
                         }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />

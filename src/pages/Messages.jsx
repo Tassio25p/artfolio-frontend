@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import ConversationItem from "../components/ConversationItem";
 import MessageBubble from "../components/MessageBubble";
 import ChameleonChatPattern from "../components/ChameleonChatPattern";
+import EmojiPicker from "../components/EmojiPicker";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { mensagemService, usuarioService, planosService, authService, getMediaUrl } from "../services/api";
@@ -22,6 +23,12 @@ export default function Messages() {
   const [loading, setLoading] = useState(true);
   const [meuPlano, setMeuPlano] = useState(null);
   const [meuUsuario, setMeuUsuario] = useState(null);
+  const [tempoAtual, setTempoAtual] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTempoAtual(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Conversas ocultas persistidas no localStorage
   const [hiddenChatIds, setHiddenChatIds] = useState(() => {
@@ -64,25 +71,91 @@ export default function Messages() {
     localStorage.setItem("artfolio_hidden_chats", JSON.stringify(hiddenChatIds));
   }, [hiddenChatIds]);
 
-  // Busca dinâmica de qualquer usuário para conversar
-  const [termoBuscaUsuario, setTermoBuscaUsuario] = useState("");
-  const [resultadosBusca, setResultadosBusca] = useState([]);
-  const [buscandoUsuarios, setBuscandoUsuarios] = useState(false);
 
   // Contexto de Obra enviado via CTA
   const [obraContexto, setObraContexto] = useState(null);
 
   // Rascunho de mensagem
   const [currentDraft, setCurrentDraft] = useState("");
-  const [userPresence, setUserPresence] = useState("Online");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [userPresence, setUserPresence] = useState(() => {
+    return localStorage.getItem("artfolio_user_presence") || "Online";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("artfolio_user_presence", userPresence);
+  }, [userPresence]);
+
+  // Conversas Fixadas no Topo (máximo 3) persistidas no localStorage
+  const [pinnedChatIds, setPinnedChatIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem("artfolio_pinned_chats");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("artfolio_pinned_chats", JSON.stringify(pinnedChatIds));
+  }, [pinnedChatIds]);
+
+  // Alternar fixação de conversa (máx 3)
+  // Regra LIFO/Topo: a recém-fixada assume a 1ª posição (#1) do topo, empurrando as fixadas anteriores
+  const handleTogglePinChat = useCallback((chatId) => {
+    setPinnedChatIds((prev) => {
+      if (prev.includes(chatId)) {
+        addToast("Conversa desafixada do topo.", "info");
+        return prev.filter((id) => id !== chatId);
+      } else {
+        if (prev.length >= 3) {
+          addToast("Você pode fixar no máximo 3 conversas no topo.", "warning");
+          return prev;
+        }
+        addToast("Conversa fixada no topo!", "success");
+        return [chatId, ...prev.filter((id) => id !== chatId)];
+      }
+    });
+  }, [addToast]);
+
+  // Obter status de presença de qualquer usuário
+  const obterPresencaUsuario = useCallback((userId, usuarioObj) => {
+    if (!userId) return "Online";
+    if (Number(userId) === Number(authUser?.id)) {
+      return userPresence;
+    }
+    if (usuarioObj?.status_presenca) {
+      return usuarioObj.status_presenca;
+    }
+    const idNum = Number(userId) || 1;
+    if (idNum % 4 === 0) return "Offline";
+    if (idNum % 5 === 0) return "Invisível";
+    return "Online";
+  }, [authUser?.id, userPresence]);
 
   // Menus e Modais
   const [showChatMenu, setShowChatMenu] = useState(false);
-  const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false);
   const [modalNovoChatAberto, setModalNovoChatAberto] = useState(false);
+  const [abaNovoChat, setAbaNovoChat] = useState("direto"); // "direto" | "grupo"
+  const [nomeNovoGrupo, setNomeNovoGrupo] = useState("");
+  const [membrosSelecionadosGrupo, setMembrosSelecionadosGrupo] = useState([]);
+  const [criandoGrupo, setCriandoGrupo] = useState(false);
   const [buscaModalTexto, setBuscaModalTexto] = useState("");
   const [resultadosModal, setResultadosModal] = useState([]);
   const [buscandoModal, setBuscandoModal] = useState(false);
+
+  // Modal de Detalhes do Grupo & Gestão de Membros
+  const [modalDetalhesGrupoAberto, setModalDetalhesGrupoAberto] = useState(false);
+  const [editandoNomeGrupo, setEditandoNomeGrupo] = useState(false);
+  const [nomeGrupoEdicao, setNomeGrupoEdicao] = useState("");
+  const [salvandoFotoGrupo, setSalvandoFotoGrupo] = useState(false);
+  const [salvandoNomeGrupo, setSalvandoNomeGrupo] = useState(false);
+  const [removendoMembroId, setRemovendoMembroId] = useState(null);
+  const [buscaMembrosGrupo, setBuscaMembrosGrupo] = useState("");
+
+  // Menções com @
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
+  const inputDraftRef = useRef(null);
 
   // Seleção individual de mensagens
   const [selectionMode, setSelectionMode] = useState(false);
@@ -341,6 +414,27 @@ export default function Messages() {
             const jaExiste = listaAtual.some((m) => String(m.id) === String(novaMsg.id));
             if (jaExiste) return prev;
 
+            // Se a mensagem foi enviada por mim, substituir a mensagem otimista temporária correspondente
+            if (novaMsg.enviado_por_mim) {
+              const idxOtimista = listaAtual.findIndex(
+                (m) =>
+                  String(m.id).startsWith("otimista-") &&
+                  (m.conteudo === novaMsg.conteudo || (m.arquivoUrl && m.arquivoUrl === novaMsg.arquivoUrl))
+              );
+              if (idxOtimista !== -1) {
+                const novaLista = [...listaAtual];
+                novaLista[idxOtimista] = {
+                  ...novaLista[idxOtimista],
+                  ...novaMsg,
+                  id: novaMsg.id,
+                };
+                return {
+                  ...prev,
+                  mensagens: novaLista,
+                };
+              }
+            }
+
             return {
               ...prev,
               mensagens: [...listaAtual, novaMsg],
@@ -503,7 +597,7 @@ export default function Messages() {
     if (isAtBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [activeChat?.mensagens?.length]);
+  }, [activeChat?.mensagens?.length, isAtBottom]);
 
   const handleSelectChat = (chat) => {
     if (!chat) return;
@@ -543,37 +637,97 @@ export default function Messages() {
     addToast("Conversa ocultada da barra lateral.", "Chat", "info");
   };
 
-  // Buscar usuários no backend
-  const handleDigitarBuscaUsuario = async (texto) => {
-    setTermoBuscaUsuario(texto);
+  const abrirModalNovoChat = async () => {
+    setModalNovoChatAberto(true);
+    setAbaNovoChat("direto");
+    setNomeNovoGrupo("");
+    setMembrosSelecionadosGrupo([]);
+    setBuscaModalTexto("");
+    setResultadosModal([]);
+    setCarregandoArtistas(true);
+    try {
+      await carregarArtistas();
+    } finally {
+      setCarregandoArtistas(false);
+    }
+  };
+
+  const handleToggleMembroGrupo = (usuario) => {
+    setMembrosSelecionadosGrupo((prev) => {
+      const existe = prev.some((u) => u.id === usuario.id);
+      if (existe) {
+        return prev.filter((u) => u.id !== usuario.id);
+      } else {
+        if (prev.length >= 11) {
+          addToast("Limite máximo de 12 participantes atingido (Você + 11 convidados).", "Grupo", "info");
+          return prev;
+        }
+        return [...prev, usuario];
+      }
+    });
+  };
+
+  const handleRemoverMembroGrupo = (usuarioId) => {
+    setMembrosSelecionadosGrupo((prev) => prev.filter((u) => u.id !== usuarioId));
+  };
+
+  const handleCriarGrupo = async () => {
+    if (membrosSelecionadosGrupo.length === 0) {
+      addToast("Selecione pelo menos 1 participante para o grupo.", "Grupo", "info");
+      return;
+    }
+    if (membrosSelecionadosGrupo.length > 11) {
+      addToast("O grupo pode ter no máximo 12 pessoas no total.", "Grupo", "erro");
+      return;
+    }
+    setCriandoGrupo(true);
+    try {
+      const ids = membrosSelecionadosGrupo.map((u) => u.id);
+      const grupoCriado = await mensagemService.criarConversaGrupo({
+        destinatarios_ids: ids,
+        nome_grupo: nomeNovoGrupo.trim() || undefined,
+      });
+      addToast("Grupo criado com sucesso!", "Chat", "sucesso");
+      setModalNovoChatAberto(false);
+      setNomeNovoGrupo("");
+      setMembrosSelecionadosGrupo([]);
+      await carregarConversas();
+      if (grupoCriado?.id) {
+        handleSelectChat(grupoCriado);
+      }
+    } catch (err) {
+      addToast(err.message || "Erro ao criar grupo.", "Erro", "erro");
+    } finally {
+      setCriandoGrupo(false);
+    }
+  };
+
+  const handleDigitarBuscaModal = async (texto) => {
+    setBuscaModalTexto(texto);
     if (!texto.trim()) {
-      setResultadosBusca([]);
+      setResultadosModal([]);
       return;
     }
 
-    setBuscandoUsuarios(true);
+    setBuscandoModal(true);
     try {
-      const usuariosEncontrados = await usuarioService.buscarUsuariosChat(texto);
-      setResultadosBusca(usuariosEncontrados);
+      const encontrados = await usuarioService.buscarUsuariosChat(texto);
+      setResultadosModal(encontrados);
     } catch {
-      setResultadosBusca([]);
+      setResultadosModal([]);
     } finally {
-      setBuscandoUsuarios(false);
+      setBuscandoModal(false);
     }
   };
 
   const handleSelecionarUsuarioBusca = (usuario) => {
-    setTermoBuscaUsuario("");
-    setResultadosBusca([]);
-
-    // Verifica se já existe conversa no estado local
+    if (!usuario) return;
     const convExistente = conversas.find((c) => c.destinatario?.id === usuario.id);
     if (convExistente) {
       handleSelectChat(convExistente);
       return;
     }
 
-    // Abre janela em modo preliminar (só salva no banco se enviar mensagem)
     const draftChat = {
       id: `draft_${usuario.id}`,
       isDraft: true,
@@ -596,41 +750,143 @@ export default function Messages() {
     setCurrentDraft("");
   };
 
-  const abrirModalNovoChat = async () => {
-    setModalNovoChatAberto(true);
-    setBuscaModalTexto("");
-    setResultadosModal([]);
-    setCarregandoArtistas(true);
-    try {
-      await carregarArtistas();
-    } finally {
-      setCarregandoArtistas(false);
-    }
-  };
-
-  const handleDigitarBuscaModal = async (texto) => {
-    setBuscaModalTexto(texto);
-    if (!texto.trim()) {
-      setResultadosModal([]);
-      return;
-    }
-
-    setBuscandoModal(true);
-    try {
-      const encontrados = await usuarioService.buscarUsuariosChat(texto);
-      setResultadosModal(encontrados);
-    } catch {
-      setResultadosModal([]);
-    } finally {
-      setBuscandoModal(false);
-    }
-  };
-
   const handleIniciarConversaComArtista = async (artista) => {
     handleSelecionarUsuarioBusca(artista);
     setModalNovoChatAberto(false);
     setBuscaModalTexto("");
     setResultadosModal([]);
+  };
+
+  // --- Funções de Gestão de Grupo (Admin e Participantes) ---
+  const handleUploadFotoGrupo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChatId) return;
+    setSalvandoFotoGrupo(true);
+    try {
+      const res = await mensagemService.uploadFotoGrupo(activeChatId, file);
+      addToast("Foto do grupo atualizada com sucesso!", "Grupo", "sucesso");
+      if (res?.foto_grupo) {
+        setActiveChat((prev) => ({ ...prev, foto_grupo: res.foto_grupo }));
+        setConversas((prev) =>
+          prev.map((c) => (c.id === activeChatId ? { ...c, foto_grupo: res.foto_grupo } : c))
+        );
+      }
+      await carregarConversas(true);
+    } catch (err) {
+      addToast(err.message || "Erro ao atualizar foto do grupo.", "Erro", "erro");
+    } finally {
+      setSalvandoFotoGrupo(false);
+    }
+  };
+
+  const handleSalvarNomeGrupo = async () => {
+    if (!nomeGrupoEdicao.trim() || !activeChatId) return;
+    setSalvandoNomeGrupo(true);
+    try {
+      await mensagemService.atualizarGrupo(activeChatId, { nome_grupo: nomeGrupoEdicao.trim() });
+      addToast("Nome do grupo atualizado!", "Grupo", "sucesso");
+      setActiveChat((prev) => ({ ...prev, nome_grupo: nomeGrupoEdicao.trim() }));
+      setConversas((prev) =>
+        prev.map((c) => (c.id === activeChatId ? { ...c, nome_grupo: nomeGrupoEdicao.trim() } : c))
+      );
+      setEditandoNomeGrupo(false);
+      await carregarConversas(true);
+    } catch (err) {
+      addToast(err.message || "Erro ao atualizar nome do grupo.", "Erro", "erro");
+    } finally {
+      setSalvandoNomeGrupo(false);
+    }
+  };
+
+  const handleRemoverMembroDoGrupo = async (membroId) => {
+    if (!activeChatId) return;
+    setRemovendoMembroId(membroId);
+    try {
+      await mensagemService.removerMembroGrupo(activeChatId, membroId);
+      addToast("Participante removido do grupo.", "Grupo", "sucesso");
+      setActiveChat((prev) => ({
+        ...prev,
+        participantes: (prev.participantes || []).filter((p) => Number(p.id || p.id_usuario) !== Number(membroId)),
+      }));
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.id === activeChatId
+            ? {
+                ...c,
+                participantes: (c.participantes || []).filter(
+                  (p) => Number(p.id || p.id_usuario) !== Number(membroId)
+                ),
+              }
+            : c
+        )
+      );
+      await carregarConversas(true);
+    } catch (err) {
+      addToast(err.message || "Erro ao remover participante.", "Erro", "erro");
+    } finally {
+      setRemovendoMembroId(null);
+    }
+  };
+
+  const handleSairDoGrupo = async () => {
+    if (!activeChatId) return;
+    try {
+      await mensagemService.sairDoGrupo(activeChatId);
+      addToast("Você saiu do grupo.", "Grupo", "info");
+      setModalDetalhesGrupoAberto(false);
+      const restantes = conversas.filter((c) => c.id !== activeChatId);
+      setConversas(restantes);
+      if (restantes.length > 0) {
+        handleSelectChat(restantes[0]);
+      } else {
+        setActiveChatId(null);
+        setActiveChat(null);
+        activeChatIdRef.current = null;
+      }
+      await carregarConversas(true);
+    } catch (err) {
+      addToast(err.message || "Erro ao sair do grupo.", "Erro", "erro");
+    }
+  };
+
+  const handleExcluirGrupo = async () => {
+    if (!activeChatId) return;
+    try {
+      await mensagemService.excluirGrupo(activeChatId);
+      addToast("Grupo excluído com sucesso.", "Grupo", "sucesso");
+      setModalDetalhesGrupoAberto(false);
+      const restantes = conversas.filter((c) => c.id !== activeChatId);
+      setConversas(restantes);
+      if (restantes.length > 0) {
+        handleSelectChat(restantes[0]);
+      } else {
+        setActiveChatId(null);
+        setActiveChat(null);
+        activeChatIdRef.current = null;
+      }
+      await carregarConversas(true);
+    } catch (err) {
+      addToast(err.message || "Erro ao excluir grupo.", "Erro", "erro");
+    }
+  };
+
+  // --- Lógica de Menção @ em Grupos ---
+  const mentionMatch = currentDraft.match(/@([a-zA-Z0-9_À-ÿ]*)$/);
+  const isMentioning = Boolean(activeChat?.is_grupo && mentionMatch);
+  const mentionQuery = isMentioning ? mentionMatch[1].toLowerCase() : "";
+  const filteredMentionMembers = isMentioning
+    ? (activeChat.participantes || []).filter((p) =>
+        p.nome?.toLowerCase().includes(mentionQuery)
+      )
+    : [];
+
+  const handleSelectMention = (p) => {
+    const lastAt = currentDraft.lastIndexOf("@");
+    if (lastAt !== -1) {
+      const novoTexto = currentDraft.substring(0, lastAt) + `@${p.nome} `;
+      setCurrentDraft(novoTexto);
+    }
+    inputDraftRef.current?.focus();
   };
 
   // 3. TRAVA DE LEITURA (SELECIONAR CHAT):
@@ -697,9 +953,10 @@ export default function Messages() {
       setObraContexto(null);
     }
 
-    // Mensagem otimista com confirmação visual de envio e leitura (dois traços)
+    // Mensagem otimista com confirmação visual de envio e leitura
+    const idOtimista = `otimista-${Date.now()}`;
     const msgOtimista = {
-      id: `otimista-${Date.now()}`,
+      id: idOtimista,
       idConversa: conversaIdReal,
       idRemetente: authUser?.id || 0,
       conteudo: textoFinal,
@@ -716,8 +973,31 @@ export default function Messages() {
     }));
 
     try {
-      await mensagemService.enviarMensagem(conversaIdReal, { conteudo: textoFinal });
-      await carregarConversas(true);
+      const msgCriada = await mensagemService.enviarMensagem(conversaIdReal, { conteudo: textoFinal });
+      if (msgCriada?.id) {
+        setActiveChat((prev) => {
+          if (!prev || !Array.isArray(prev.mensagens)) return prev;
+          return {
+            ...prev,
+            mensagens: prev.mensagens.map((m) =>
+              m.id === idOtimista ? { ...m, ...msgCriada, id: msgCriada.id, enviado_por_mim: true } : m
+            ),
+          };
+        });
+      }
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.id === conversaIdReal
+            ? {
+                ...c,
+                ultimaMensagem: {
+                  conteudo: textoFinal,
+                  dataEnvio: new Date().toISOString(),
+                },
+              }
+            : c
+        )
+      );
     } catch (err) {
       addToast(err.message || "Erro ao enviar mensagem no servidor.", "Erro", "erro");
     }
@@ -732,18 +1012,57 @@ export default function Messages() {
       return;
     }
 
+    const idOtimista = `otimista-anexo-${Date.now()}`;
+    const msgOtimista = {
+      id: idOtimista,
+      idConversa: activeChatId,
+      idRemetente: authUser?.id || 0,
+      conteudo: `[Arquivo: ${file.name}]`,
+      arquivoUrl: URL.createObjectURL(file),
+      dataEnvio: new Date().toISOString(),
+      enviado_por_mim: true,
+      lida: false,
+    };
+
+    setActiveChat((prev) => ({
+      ...(prev || {}),
+      mensagens: [...(prev?.mensagens || []), msgOtimista],
+    }));
+
     try {
-      addToast(`Enviando anexo ${file.name}...`, "Upload em Andamento", "info");
       const resUpload = await mensagemService.uploadAnexo(file);
-      await mensagemService.enviarMensagem(activeChatId, {
+      const msgCriada = await mensagemService.enviarMensagem(activeChatId, {
         conteudo: `[Arquivo: ${file.name}]`,
         arquivoUrl: resUpload.url,
       });
-      await carregarConversas(true);
+      if (msgCriada?.id) {
+        setActiveChat((prev) => {
+          if (!prev || !Array.isArray(prev.mensagens)) return prev;
+          return {
+            ...prev,
+            mensagens: prev.mensagens.map((m) =>
+              m.id === idOtimista ? { ...m, ...msgCriada, id: msgCriada.id, enviado_por_mim: true } : m
+            ),
+          };
+        });
+      }
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.id === activeChatId
+            ? {
+                ...c,
+                ultimaMensagem: {
+                  conteudo: `[Arquivo: ${file.name}]`,
+                  dataEnvio: new Date().toISOString(),
+                },
+              }
+            : c
+        )
+      );
       addToast("Arquivo anexado e enviado com sucesso!", "Mensagem Enviada", "sucesso");
     } catch (err) {
       console.error("Erro no upload de anexo:", err);
-      addToast(err.message || "Erro ao enviar arquivo: Formato não suportado ou erro no servidor.", "Falha no Envio", "erro");
+      addToast(err.message || "Erro ao enviar arquivo.", "Falha no Envio", "erro");
     }
   };
 
@@ -840,29 +1159,6 @@ export default function Messages() {
     }
   };
 
-  const handleDeletarMensagemIndividual = async (mensagemId) => {
-    try {
-      await mensagemService.deletarMensagem(mensagemId);
-      setActiveChat((prev) => ({
-        ...prev,
-        mensagens: (prev?.mensagens || []).filter((m) => m.id !== mensagemId),
-      }));
-      setConversas((prev) =>
-        prev.map((c) =>
-          c.id === activeChat?.id
-            ? {
-                ...c,
-                mensagens: (c.mensagens || []).filter((m) => m.id !== mensagemId),
-              }
-            : c
-        )
-      );
-      addToast("Mensagem apagada para você.", "Mensagem Apagada", "info");
-    } catch (err) {
-      addToast(err.message || "Erro ao apagar mensagem.", "Erro", "erro");
-    }
-  };
-
   const handleDeletarMensagensSelecionadas = async () => {
     if (selectedIndexes.length === 0 || !activeChat?.mensagens) return;
     try {
@@ -911,18 +1207,6 @@ export default function Messages() {
     setSelectedIndexes((prev) =>
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
     );
-  };
-
-  const handleLimparTudo = async () => {
-    if (!activeChatId) return;
-    try {
-      await mensagemService.limparConversa(activeChatId);
-      await carregarConversas();
-      setModalLimpezaAberto(false);
-      addToast("Histórico da conversa foi limpo para você com sucesso.", "Conversa Limpa", "info");
-    } catch (err) {
-      addToast("Erro ao limpar histórico.", "Erro", "erro");
-    }
   };
 
   const destinatarioId = activeChat?.destinatario?.id;
@@ -1074,13 +1358,53 @@ export default function Messages() {
                 </p>
               </div>
             ) : (
-              conversas
+              [...conversas]
                 .filter((chat) => !hiddenChatIds.includes(chat.id))
+                .sort((a, b) => {
+                  const idxA = pinnedChatIds.indexOf(a.id);
+                  const idxB = pinnedChatIds.indexOf(b.id);
+                  const isPinnedA = idxA !== -1;
+                  const isPinnedB = idxB !== -1;
+
+                  // Se ambos estão fixados, ordenar estritamente pela posição de fixação no topo
+                  if (isPinnedA && isPinnedB) {
+                    return idxA - idxB;
+                  }
+                  // Fixados sempre ficam no topo absoluto
+                  if (isPinnedA) return -1;
+                  if (isPinnedB) return 1;
+
+                  // Para conversas não-fixadas: ordenar pela atividade mais recente (última mensagem ou criação)
+                  const timeA = new Date(
+                    a.ultimaMensagem?.dataEnvio ||
+                    (Array.isArray(a.mensagens) && a.mensagens.length > 0 ? a.mensagens[a.mensagens.length - 1].dataEnvio : 0) ||
+                    a.atualizado_em ||
+                    a.dataCriacao ||
+                    0
+                  ).getTime();
+
+                  const timeB = new Date(
+                    b.ultimaMensagem?.dataEnvio ||
+                    (Array.isArray(b.mensagens) && b.mensagens.length > 0 ? b.mensagens[b.mensagens.length - 1].dataEnvio : 0) ||
+                    b.atualizado_em ||
+                    b.dataCriacao ||
+                    0
+                  ).getTime();
+
+                  return timeB - timeA;
+                })
                 .map((chat) => {
-                  const destNome = chat.destinatario?.nome || "Usuário Artfolio";
-                  const destAvatar = chat.destinatario?.fotoPerfil
-                    ? getMediaUrl(chat.destinatario.fotoPerfil)
-                    : "";
+                  const isGroup = Boolean(chat.is_grupo);
+                  const destNome = isGroup
+                    ? (chat.nome_grupo || "Grupo de Artistas")
+                    : (chat.destinatario?.nome || "Usuário Artfolio");
+                  const destAvatar = isGroup
+                    ? (chat.foto_grupo ? getMediaUrl(chat.foto_grupo) : "")
+                    : (chat.destinatario?.fotoPerfil ? getMediaUrl(chat.destinatario.fotoPerfil) : "");
+                  const destId = chat.destinatario?.id || chat.destinatarioId;
+                  const presencaContato = obterPresencaUsuario(destId, chat.destinatario);
+                  const isPinned = pinnedChatIds.includes(chat.id);
+
                   const ultimaMsgTexto =
                     chat.ultimaMensagem?.conteudo ||
                     (chat.mensagens?.length > 0
@@ -1112,13 +1436,13 @@ export default function Messages() {
                         name={destNome}
                         message={previewFormatado}
                         time={horaMsg}
+                        isGroup={isGroup}
+                        participantsCount={chat.participantes?.length || 0}
+                        presence={presencaContato}
+                        isPinned={isPinned}
+                        onTogglePin={() => handleTogglePinChat(chat.id)}
                         onHide={() => handleHideConversation(chat.id)}
-                        image={
-                          destAvatar ||
-                          `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-                            destNome
-                          )}&backgroundColor=7c3aed,ff5c00,0066ff`
-                        }
+                        image={destAvatar || ""}
                       />
                     </div>
                   );
@@ -1146,53 +1470,95 @@ export default function Messages() {
                     <i className="fa-solid fa-arrow-left text-sm"></i>
                   </button>
 
-                  <Link
-                    to={destinatarioId ? `/artista/${destinatarioId}` : "/feed"}
-                    className="flex items-center gap-3 min-w-0 group hover:opacity-90 transition-all"
-                    title={`Ver perfil público de ${activeChat.destinatario?.nome || "Artista"}`}
-                  >
-                    {activeChat.destinatario?.fotoPerfil ? (
-                      <img
-                        src={getMediaUrl(activeChat.destinatario.fotoPerfil)}
-                        alt={activeChat.destinatario?.nome}
-                        className="w-11 h-11 rounded-2xl object-cover border border-black/5 group-hover:scale-105 transition-transform"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-artPurple to-artBlue text-white font-bold flex items-center justify-center text-base shadow-sm group-hover:scale-105 transition-transform">
-                        {activeChat.destinatario?.nome?.charAt(0)?.toUpperCase() || "A"}
-                      </div>
-                    )}
-
-                    <div className="min-w-0 text-left">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-editorial text-2xl italic truncate group-hover:text-artPurple transition-colors">
-                          {activeChat.destinatario?.nome || "Usuário"}
-                        </span>
-
-                        <span className="bg-emerald-50 text-emerald-600 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                          {activeChat.destinatario?.tipo_conta || "Artista"}
-                        </span>
-
-                        {isBlocked && (
-                          <span className="bg-red-50 text-red-500 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                            Bloqueado
+                  {activeChat.is_grupo ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNomeGrupoEdicao(activeChat.nome_grupo || "");
+                        setEditandoNomeGrupo(false);
+                        setBuscaMembrosGrupo("");
+                        setModalDetalhesGrupoAberto(true);
+                      }}
+                      className="flex items-center gap-3 min-w-0 text-left group/grp cursor-pointer hover:opacity-90 transition-all"
+                      title="Clique para ver detalhes, foto e participantes do grupo"
+                    >
+                      {activeChat.foto_grupo ? (
+                        <img
+                          src={getMediaUrl(activeChat.foto_grupo)}
+                          alt={activeChat.nome_grupo}
+                          className="w-11 h-11 rounded-2xl object-cover border border-black/5 group-hover/grp:scale-105 transition-transform shrink-0 shadow-xs"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-artPurple via-indigo-600 to-artBlue text-white font-bold flex items-center justify-center text-base shadow-sm shrink-0 group-hover/grp:scale-105 transition-transform">
+                          <i className="fa-solid fa-users text-sm"></i>
+                        </div>
+                      )}
+                      <div className="min-w-0 text-left">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-editorial text-2xl italic truncate text-artDark group-hover/grp:text-artPurple transition-colors">
+                            {activeChat.nome_grupo || "Grupo de Artistas"}
                           </span>
+                          <span className="bg-artPurple/10 text-artPurple px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                            <span>Grupo • {activeChat.participantes?.length || 0} membros</span>
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-0.5 truncate flex items-center gap-1 group-hover/grp:text-artPurple transition-colors">
+                          <span className="truncate">
+                            {activeChat.participantes?.map((p) => p.nome).join(", ") || "Conversa em grupo"}
+                          </span>
+                          <i className="fa-solid fa-circle-info text-[9px] text-artPurple shrink-0"></i>
+                        </p>
+                      </div>
+                    </button>
+                  ) : (
+                    <Link
+                      to={destinatarioId ? `/artista/${destinatarioId}` : "/feed"}
+                      className="flex items-center gap-3 min-w-0 group hover:opacity-90 transition-all"
+                      title={`Ver perfil público de ${activeChat.destinatario?.nome || "Artista"}`}
+                    >
+                      {activeChat.destinatario?.fotoPerfil ? (
+                        <img
+                          src={getMediaUrl(activeChat.destinatario.fotoPerfil)}
+                          alt={activeChat.destinatario?.nome}
+                          className="w-11 h-11 rounded-2xl object-cover border border-black/5 group-hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-artPurple to-artBlue text-white font-bold flex items-center justify-center text-base shadow-sm group-hover:scale-105 transition-transform">
+                          {activeChat.destinatario?.nome?.charAt(0)?.toUpperCase() || "A"}
+                        </div>
+                      )}
+
+                      <div className="min-w-0 text-left">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-editorial text-2xl italic truncate group-hover:text-artPurple transition-colors">
+                            {activeChat.destinatario?.nome || "Usuário"}
+                          </span>
+
+                          <span className="bg-emerald-50 text-emerald-600 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                            {activeChat.destinatario?.tipo_conta || "Artista"}
+                          </span>
+
+                          {isBlocked && (
+                            <span className="bg-red-50 text-red-500 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                              Bloqueado
+                            </span>
+                          )}
+                        </div>
+
+                        {outroUsuarioDigitando ? (
+                          <p className="text-[11px] font-semibold text-emerald-500 mt-0.5 flex items-center gap-1.5 animate-pulse">
+                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            Digitando...
+                          </p>
+                        ) : (
+                          <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-0.5 flex items-center gap-1 group-hover:text-artOrange transition-colors">
+                            <span>Ver Perfil</span>
+                            <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                          </p>
                         )}
                       </div>
-
-                      {outroUsuarioDigitando ? (
-                        <p className="text-[11px] font-semibold text-emerald-500 mt-0.5 flex items-center gap-1.5 animate-pulse">
-                          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                          Digitando...
-                        </p>
-                      ) : (
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-0.5 flex items-center gap-1 group-hover:text-artOrange transition-colors">
-                          <span>Ver Perfil</span>
-                          <i className="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
-                        </p>
-                      )}
-                    </div>
-                  </Link>
+                    </Link>
+                  )}
                 </div>
 
                 {/* Ações do Topo do Chat */}
@@ -1265,14 +1631,30 @@ export default function Messages() {
                     </div>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={handleAbrirModalDenuncia}
-                        className="w-10 h-10 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors flex items-center justify-center text-sm border border-black/5 cursor-pointer"
-                        title="Denunciar usuário ou conversa"
-                      >
-                        <i className="fa-regular fa-flag"></i>
-                      </button>
+                      {activeChat.is_grupo ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNomeGrupoEdicao(activeChat.nome_grupo || "");
+                            setEditandoNomeGrupo(false);
+                            setBuscaMembrosGrupo("");
+                            setModalDetalhesGrupoAberto(true);
+                          }}
+                          className="w-10 h-10 rounded-full hover:bg-artPurple/10 text-artPurple transition-colors flex items-center justify-center text-sm border border-black/5 cursor-pointer"
+                          title="Detalhes e participantes do grupo"
+                        >
+                          <i className="fa-solid fa-circle-info"></i>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleAbrirModalDenuncia}
+                          className="w-10 h-10 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors flex items-center justify-center text-sm border border-black/5 cursor-pointer"
+                          title="Denunciar usuário ou conversa"
+                        >
+                          <i className="fa-regular fa-flag"></i>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -1285,39 +1667,118 @@ export default function Messages() {
 
                       {showChatMenu && (
                         <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-black/10 py-2 z-50 text-xs animate-fadeIn">
+                          {/* Opção Fixar / Desafixar do Topo (máx 3) */}
                           <button
                             type="button"
                             onClick={() => {
                               setShowChatMenu(false);
-                              setSelectionMode(true);
-                              setSelectedIndexes([]);
+                              handleTogglePinChat(activeChat.id);
                             }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 cursor-pointer font-medium"
+                            className="w-full px-4 py-2.5 text-left hover:bg-artPurple/5 text-artDark flex items-center gap-2.5 cursor-pointer font-medium"
                           >
-                            <i className="fa-solid fa-trash text-red-500 text-xs"></i>
-                            <span>Apagar mensagens...</span>
+                            <i className="fa-solid fa-thumbtack text-artPurple text-xs -rotate-45"></i>
+                            <span>
+                              {pinnedChatIds.includes(activeChat.id)
+                                ? "Desafixar do topo"
+                                : `Fixar no topo (${pinnedChatIds.length}/3)`}
+                            </span>
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={handleAbrirModalDenuncia}
-                            className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2.5 border-t border-black/5 cursor-pointer"
-                          >
-                            <i className="fa-regular fa-flag"></i>
-                            <span>Denunciar usuário</span>
-                          </button>
+                          {activeChat.is_grupo ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowChatMenu(false);
+                                  setNomeGrupoEdicao(activeChat.nome_grupo || "");
+                                  setEditandoNomeGrupo(false);
+                                  setBuscaMembrosGrupo("");
+                                  setModalDetalhesGrupoAberto(true);
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-artPurple/5 text-artDark flex items-center gap-2.5 cursor-pointer font-medium border-t border-black/5"
+                              >
+                                <i className="fa-solid fa-circle-info text-artPurple text-xs"></i>
+                                <span>Detalhes do grupo</span>
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowChatMenu(false);
-                              handleBlockUser();
-                            }}
-                            className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 border-t border-black/5 cursor-pointer"
-                          >
-                            <i className={isBlocked ? "fa-solid fa-unlock" : "fa-solid fa-ban"}></i>
-                            <span>{isBlocked ? "Desbloquear contato" : "Bloquear contato"}</span>
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowChatMenu(false);
+                                  setSelectionMode(true);
+                                  setSelectedIndexes([]);
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 cursor-pointer font-medium border-t border-black/5"
+                              >
+                                <i className="fa-solid fa-trash text-red-500 text-xs"></i>
+                                <span>Apagar mensagens...</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowChatMenu(false);
+                                  handleSairDoGrupo();
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-orange-50 text-artOrange flex items-center gap-2.5 border-t border-black/5 cursor-pointer font-medium"
+                              >
+                                <i className="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                                <span>Sair do grupo</span>
+                              </button>
+
+                              {Number(activeChat.admin_id) === Number(authUser?.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowChatMenu(false);
+                                    if (window.confirm("Tem certeza que deseja excluir este grupo permanentemente? Todas as mensagens serão perdidas.")) {
+                                      handleExcluirGrupo();
+                                    }
+                                  }}
+                                  className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2.5 border-t border-black/5 cursor-pointer font-medium"
+                                >
+                                  <i className="fa-solid fa-trash-can text-xs"></i>
+                                  <span>Excluir grupo</span>
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowChatMenu(false);
+                                  setSelectionMode(true);
+                                  setSelectedIndexes([]);
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 cursor-pointer font-medium border-t border-black/5"
+                              >
+                                <i className="fa-solid fa-trash text-red-500 text-xs"></i>
+                                <span>Apagar mensagens...</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleAbrirModalDenuncia}
+                                className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2.5 border-t border-black/5 cursor-pointer"
+                              >
+                                <i className="fa-regular fa-flag"></i>
+                                <span>Denunciar usuário</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowChatMenu(false);
+                                  handleBlockUser();
+                                }}
+                                className="w-full px-4 py-2.5 text-left hover:bg-red-50 text-red-500 flex items-center gap-2.5 border-t border-black/5 cursor-pointer"
+                              >
+                                <i className={isBlocked ? "fa-solid fa-unlock" : "fa-solid fa-ban"}></i>
+                                <span>{isBlocked ? "Desbloquear contato" : "Bloquear contato"}</span>
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </>
@@ -1364,7 +1825,7 @@ export default function Messages() {
                       isMe &&
                       !msg.deletado_em &&
                       msg.dataEnvio &&
-                      Date.now() - new Date(msg.dataEnvio).getTime() < 15 * 60 * 1000
+                      tempoAtual - new Date(msg.dataEnvio).getTime() < 15 * 60 * 1000
                     );
 
                     return (
@@ -1453,6 +1914,9 @@ export default function Messages() {
                                 deletado_em={msg.deletado_em}
                                 editado_em={msg.editado_em}
                                 podeEditar={podeEditar}
+                                isGroup={Boolean(activeChat.is_grupo)}
+                                senderName={msg.remetente_nome || msg.remetente?.nome}
+                                senderAvatar={msg.remetente_foto || msg.remetente?.fotoPerfil}
                                 onEditar={() => handleStartEdit(msg)}
                                 onExcluir={() => handleConfirmarExclusao(msg.id)}
                               />
@@ -1571,70 +2035,169 @@ export default function Messages() {
                     Você bloqueou este contato. Desbloqueie para enviar novas mensagens.
                   </div>
                 ) : (
-                  <form
-                    onSubmit={handleSendMessage}
-                    className="max-w-4xl mx-auto relative flex items-center"
-                  >
-                    <input
-                      type="text"
-                      value={currentDraft}
-                      onChange={(e) => {
-                        setCurrentDraft(e.target.value);
-                        const agora = Date.now();
-                        if (activeChatId && !activeChat?.isDraft && agora - ultimoEnvioDigitandoRef.current > 2000) {
-                          ultimoEnvioDigitandoRef.current = agora;
-                          window.dispatchEvent(
-                            new CustomEvent("artfolio_enviar_socket", {
-                              detail: {
-                                tipo: "DIGITANDO",
-                                conversa_id: activeChatId,
-                                idRemetente: authUser?.id,
-                              },
-                            })
-                          );
+                  <div className="max-w-4xl mx-auto relative">
+                    {/* Popover de Menção @ em Grupos */}
+                    {isMentioning && filteredMentionMembers.length > 0 && (
+                      <div className="absolute bottom-full left-0 right-0 mb-3 bg-white/95 backdrop-blur-md rounded-2xl border border-black/10 shadow-2xl p-2 z-40 max-h-56 overflow-y-auto animate-fadeIn">
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between border-b border-black/5 mb-1">
+                          <span className="flex items-center gap-1.5 text-artPurple">
+                            <i className="fa-solid fa-at text-xs"></i>
+                            <span>Mencionar membro</span>
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-semibold">{filteredMentionMembers.length} encontrado(s)</span>
+                        </div>
+                        <div className="space-y-1">
+                          {filteredMentionMembers.map((membro, idx) => {
+                            const isSelected = idx === mentionSelectedIndex;
+                            const isAdmin = Number(membro.id || membro.id_usuario) === Number(activeChat.admin_id);
+                            return (
+                              <button
+                                key={membro.id || membro.id_usuario || idx}
+                                type="button"
+                                onClick={() => handleSelectMention(membro)}
+                                className={`w-full p-2 rounded-xl text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer ${
+                                  isSelected ? "bg-artPurple/15 text-artDark font-semibold" : "hover:bg-[#F9F8F6] text-gray-700"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-artPurple/20 text-artPurple font-bold flex items-center justify-center text-xs shrink-0 overflow-hidden">
+                                    {membro.fotoPerfil ? (
+                                      <img src={getMediaUrl(membro.fotoPerfil)} alt={membro.nome} className="w-full h-full object-cover" />
+                                    ) : (
+                                      membro.nome?.charAt(0)?.toUpperCase() || "U"
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-artDark truncate block">{membro.nome}</span>
+                                    <span className="text-[10px] text-gray-400 font-normal truncate block">@{membro.nome?.toLowerCase().replace(/\s+/g, "_")}</span>
+                                  </div>
+                                </div>
+                                {isAdmin && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 shrink-0">
+                                    <i className="fa-solid fa-crown text-[8px] text-amber-600"></i> Admin
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <form
+                      onSubmit={handleSendMessage}
+                      className="relative flex items-center"
+                    >
+                      <input
+                        ref={inputDraftRef}
+                        type="text"
+                        value={currentDraft}
+                        onKeyDown={(e) => {
+                          if (isMentioning && filteredMentionMembers.length > 0) {
+                            if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              setMentionSelectedIndex((prev) => (prev + 1) % filteredMentionMembers.length);
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              setMentionSelectedIndex((prev) => (prev - 1 + filteredMentionMembers.length) % filteredMentionMembers.length);
+                            } else if (e.key === "Enter" || e.key === "Tab") {
+                              if (isMentioning && filteredMentionMembers.length > 0) {
+                                e.preventDefault();
+                                const target = filteredMentionMembers[mentionSelectedIndex] || filteredMentionMembers[0];
+                                if (target) handleSelectMention(target);
+                              }
+                            }
+                          }
+                        }}
+                        onChange={(e) => {
+                          setCurrentDraft(e.target.value);
+                          setMentionSelectedIndex(0);
+                          const agora = Date.now();
+                          if (activeChatId && !activeChat?.isDraft && agora - ultimoEnvioDigitandoRef.current > 2000) {
+                            ultimoEnvioDigitandoRef.current = agora;
+                            window.dispatchEvent(
+                              new CustomEvent("artfolio_enviar_socket", {
+                                detail: {
+                                  tipo: "DIGITANDO",
+                                  conversa_id: activeChatId,
+                                  idRemetente: authUser?.id,
+                                },
+                              })
+                            );
+                          }
+                        }}
+                        placeholder={
+                          activeChat.is_grupo
+                            ? "Escreva sua mensagem no grupo (digite @ para marcar)..."
+                            : `Escreva sua mensagem para ${
+                                activeChat.destinatario?.nome || "o artista"
+                              }...`
                         }
-                      }}
-                      placeholder={`Escreva sua mensagem para ${
-                        activeChat.destinatario?.nome || "o artista"
-                      }...`}
-                      className="w-full bg-[#F9F8F6] py-4 pl-5 sm:pl-6 pr-28 rounded-full border-none outline-none focus:ring-2 ring-artPurple/20 transition-all font-light text-sm"
-                    />
+                        className="w-full bg-[#F9F8F6] py-4 pl-5 sm:pl-6 pr-28 rounded-full border-none outline-none focus:ring-2 ring-artPurple/20 transition-all font-light text-sm"
+                      />
 
-                    <div className="absolute right-3 flex items-center space-x-1">
-                      {isBoost && (
-                        <button
-                          type="button"
-                          onClick={handleInserirMensagemPrePronta}
-                          className="w-10 h-10 rounded-full hover:bg-artOrange/10 text-artOrange transition-colors flex items-center justify-center cursor-pointer shadow-xs"
-                          title="Inserir Minha Mensagem Pré-Pronta / Pitch de Vendas (Exclusivo Boost)"
+                      <div className="absolute right-3 flex items-center space-x-1">
+                        {isBoost && (
+                          <button
+                            type="button"
+                            onClick={handleInserirMensagemPrePronta}
+                            className="w-10 h-10 rounded-full hover:bg-artOrange/10 text-artOrange transition-colors flex items-center justify-center cursor-pointer shadow-xs"
+                            title="Inserir Minha Mensagem Pré-Pronta / Pitch de Vendas (Exclusivo Boost)"
+                          >
+                            <i className="fa-solid fa-bolt text-sm"></i>
+                          </button>
+                        )}
+
+                        {/* Botão de Emojis Artfolio & Computador */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowEmojiPicker((prev) => !prev)}
+                            className={`w-10 h-10 rounded-full transition-colors flex items-center justify-center cursor-pointer ${
+                              showEmojiPicker
+                                ? "bg-artOrange/10 text-artOrange"
+                                : "hover:bg-gray-100 text-gray-400 hover:text-artOrange"
+                            }`}
+                            title="Inserir Emojis (Artfolio & Computador)"
+                          >
+                            <i className="fa-regular fa-face-smile text-base"></i>
+                          </button>
+
+                          <EmojiPicker
+                            isOpen={showEmojiPicker}
+                            onClose={() => setShowEmojiPicker(false)}
+                            onSelect={(emoji) => {
+                              setCurrentDraft((prev) => prev + (emoji.startsWith(":") ? ` ${emoji} ` : emoji));
+                            }}
+                            position="top"
+                            className="right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2"
+                          />
+                        </div>
+
+                        <label
+                          className="w-10 h-10 rounded-full hover:bg-gray-100 text-gray-400 transition-colors flex items-center justify-center cursor-pointer"
+                          title="Anexar arquivo / imagem"
                         >
-                          <i className="fa-solid fa-bolt text-sm"></i>
+                          <i className="fa-solid fa-paperclip"></i>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleAttachFile}
+                            className="hidden"
+                          />
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={!currentDraft.trim()}
+                          className="w-10 h-10 rounded-full bg-gradient-to-r from-artPurple to-artBlue text-white hover:opacity-90 shadow-md shadow-artPurple/25 transition-all flex items-center justify-center active:scale-95 disabled:opacity-40 cursor-pointer"
+                          title="Enviar mensagem"
+                        >
+                          <i className="fa-solid fa-arrow-up"></i>
                         </button>
-                      )}
-
-                      <label
-                        className="w-10 h-10 rounded-full hover:bg-gray-100 text-gray-400 transition-colors flex items-center justify-center cursor-pointer"
-                        title="Anexar arquivo / imagem"
-                      >
-                        <i className="fa-solid fa-paperclip"></i>
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          onChange={handleAttachFile}
-                          className="hidden"
-                        />
-                      </label>
-
-                      <button
-                        type="submit"
-                        disabled={!currentDraft.trim()}
-                        className="w-10 h-10 rounded-full bg-gradient-to-r from-artPurple to-artBlue text-white hover:opacity-90 shadow-md shadow-artPurple/25 transition-all flex items-center justify-center active:scale-95 disabled:opacity-40"
-                        title="Enviar mensagem"
-                      >
-                        <i className="fa-solid fa-arrow-up"></i>
-                      </button>
-                    </div>
-                  </form>
+                      </div>
+                    </form>
+                  </div>
                 )}
               </footer>
             </>
@@ -1657,32 +2220,125 @@ export default function Messages() {
         </section>
       </div>
 
-      {/* Modal de Nova Conversa com Artista Real */}
+      {/* Modal de Nova Conversa (Direta ou em Grupo) */}
       {modalNovoChatAberto && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] p-6 max-w-md w-full shadow-2xl border border-black/5 animate-scaleIn">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-[2rem] p-6 max-w-lg w-full shadow-2xl border border-black/5 animate-scaleIn max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-artPurple/10 text-artPurple flex items-center justify-center text-sm">
-                  <i className="fa-solid fa-user-plus"></i>
+                  <i className={abaNovoChat === "grupo" ? "fa-solid fa-users" : "fa-solid fa-user-plus"}></i>
                 </div>
-                <h3 className="font-editorial text-2xl italic">Iniciar Conversa</h3>
+                <h3 className="font-editorial text-2xl italic">
+                  {abaNovoChat === "grupo" ? "Novo Chat em Grupo" : "Iniciar Conversa"}
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setModalNovoChatAberto(false)}
-                className="text-gray-400 hover:text-artDark text-sm"
+                className="text-gray-400 hover:text-artDark text-sm w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center cursor-pointer transition-colors"
               >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-              Escolha um artista da comunidade ou pesquise pelo nome para iniciar uma conversa direta.
+            {/* Abas de Alternância: Direta vs Grupo */}
+            <div className="flex bg-[#F9F8F6] p-1 rounded-2xl mb-3 shrink-0 border border-black/5">
+              <button
+                type="button"
+                onClick={() => setAbaNovoChat("direto")}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  abaNovoChat === "direto"
+                    ? "bg-white text-artPurple shadow-xs"
+                    : "text-gray-500 hover:text-artDark"
+                }`}
+              >
+                <i className="fa-solid fa-user text-[11px]"></i>
+                <span>Conversa Direta</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAbaNovoChat("grupo")}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  abaNovoChat === "grupo"
+                    ? "bg-white text-artPurple shadow-xs"
+                    : "text-gray-500 hover:text-artDark"
+                }`}
+              >
+                <i className="fa-solid fa-users text-[11px]"></i>
+                <span>Chat em Grupo</span>
+                <span className="bg-artPurple/10 text-artPurple text-[9px] px-1.5 py-0.2 rounded-full">
+                  máx 12
+                </span>
+              </button>
+            </div>
+
+            {abaNovoChat === "grupo" && (
+              <div className="space-y-3 mb-3 shrink-0">
+                {/* Input de Nome do Grupo */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                    Nome do Grupo (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={nomeNovoGrupo}
+                    onChange={(e) => setNomeNovoGrupo(e.target.value)}
+                    placeholder="Ex: Ilustradores 3D, Collab de Verão..."
+                    maxLength={100}
+                    className="w-full bg-[#F9F8F6] border border-black/5 rounded-2xl px-3.5 py-2.5 text-xs outline-none focus:ring-2 ring-artPurple/20 transition-all placeholder:text-gray-400"
+                  />
+                </div>
+
+                {/* Chips dos Membros Selecionados */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                      Participantes ({membrosSelecionadosGrupo.length + 1}/12)
+                    </span>
+                    <span className="text-[10px] text-artPurple font-medium">
+                      Você + {membrosSelecionadosGrupo.length} membro(s)
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-[#F9F8F6] border border-black/5 rounded-2xl min-h-[42px] max-h-24 overflow-y-auto no-scrollbar items-center">
+                    <span className="bg-white border border-black/5 text-artDark px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-2xs">
+                      <i className="fa-solid fa-crown text-artOrange text-[9px]"></i> Você (Admin)
+                    </span>
+                    {membrosSelecionadosGrupo.map((membro) => (
+                      <span
+                        key={membro.id}
+                        className="bg-artPurple/10 text-artPurple border border-artPurple/20 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 animate-fadeIn shadow-2xs"
+                      >
+                        <span className="truncate max-w-[100px]">{membro.nome}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverMembroGrupo(membro.id)}
+                          className="hover:text-red-500 text-artPurple/70 cursor-pointer"
+                        >
+                          <i className="fa-solid fa-xmark text-[9px]"></i>
+                        </button>
+                      </span>
+                    ))}
+                    {membrosSelecionadosGrupo.length === 0 && (
+                      <span className="text-[11px] text-gray-400 italic px-2">
+                        Selecione contatos abaixo para adicionar ao grupo...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 mb-2 leading-relaxed shrink-0">
+              {abaNovoChat === "grupo"
+                ? "Selecione até 11 artistas ou contatos da comunidade para compor o grupo:"
+                : "Escolha um artista da comunidade ou pesquise pelo nome para iniciar uma conversa direta:"}
             </p>
 
             {/* Input de Busca de Usuário no Modal */}
-            <div className="relative mb-3">
+            <div className="relative mb-3 shrink-0">
               <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
               <input
                 type="text"
@@ -1706,8 +2362,8 @@ export default function Messages() {
               )}
             </div>
 
-            {/* Lista de Resultados da Busca ou Lista de Artistas Disponíveis */}
-            <div className="max-h-64 overflow-y-auto space-y-2 pr-1 no-scrollbar mb-4">
+            {/* Lista de Usuários Disponíveis */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar mb-4 min-h-[140px] max-h-56">
               {buscaModalTexto ? (
                 buscandoModal ? (
                   <div className="p-6 text-center text-xs text-gray-400">
@@ -1735,10 +2391,16 @@ export default function Messages() {
                           : "ring-2 ring-[#00B894] shadow-[0_0_8px_#00B894]"
                         : "";
 
+                    const selecionadoNoGrupo = membrosSelecionadosGrupo.some((m) => m.id === usr.id);
+
                     return (
                       <div
                         key={usr.id}
-                        className="w-full p-3 rounded-2xl bg-[#F9F8F6] hover:bg-artPurple/5 hover:border-artPurple/20 border border-transparent transition-all flex items-center justify-between gap-3 text-left group shadow-2xs"
+                        className={`w-full p-3 rounded-2xl transition-all flex items-center justify-between gap-3 text-left group shadow-2xs border ${
+                          selecionadoNoGrupo
+                            ? "bg-artPurple/10 border-artPurple/30"
+                            : "bg-[#F9F8F6] hover:bg-artPurple/5 hover:border-artPurple/20 border-transparent"
+                        }`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="relative shrink-0">
@@ -1769,22 +2431,39 @@ export default function Messages() {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          <Link
-                            to={`/artista/${usr.id}`}
-                            onClick={() => setModalNovoChatAberto(false)}
-                            className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-black/10 text-gray-600 hover:text-artPurple hover:border-artPurple transition-all"
-                            title="Ver perfil completo"
-                          >
-                            <i className="fa-solid fa-user mr-1"></i> Perfil
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => handleIniciarConversaComArtista(usr)}
-                            className="px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-artPurple text-white hover:bg-indigo-700 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                            title="Iniciar conversa"
-                          >
-                            <i className="fa-solid fa-paper-plane text-[9px]"></i> Conversar
-                          </button>
+                          {abaNovoChat === "grupo" ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMembroGrupo(usr)}
+                              className={`px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                                selecionadoNoGrupo
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "bg-white border border-black/10 text-artDark hover:bg-artPurple hover:text-white hover:border-artPurple"
+                              }`}
+                            >
+                              <i className={`fa-solid ${selecionadoNoGrupo ? "fa-check" : "fa-plus"} text-[9px]`}></i>
+                              <span>{selecionadoNoGrupo ? "Adicionado" : "Adicionar"}</span>
+                            </button>
+                          ) : (
+                            <>
+                              <Link
+                                to={`/artista/${usr.id}`}
+                                onClick={() => setModalNovoChatAberto(false)}
+                                className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-black/10 text-gray-600 hover:text-artPurple hover:border-artPurple transition-all"
+                                title="Ver perfil completo"
+                              >
+                                <i className="fa-solid fa-user mr-1"></i> Perfil
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => handleIniciarConversaComArtista(usr)}
+                                className="px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-artPurple text-white hover:bg-indigo-700 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                title="Iniciar conversa"
+                              >
+                                <i className="fa-solid fa-paper-plane text-[9px]"></i> Conversar
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     );
@@ -1805,65 +2484,352 @@ export default function Messages() {
                   </p>
                 </div>
               ) : (
-                artistasDisponiveis.map((art) => (
-                  <div
-                    key={art.id}
-                    className="w-full p-3 rounded-2xl bg-[#F9F8F6] hover:bg-artPurple/5 hover:border-artPurple/20 border border-transparent transition-all flex items-center justify-between gap-3 text-left group shadow-2xs"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {art.fotoPerfil ? (
-                        <img
-                          src={getMediaUrl(art.fotoPerfil)}
-                          alt={art.nome}
-                          className="w-10 h-10 rounded-full object-cover border border-black/5"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-artPurple text-white font-bold flex items-center justify-center text-sm">
-                          {art.nome?.charAt(0)?.toUpperCase() || "A"}
+                artistasDisponiveis.map((art) => {
+                  const selecionadoNoGrupo = membrosSelecionadosGrupo.some((m) => m.id === art.id);
+
+                  return (
+                    <div
+                      key={art.id}
+                      className={`w-full p-3 rounded-2xl transition-all flex items-center justify-between gap-3 text-left group shadow-2xs border ${
+                        selecionadoNoGrupo
+                          ? "bg-artPurple/10 border-artPurple/30"
+                          : "bg-[#F9F8F6] hover:bg-artPurple/5 hover:border-artPurple/20 border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {art.fotoPerfil ? (
+                          <img
+                            src={getMediaUrl(art.fotoPerfil)}
+                            alt={art.nome}
+                            className="w-10 h-10 rounded-full object-cover border border-black/5"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-artPurple text-white font-bold flex items-center justify-center text-sm">
+                            {art.nome?.charAt(0)?.toUpperCase() || "A"}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-editorial text-base italic font-bold group-hover:text-artPurple transition-colors truncate">
+                              {art.nome}
+                            </h4>
+                          </div>
+                          <p className="text-[10px] text-gray-400 truncate">
+                            {art.biografia || art.tipo_conta || "Artista no Artfolio"}
+                          </p>
                         </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="font-editorial text-base italic font-bold group-hover:text-artPurple transition-colors truncate">
-                            {art.nome}
-                          </h4>
-                        </div>
-                        <p className="text-[10px] text-gray-400 truncate">
-                          {art.biografia || art.tipo_conta || "Artista no Artfolio"}
-                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {abaNovoChat === "grupo" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMembroGrupo(art)}
+                            className={`px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                              selecionadoNoGrupo
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-white border border-black/10 text-artDark hover:bg-artPurple hover:text-white hover:border-artPurple"
+                            }`}
+                          >
+                            <i className={`fa-solid ${selecionadoNoGrupo ? "fa-check" : "fa-plus"} text-[9px]`}></i>
+                            <span>{selecionadoNoGrupo ? "Adicionado" : "Adicionar"}</span>
+                          </button>
+                        ) : (
+                          <>
+                            <Link
+                              to={`/artista/${art.id}`}
+                              onClick={() => setModalNovoChatAberto(false)}
+                              className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-black/10 text-gray-600 hover:text-artPurple hover:border-artPurple transition-all"
+                              title="Ver perfil"
+                            >
+                              <i className="fa-solid fa-user mr-1"></i> Perfil
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleIniciarConversaComArtista(art)}
+                              className="px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-artPurple text-white hover:bg-indigo-700 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                              title="Iniciar conversa"
+                            >
+                              <i className="fa-solid fa-paper-plane text-[9px]"></i> Conversar
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Link
-                        to={`/artista/${art.id}`}
-                        onClick={() => setModalNovoChatAberto(false)}
-                        className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-black/10 text-gray-600 hover:text-artPurple hover:border-artPurple transition-all"
-                        title="Ver perfil"
-                      >
-                        <i className="fa-solid fa-user mr-1"></i> Perfil
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleIniciarConversaComArtista(art)}
-                        className="px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-artPurple text-white hover:bg-indigo-700 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                        title="Iniciar conversa"
-                      >
-                        <i className="fa-solid fa-paper-plane text-[9px]"></i> Conversar
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setModalNovoChatAberto(false)}
-              className="w-full bg-gray-100 text-gray-500 py-3 rounded-full text-xs font-bold hover:bg-gray-200 transition-all"
-            >
-              Fechar
-            </button>
+            {/* Rodapé do Modal com Botões de Ação */}
+            <div className="flex gap-2 pt-2 border-t border-black/5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setModalNovoChatAberto(false)}
+                className="flex-1 bg-gray-100 text-gray-500 py-3 rounded-2xl text-xs font-bold hover:bg-gray-200 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              {abaNovoChat === "grupo" && (
+                <button
+                  type="button"
+                  onClick={handleCriarGrupo}
+                  disabled={membrosSelecionadosGrupo.length === 0 || criandoGrupo}
+                  className="flex-1 bg-gradient-to-r from-artPurple to-artBlue text-white py-3 rounded-2xl text-xs font-bold hover:opacity-95 transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {criandoGrupo ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                      <span>Criando Grupo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-users text-xs"></i>
+                      <span>Criar Grupo ({membrosSelecionadosGrupo.length + 1}/12)</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhes e Gerenciamento do Grupo */}
+      {modalDetalhesGrupoAberto && activeChat?.is_grupo && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[2rem] p-6 max-w-md w-full shadow-2xl border border-black/5 animate-scaleIn max-h-[90vh] flex flex-col">
+            {/* Header do Modal */}
+            <div className="flex items-center justify-between mb-4 shrink-0 pb-3 border-b border-black/5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-artPurple/10 text-artPurple flex items-center justify-center text-sm">
+                  <i className="fa-solid fa-users"></i>
+                </div>
+                <h3 className="font-editorial text-2xl italic font-bold text-artDark">
+                  Detalhes do Grupo
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalDetalhesGrupoAberto(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-artDark transition-all flex items-center justify-center text-xs cursor-pointer"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            {/* Foto e Nome do Grupo */}
+            <div className="flex flex-col items-center text-center mb-5 shrink-0">
+              <div className="relative group/foto mb-3">
+                <div className="w-24 h-24 rounded-3xl overflow-hidden border-2 border-white shadow-md bg-gradient-to-tr from-artPurple via-indigo-600 to-artBlue flex items-center justify-center text-white">
+                  {salvandoFotoGrupo ? (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <i className="fa-solid fa-spinner fa-spin text-xl"></i>
+                      <span className="text-[9px] font-bold">Salvando...</span>
+                    </div>
+                  ) : activeChat.foto_grupo ? (
+                    <img
+                      src={getMediaUrl(activeChat.foto_grupo)}
+                      alt={activeChat.nome_grupo}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <i className="fa-solid fa-users text-3xl"></i>
+                  )}
+                </div>
+
+                {/* Botão de Upload exclusivo do Admin */}
+                {Number(activeChat.admin_id) === Number(authUser?.id) && (
+                  <label
+                    className="absolute inset-0 bg-black/50 hover:bg-black/70 rounded-3xl flex flex-col items-center justify-center text-white opacity-0 group-hover/foto:opacity-100 transition-all cursor-pointer"
+                    title="Alterar imagem do grupo (Exclusivo Admin)"
+                  >
+                    <i className="fa-solid fa-camera text-lg mb-1"></i>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Alterar</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/jpe,image/png,image/webp,.jpe,.jpeg,.jpg"
+                      onChange={handleUploadFotoGrupo}
+                      className="hidden"
+                      disabled={salvandoFotoGrupo}
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Nome do Grupo (Editável pelo Admin) */}
+              {editandoNomeGrupo ? (
+                <div className="flex items-center gap-1.5 w-full max-w-xs">
+                  <input
+                    type="text"
+                    value={nomeGrupoEdicao}
+                    onChange={(e) => setNomeGrupoEdicao(e.target.value)}
+                    className="flex-1 bg-[#F9F8F6] border border-artPurple/30 rounded-xl px-3 py-1.5 text-xs text-artDark focus:outline-none focus:ring-2 ring-artPurple/20 font-bold"
+                    placeholder="Nome do grupo..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSalvarNomeGrupo}
+                    disabled={salvandoNomeGrupo || !nomeGrupoEdicao.trim()}
+                    className="px-2.5 py-1.5 bg-artPurple text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {salvandoNomeGrupo ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditandoNomeGrupo(false)}
+                    className="px-2 py-1.5 text-gray-400 hover:text-artDark text-xs cursor-pointer"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2">
+                  <h4 className="font-editorial text-2xl italic font-bold text-artDark">
+                    {activeChat.nome_grupo || "Grupo de Artistas"}
+                  </h4>
+                  {Number(activeChat.admin_id) === Number(authUser?.id) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNomeGrupoEdicao(activeChat.nome_grupo || "");
+                        setEditandoNomeGrupo(true);
+                      }}
+                      className="text-gray-400 hover:text-artPurple text-xs cursor-pointer p-1"
+                      title="Editar nome do grupo"
+                    >
+                      <i className="fa-solid fa-pen text-[11px]"></i>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[11px] text-gray-400 mt-1">
+                {activeChat.participantes?.length || 0} de 12 participantes
+              </p>
+            </div>
+
+            {/* Campo de Busca de Participantes */}
+            <div className="relative mb-3 shrink-0">
+              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+              <input
+                type="text"
+                value={buscaMembrosGrupo}
+                onChange={(e) => setBuscaMembrosGrupo(e.target.value)}
+                placeholder="Filtrar membros..."
+                className="w-full bg-[#F9F8F6] border border-black/5 rounded-xl pl-8 pr-3 py-2 text-xs outline-none focus:ring-2 ring-artPurple/20 placeholder:text-gray-400"
+              />
+            </div>
+
+            {/* Lista de Membros */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar mb-4 min-h-[140px] max-h-56">
+              {(activeChat.participantes || [])
+                .filter((p) =>
+                  !buscaMembrosGrupo.trim() ||
+                  p.nome?.toLowerCase().includes(buscaMembrosGrupo.toLowerCase())
+                )
+                .map((membro) => {
+                  const membroId = membro.id || membro.id_usuario;
+                  const isAdmin = Number(membroId) === Number(activeChat.admin_id);
+                  const isEu = Number(membroId) === Number(authUser?.id);
+                  const souAdmin = Number(activeChat.admin_id) === Number(authUser?.id);
+                  const presencaMembro = obterPresencaUsuario(membroId, membro);
+
+                  return (
+                    <div
+                      key={membroId}
+                      className="p-2.5 rounded-2xl bg-[#F9F8F6] flex items-center justify-between gap-3 border border-black/5"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="relative shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-artPurple/20 text-artPurple font-bold flex items-center justify-center text-xs overflow-hidden">
+                            {membro.fotoPerfil ? (
+                              <img src={getMediaUrl(membro.fotoPerfil)} alt={membro.nome} className="w-full h-full object-cover" />
+                            ) : (
+                              membro.nome?.charAt(0)?.toUpperCase() || "U"
+                            )}
+                          </div>
+                          <span
+                            className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white shadow-xs ${
+                              presencaMembro === "Online"
+                                ? "bg-emerald-500"
+                                : presencaMembro === "Offline"
+                                ? "bg-gray-400"
+                                : "bg-artOrange"
+                            }`}
+                            title={`Status: ${presencaMembro}`}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-artDark truncate">{membro.nome}</span>
+                            {isEu && (
+                              <span className="text-[10px] text-gray-400 font-normal">(Você)</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-gray-400 truncate capitalize">
+                            {membro.tipo_conta || "Artista"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isAdmin && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                            <i className="fa-solid fa-crown text-[8px] text-amber-600"></i> Admin
+                          </span>
+                        )}
+
+                        {souAdmin && !isEu && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverMembroDoGrupo(membro.id || membro.id_usuario)}
+                            disabled={removendoMembroId === (membro.id || membro.id_usuario)}
+                            className="px-2.5 py-1 rounded-full text-[10px] font-bold text-red-600 hover:bg-red-50 border border-red-200 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            title="Remover do grupo"
+                          >
+                            {removendoMembroId === (membro.id || membro.id_usuario) ? (
+                              <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+                            ) : (
+                              <i className="fa-solid fa-user-minus text-[9px]"></i>
+                            )}
+                            <span>Remover</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Ações do Rodapé (Sair e Excluir) */}
+            <div className="flex gap-2 pt-3 border-t border-black/5 shrink-0">
+              <button
+                type="button"
+                onClick={handleSairDoGrupo}
+                className="flex-1 bg-orange-50 hover:bg-orange-100 text-artOrange border border-orange-200/60 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <i className="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                <span>Sair do Grupo</span>
+              </button>
+
+              {Number(activeChat.admin_id) === Number(authUser?.id) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Tem certeza que deseja excluir permanentemente este grupo?")) {
+                      handleExcluirGrupo();
+                    }
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl text-xs font-bold transition-all shadow-sm shadow-red-600/20 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                  <span>Excluir Grupo</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

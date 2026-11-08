@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { obrasService, getMediaUrl } from "../services/api";
@@ -12,7 +12,7 @@ export default function MeuPortfolio() {
   const [mensagemSucesso, setMensagemSucesso] = useState("");
   const [mensagemErro, setMensagemErro] = useState("");
 
-  const carregarObras = async () => {
+  const carregarObras = useCallback(async () => {
     try {
       setLoading(true);
       if (user?.id) {
@@ -25,11 +25,11 @@ export default function MeuPortfolio() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     carregarObras();
-  }, [user]);
+  }, [carregarObras]);
 
   const handleExcluirObra = async (id) => {
     if (!window.confirm("Tem certeza de que deseja excluir esta obra? Esta ação não pode ser desfeita.")) {
@@ -61,7 +61,7 @@ export default function MeuPortfolio() {
               <span className="text-artPurple font-bold tracking-widest uppercase text-xs sm:text-sm mb-2 block">
                 Gerenciamento de Criações
               </span>
-              <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl italic leading-[1.05]">
+              <h1 className="font-editorial text-5xl sm:text-6xl lg:text-7xl italic leading-[1.05] text-artDark">
                 Minhas Obras<span className="text-artOrange not-italic">.</span>
               </h1>
               <p className="text-base text-gray-500 mt-3 font-light">
@@ -78,7 +78,7 @@ export default function MeuPortfolio() {
             <div className="flex items-center gap-3">
               <Link
                 to="/perfil"
-                className="bg-white border border-black/5 text-artDark px-5 py-2.5 rounded-full text-xs font-bold hover:bg-gray-100 transition-all text-center"
+                className="bg-transparent border border-black/10 text-artDark px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artBlue/5 hover:text-artBlue hover:border-artBlue transition-all duration-300 text-center shadow-2xs"
               >
                 Ver Perfil Público
               </Link>
@@ -96,13 +96,13 @@ export default function MeuPortfolio() {
           {/* Feedback Alerts */}
           {mensagemSucesso && (
             <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl p-4 mb-6 text-xs font-bold flex items-center gap-2">
-              <i className="fa-solid fa-circle-check"></i>
+              <i className="fa-solid fa-circle-check text-artGreen"></i>
               <span>{mensagemSucesso}</span>
             </div>
           )}
 
           {mensagemErro && (
-            <div className="bg-red-50 border border-red-200 text-red-600 rounded-2xl p-4 mb-6 text-xs font-bold flex items-center gap-2">
+            <div className="bg-artOrange/10 border border-artOrange/30 text-artOrange rounded-2xl p-4 mb-6 text-xs font-bold flex items-center gap-2">
               <i className="fa-solid fa-triangle-exclamation"></i>
               <span>{mensagemErro}</span>
             </div>
@@ -110,14 +110,14 @@ export default function MeuPortfolio() {
 
           {/* Lista de Obras */}
           {loading ? (
-            <div className="bg-white rounded-[2rem] border border-black/5 p-12 text-center shadow-sm">
+            <div className="bg-white/80 backdrop-blur-md rounded-[2rem] border border-white/60 shadow-[0_20px_50px_rgba(0,0,0,0.05)] p-12 text-center">
               <i className="fa-solid fa-spinner fa-spin text-3xl text-artPurple mb-3"></i>
               <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
                 Carregando suas obras...
               </p>
             </div>
           ) : obras.length === 0 ? (
-            <div className="bg-white rounded-[2.5rem] border border-black/5 p-12 text-center shadow-sm">
+            <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] border border-white/60 shadow-[0_20px_50px_rgba(0,0,0,0.05)] p-12 text-center">
               <i className="fa-solid fa-palette text-5xl text-gray-200 mb-4"></i>
               <h2 className="font-editorial text-3xl italic mb-2">
                 Você ainda não publicou nenhuma obra.
@@ -143,24 +143,58 @@ export default function MeuPortfolio() {
                 const totalComentarios = obra.totalComentarios ?? obra.total_comentarios ?? 0;
                 const totalViews = obra.visualizacoes ?? obra.total_visualizacoes ?? 0;
 
+                const ext = imagemObra ? imagemObra.split(".").pop().toLowerCase().split("?")[0] : "";
+                const isVideo = ["mp4", "webm", "ogg", "mov", "avi", "mkv"].includes(ext) || obra.tipoMidia === "video" || obra.tipo === "video";
+                const isPdf = ["pdf"].includes(ext);
+                const isDoc = ["doc", "docx", "txt", "odt", "rtf", "ppt", "pptx"].includes(ext);
+                const is3D = ["obj", "fbx", "gltf", "glb", "stl", "blend", "dae"].includes(ext);
+                const isArchive = ["zip", "rar", "7z", "psd", "ai", "eps"].includes(ext);
+                const isOutroArquivo = isPdf || isDoc || is3D || isArchive;
+
                 return (
                   <div
                     key={obra.id}
-                    className="bg-white rounded-[2rem] border border-black/5 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-black/5 transition-all flex flex-col group"
+                    className="bg-white/80 backdrop-blur-md rounded-[2rem] border border-white/60 shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col group overflow-hidden"
                   >
-                    <Link to={`/obra/${obra.id}`} className="relative h-60 bg-gray-100 overflow-hidden block cursor-pointer">
-                      <img
-                        src={getMediaUrl(imagemObra)}
-                        alt={tituloObra}
-                        onError={(e) => {
-                          e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
-                        }}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                    <Link to={`/obra/${obra.id}`} className="relative h-60 bg-gray-100/70 overflow-hidden block cursor-pointer">
+                      {isVideo ? (
+                        <div className="relative w-full h-full bg-neutral-950 flex items-center justify-center">
+                          <video
+                            src={getMediaUrl(imagemObra)}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 border border-white/10 z-10">
+                            <i className="fa-solid fa-play text-[8px] text-artOrange"></i>
+                            <span>Vídeo</span>
+                          </div>
+                        </div>
+                      ) : isOutroArquivo ? (
+                        <div className="w-full h-full bg-gradient-to-br from-neutral-900 to-neutral-800 flex flex-col items-center justify-center text-white p-4 text-center">
+                          <div className="w-12 h-12 rounded-2xl bg-white/10 text-artOrange border border-white/10 flex items-center justify-center text-xl mb-2 shadow-inner">
+                            <i className={isPdf ? "fa-solid fa-file-pdf" : isDoc ? "fa-solid fa-file-lines" : is3D ? "fa-solid fa-cube" : "fa-solid fa-file-zipper"}></i>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-artOrange bg-artOrange/20 px-2 py-0.5 rounded-full border border-artOrange/30">
+                            {ext.toUpperCase()}
+                          </span>
+                        </div>
+                      ) : (
+                        <img
+                          src={getMediaUrl(imagemObra)}
+                          alt={tituloObra}
+                          onError={(e) => {
+                            e.currentTarget.src = "/default-art.png";
+                          }}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      )}
 
-                      <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                        <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-emerald-700 shadow-sm border border-black/5">
-                          ● Ativa
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                        <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest text-artDark shadow-sm border border-white/60 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-artGreen animate-pulse"></span>
+                          <span>Ativa</span>
                         </span>
                       </div>
                     </Link>
@@ -192,7 +226,7 @@ export default function MeuPortfolio() {
 
                         <div className="flex items-center gap-4 mt-3 text-xs text-gray-400 font-bold">
                           <span className="flex items-center gap-1" title="Curtidas">
-                            <i className="fa-regular fa-heart text-red-500"></i>
+                            <i className="fa-regular fa-heart text-artOrange"></i>
                             {totalCurtidas}
                           </span>
                           <span className="flex items-center gap-1" title="Comentários">
@@ -200,7 +234,7 @@ export default function MeuPortfolio() {
                             {totalComentarios}
                           </span>
                           <span className="flex items-center gap-1" title="Visualizações">
-                            <i className="fa-regular fa-eye"></i>
+                            <i className="fa-regular fa-eye text-gray-400"></i>
                             {totalViews}
                           </span>
                         </div>
@@ -209,16 +243,19 @@ export default function MeuPortfolio() {
                       <div className="mt-5 pt-4 border-t border-black/5 flex items-center justify-between gap-2">
                         <Link
                           to={`/obra/${obra.id}`}
-                          className="text-xs font-bold text-gray-600 hover:text-artDark transition-colors flex items-center gap-1.5"
+                          className="text-xs font-bold text-gray-600 group-hover:text-artOrange transition-colors flex items-center gap-2 relative py-1"
                         >
                           <span>Ver Detalhes</span>
-                          <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                          <span className="relative flex items-center justify-center w-5 h-5">
+                            <span className="absolute inset-0 rounded-full bg-artOrange/10 scale-0 group-hover:scale-100 transition-transform duration-300 pointer-events-none"></span>
+                            <i className="fa-solid fa-arrow-right text-[10px] relative z-10 transition-transform duration-300 group-hover:translate-x-1.5 text-gray-400 group-hover:text-artOrange"></i>
+                          </span>
                         </Link>
 
                         <div className="flex items-center gap-2">
                           <Link
                             to={`/editar-obra/${obra.id}`}
-                            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-artDark hover:text-white transition-colors flex items-center justify-center text-xs"
+                            className="w-8 h-8 rounded-full bg-gray-100/80 hover:bg-artDark hover:text-white transition-colors flex items-center justify-center text-xs"
                             title="Editar"
                           >
                             <i className="fa-solid fa-pen"></i>
@@ -228,7 +265,7 @@ export default function MeuPortfolio() {
                             type="button"
                             onClick={() => handleExcluirObra(obra.id)}
                             disabled={deletandoId === obra.id}
-                            className="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-xs"
+                            className="w-8 h-8 rounded-full bg-artOrange/10 text-artOrange hover:bg-artOrange hover:text-white transition-colors flex items-center justify-center text-xs"
                             title="Excluir"
                           >
                             {deletandoId === obra.id ? (

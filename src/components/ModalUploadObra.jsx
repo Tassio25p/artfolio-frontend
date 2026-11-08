@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { obrasService, planosService, authService, getMediaUrl } from "../services/api";
-import { SETORES_ARTISTICOS, getEstiloCategoria } from "../constants/categories";
+import { obrasService, planosService, authService, categoriaService, getMediaUrl } from "../services/api";
+import { SETORES_ARTISTICOS } from "../constants/categories";
 import { empacotarDadosObra, desempacotarDadosObra } from "../utils/obraHelper";
 import WatermarkOverlay from "./WatermarkOverlay";
+import EmojiPicker from "./EmojiPicker";
 
 // Lista plana de todas as categorias individuais disponíveis
 const CATEGORIAS_PLANAS = Array.from(
@@ -23,18 +24,21 @@ export default function ModalUploadObra({
   // Usuário e Plano do usuário ativo
   const [meuPlano, setMeuPlano] = useState(null);
   const [usuarioAtual, setUsuarioAtual] = useState(null);
+  const [desafioAtual, setDesafioAtual] = useState(null);
 
   // Estados do formulário
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [showEmojiTitulo, setShowEmojiTitulo] = useState(false);
+  const [showEmojiDesc, setShowEmojiDesc] = useState(false);
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState([]);
   const [avisoCategorias, setAvisoCategorias] = useState(false);
   const [buscaCategoria, setBuscaCategoria] = useState("");
   const [setorFiltro, setSetorFiltro] = useState("todas");
 
-  // Opções: Marca d'água, Proteção contra download/print, Redução de Qualidade e Preço Base
+  // Opções: Download permitido (padrão true), Marca d'água, Proteção contra print, Redução de Qualidade e Preço Base
+  const [permitirDownload, setPermitirDownload] = useState(true);
   const [marcaDagua, setMarcaDagua] = useState(false);
-  const [bloquearDownload, setBloquearDownload] = useState(false);
   const [bloquearPrint, setBloquearPrint] = useState(false);
   const [reduzirQualidade, setReduzirQualidade] = useState(false);
   const [precoBase, setPrecoBase] = useState("");
@@ -84,7 +88,7 @@ export default function ModalUploadObra({
     return "other";
   };
 
-  const getIconeArquivo = (tipo, ext) => {
+  const getIconeArquivo = (tipo, _ext) => {
     switch (tipo) {
       case "video":
         return "fa-solid fa-video";
@@ -109,12 +113,14 @@ export default function ModalUploadObra({
   useEffect(() => {
     const carregarDadosIniciais = async () => {
       try {
-        const [plano, usuario] = await Promise.all([
+        const [plano, usuario, desafio] = await Promise.all([
           planosService.obterMeuPlano().catch(() => ({ tipo: "Free" })),
           authService.getMe().catch(() => null),
+          categoriaService.obterDesafioAtual().catch(() => null),
         ]);
         setMeuPlano(plano);
         setUsuarioAtual(usuario);
+        setDesafioAtual(desafio);
 
         // Se estiver em modo de edição, busca a obra existente e preenche todos os campos
         if (modoEdicao && idObra) {
@@ -126,7 +132,7 @@ export default function ModalUploadObra({
             setDescricao(dados.descricao || "");
             setPrecoBase(dados.precoBase || "");
             setMarcaDagua(Boolean(dados.marcaDagua));
-            setBloquearDownload(Boolean(dados.bloquearDownload));
+            setPermitirDownload(dados.bloquearDownload !== undefined ? !dados.bloquearDownload : true);
             setBloquearPrint(Boolean(dados.bloquearPrint));
             setReduzirQualidade(Boolean(dados.reduzirQualidade));
             setExibirPaleta(dados.exibirPaleta !== false);
@@ -277,24 +283,64 @@ export default function ModalUploadObra({
           if (tipo === "image") {
             const reader = new FileReader();
             reader.onloadend = () => {
+              const img = new Image();
+              img.onload = () => {
+                const width = img.naturalWidth || img.width;
+                const height = img.naturalHeight || img.height;
+                const resolucao = width && height ? `${width} × ${height}` : null;
+                const mp = width && height ? ((width * height) / 1000000).toFixed(1) : null;
+                resolve({
+                  url: reader.result,
+                  tipo: "image",
+                  name: file.name,
+                  size: file.size,
+                  ext,
+                  width,
+                  height,
+                  resolucao,
+                  mp,
+                });
+              };
+              img.onerror = () => {
+                resolve({
+                  url: reader.result,
+                  tipo: "image",
+                  name: file.name,
+                  size: file.size,
+                  ext,
+                });
+              };
+              img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+          } else if (tipo === "video") {
+            const blobUrl = URL.createObjectURL(file);
+            const video = document.createElement("video");
+            video.onloadedmetadata = () => {
+              const width = video.videoWidth;
+              const height = video.videoHeight;
+              const resolucao = width && height ? `${width} × ${height}` : null;
               resolve({
-                url: reader.result,
-                tipo: "image",
+                url: blobUrl,
+                tipo: "video",
+                name: file.name,
+                size: file.size,
+                ext,
+                width,
+                height,
+                resolucao,
+              });
+            };
+            video.onerror = () => {
+              resolve({
+                url: blobUrl,
+                tipo: "video",
                 name: file.name,
                 size: file.size,
                 ext,
               });
             };
-            reader.readAsDataURL(file);
-          } else if (tipo === "video") {
-            const blobUrl = URL.createObjectURL(file);
-            resolve({
-              url: blobUrl,
-              tipo: "video",
-              name: file.name,
-              size: file.size,
-              ext,
-            });
+            video.src = blobUrl;
           } else {
             resolve({
               url: null,
@@ -385,7 +431,7 @@ export default function ModalUploadObra({
 
       const protecoesAtivas = isProOuBoost;
       const finalMarcaDagua = protecoesAtivas ? marcaDagua : false;
-      const finalBloquearDownload = protecoesAtivas ? bloquearDownload : false;
+      const finalBloquearDownload = !permitirDownload;
       const finalBloquearPrint = protecoesAtivas ? bloquearPrint : false;
       const finalReduzirQualidade = protecoesAtivas ? reduzirQualidade : false;
 
@@ -538,7 +584,7 @@ export default function ModalUploadObra({
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* COLUNA ESQUERDA: Upload e Preview com Carrossel e Remoção Intuitiva */}
-          <div className="lg:col-span-5 flex flex-col">
+          <div className="lg:col-span-5 flex flex-col relative z-10">
             <div className="flex items-center justify-between mb-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-lg bg-artOrange/10 text-artOrange flex items-center justify-center text-[10px]">
@@ -619,12 +665,49 @@ export default function ModalUploadObra({
                         <img
                           src={urlAtual?.startsWith("http") || urlAtual?.startsWith("/") ? getMediaUrl(urlAtual) : urlAtual}
                           alt={`Prévia ${slideAtual + 1}`}
+                          onLoad={(e) => {
+                            const naturalW = e.currentTarget.naturalWidth;
+                            const naturalH = e.currentTarget.naturalHeight;
+                            if (naturalW && naturalH && (!previewAtual?.resolucao || !previewAtual?.width)) {
+                              setImagensPreviews((prev) => {
+                                const copy = [...prev];
+                                if (copy[slideAtual]) {
+                                  copy[slideAtual] = {
+                                    ...copy[slideAtual],
+                                    width: naturalW,
+                                    height: naturalH,
+                                    resolucao: `${naturalW} × ${naturalH}`,
+                                    mp: ((naturalW * naturalH) / 1000000).toFixed(1),
+                                  };
+                                }
+                                return copy;
+                              });
+                            }
+                          }}
                           className="w-full h-full max-h-[380px] object-contain transition-all duration-300"
                         />
                       ) : tipoAtual === "video" ? (
                         <video
                           src={urlAtual?.startsWith("http") || urlAtual?.startsWith("/") ? getMediaUrl(urlAtual) : urlAtual}
                           controls
+                          onLoadedMetadata={(e) => {
+                            const videoW = e.currentTarget.videoWidth;
+                            const videoH = e.currentTarget.videoHeight;
+                            if (videoW && videoH && (!previewAtual?.resolucao || !previewAtual?.width)) {
+                              setImagensPreviews((prev) => {
+                                const copy = [...prev];
+                                if (copy[slideAtual]) {
+                                  copy[slideAtual] = {
+                                    ...copy[slideAtual],
+                                    width: videoW,
+                                    height: videoH,
+                                    resolucao: `${videoW} × ${videoH}`,
+                                  };
+                                }
+                                return copy;
+                              });
+                            }
+                          }}
                           className="w-full h-full max-h-[380px] object-contain bg-black"
                         />
                       ) : (
@@ -638,6 +721,25 @@ export default function ModalUploadObra({
                           <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-artOrange bg-artOrange/20 px-2.5 py-0.5 rounded-full border border-artOrange/30">
                             {extAtual} {sizeAtual > 0 ? `• ${(sizeAtual / (1024 * 1024)).toFixed(2)} MB` : ""}
                           </span>
+                        </div>
+                      )}
+
+                      {/* Badge de Resolução da Imagem / Vídeo em Destaque — Sempre Visível e Chamativo */}
+                      {previewAtual?.resolucao && (
+                        <div className="absolute top-3 left-3 z-30 pointer-events-none transition-all">
+                          <div className="bg-neutral-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/30 shadow-xl flex items-center gap-2.5 text-white ring-1 ring-black/40">
+                            <span className="w-5 h-5 rounded-lg bg-artOrange/20 border border-artOrange/40 flex items-center justify-center text-artOrange text-[10px]">
+                              <i className="fa-solid fa-expand"></i>
+                            </span>
+                            <div className="flex flex-col text-left">
+                              <span className="text-[11px] font-black tracking-wider leading-none text-white drop-shadow-xs">
+                                {previewAtual.resolucao} px
+                              </span>
+                              <span className="text-[9px] text-gray-300 font-bold leading-tight mt-0.5">
+                                {previewAtual.mp ? `${previewAtual.mp} MP • ` : ""}{reduzirQualidade ? "Modo Prévia" : "100% Original"}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       )}
 
@@ -660,9 +762,9 @@ export default function ModalUploadObra({
 
                       {/* Tag de Preço Base na Prévia se informado */}
                       {precoBase && (
-                        <div className="absolute top-3 left-3 z-30 pointer-events-none">
+                        <div className="absolute bottom-3 left-3 z-30 pointer-events-none">
                           <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-black/10 shadow-lg flex items-center gap-1.5">
-                            <i className="fa-solid fa-tag text-artOrange text-[10px]"></i>
+                            <i className="fa-solid fa-tag text-emerald-600 text-[10px]"></i>
                             <span className="text-[11px] font-bold text-artDark">
                               {precoBase.startsWith("R$") ? precoBase : `R$ ${precoBase}`}
                             </span>
@@ -777,10 +879,24 @@ export default function ModalUploadObra({
                 {/* Informações da mídia ativa e Botão de Ação */}
                 <div className="flex items-center justify-between bg-white border border-black/10 rounded-2xl p-3 text-xs shadow-2xs backdrop-blur-sm">
                   <div className="truncate pr-2">
-                    <span className="font-bold text-artDark block truncate text-[11px]">
-                      {arquivosSelecionados[slideAtual]?.name || "arquivo_selecionado"}
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-artDark block truncate text-[11px]">
+                        {arquivosSelecionados[slideAtual]?.name || "arquivo_selecionado"}
+                      </span>
+                      {imagensPreviews[slideAtual]?.resolucao && (
+                        <span className="bg-artBlue/10 text-artBlue border border-artBlue/25 text-[9px] font-black px-2 py-0.5 rounded-md shrink-0 flex items-center gap-1">
+                          <i className="fa-solid fa-expand text-[8px]"></i>
+                          <span>{imagensPreviews[slideAtual].resolucao} px</span>
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-medium mt-0.5 block truncate">
+                      {arquivosSelecionados[slideAtual]?.size
+                        ? `${(arquivosSelecionados[slideAtual].size / (1024 * 1024)).toFixed(2)} MB • `
+                        : ""}
+                      {imagensPreviews[slideAtual]?.resolucao
+                        ? `Resolução: ${imagensPreviews[slideAtual].resolucao} px • `
+                        : ""}
                       {arquivosSelecionados.length > 1
                         ? `Item ${slideAtual + 1} de ${arquivosSelecionados.length}`
                         : "Arquivo pronto"}
@@ -809,215 +925,351 @@ export default function ModalUploadObra({
             )}
           </div>
 
-          {/* COLUNA DIREITA: Dados da Publicação com Painel Arquitetural Colorido */}
-          <div className="lg:col-span-7 flex flex-col justify-between">
-            <div className="bg-gradient-to-br from-white/95 via-purple-50/40 to-orange-50/40 p-5 sm:p-7 rounded-[2rem] border-2 border-artPurple/15 shadow-sm space-y-5 relative overflow-hidden backdrop-blur-md">
-              {/* Orbes de Luz Difusa Decorativa no Card */}
-              <div className="absolute -top-12 -right-12 w-40 h-40 bg-artPurple/15 rounded-full blur-2xl pointer-events-none"></div>
-              <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-artOrange/15 rounded-full blur-2xl pointer-events-none"></div>
+          {/* COLUNA DIREITA: Dados da Publicação com Painel Arquitetural Colorido e Overlay Garantido */}
+          <div className={`lg:col-span-7 flex flex-col justify-between relative ${showEmojiTitulo || showEmojiDesc ? "z-[100]" : "z-20"}`}>
+            <div className={`bg-gradient-to-br from-white/95 via-purple-50/40 to-orange-50/40 p-4 sm:p-5 rounded-[2rem] border-2 border-artPurple/15 shadow-sm space-y-3.5 relative ${showEmojiTitulo || showEmojiDesc ? "z-[100]" : "z-20"} backdrop-blur-md`}>
+              {/* Orbes de Luz Difusa Decorativa no Card devidamente isolados sem overflow-hidden no container principal */}
+              <div className="absolute inset-0 rounded-[2rem] overflow-hidden pointer-events-none -z-10">
+                <div className="absolute -top-12 -right-12 w-40 h-40 bg-artPurple/15 rounded-full blur-2xl"></div>
+                <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-artOrange/15 rounded-full blur-2xl"></div>
+              </div>
 
               {/* Barra de Subtítulo do Painel */}
-              <div className="flex items-center justify-between border-b border-artPurple/10 pb-3 relative z-10">
+              <div className="flex items-center justify-between border-b border-artPurple/10 pb-2 relative z-10">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-artPurple flex items-center gap-2">
                   <i className="fa-solid fa-sliders text-xs"></i> Detalhes & Categorização
                 </span>
+                <span className="text-[10px] text-gray-400 font-medium">Layout Compacto</span>
               </div>
 
-              {/* Título da Obra */}
-              <div className="bg-white/90 border border-artPurple/20 hover:border-artPurple/40 focus-within:border-artPurple focus-within:ring-4 focus-within:ring-artPurple/10 rounded-2xl p-3.5 shadow-2xs transition-all relative z-10">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-2 mb-2">
-                  <span className="w-5 h-5 rounded-lg bg-artPurple/15 text-artPurple flex items-center justify-center text-[10px] shadow-2xs">
-                    <i className="fa-solid fa-paintbrush"></i>
-                  </span>
-                  <span>
-                    Título da Obra <span className="text-gray-400 font-normal lowercase">(opcional)</span>
-                  </span>
-                </label>
-                <input
-                  type="text"
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
-                  placeholder="Dê um nome marcante à sua criação..."
-                  maxLength={100}
-                  className="w-full bg-artPurple/[0.02] border border-artPurple/15 rounded-xl px-3.5 py-2.5 text-sm font-medium text-artDark placeholder:text-gray-400 focus:bg-white focus:border-artPurple outline-none transition-all"
-                />
-              </div>
-
-              {/* Descrição / Legenda */}
-              <div className="bg-white/90 border border-artOrange/20 hover:border-artOrange/40 focus-within:border-artOrange focus-within:ring-4 focus-within:ring-artOrange/10 rounded-2xl p-3.5 shadow-2xs transition-all relative z-10">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-2 mb-2">
-                  <span className="w-5 h-5 rounded-lg bg-artOrange/15 text-artOrange flex items-center justify-center text-[10px] shadow-2xs">
-                    <i className="fa-solid fa-feather"></i>
-                  </span>
-                  <span>História, Conceito ou Técnica</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                  placeholder="Conte um pouco sobre as inspirações, ferramentas ou conceitos desta obra..."
-                  className="w-full bg-artOrange/[0.02] border border-artOrange/15 rounded-xl p-3 text-sm font-medium text-artDark placeholder:text-gray-400 focus:bg-white focus:border-artOrange outline-none resize-none leading-relaxed transition-all"
-                />
-              </div>
-
-              {/* Preço Base & Proteções Autorais */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 relative z-10">
-                {/* Preço Base Sugerido */}
-                <div className="sm:col-span-5 bg-white/90 border border-artGreen/30 hover:border-artGreen/50 focus-within:border-artGreen focus-within:ring-4 focus-within:ring-artGreen/10 rounded-2xl p-3.5 shadow-2xs transition-all">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-2 mb-2">
-                    <span className="w-5 h-5 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center text-[10px] shadow-2xs">
-                      <i className="fa-solid fa-tag"></i>
-                    </span>
-                    <span>Preço Base <span className="text-gray-400 font-normal lowercase">(opcional)</span></span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
-                      R$
-                    </span>
-                    <input
-                      type="text"
-                      value={precoBase}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^\d.,]/g, "");
-                        setPrecoBase(val);
-                      }}
-                      placeholder="0,00"
-                      maxLength={15}
-                      className="w-full bg-emerald-500/[0.02] border border-emerald-500/20 rounded-xl pl-9 pr-3.5 py-2.5 text-sm font-bold text-artDark placeholder:text-gray-400 focus:bg-white focus:border-emerald-500 outline-none transition-all"
-                    />
-                  </div>
-                  <p className="text-[9px] text-gray-400 mt-1.5 leading-tight">
-                    Ficará como uma etiquetinha elegante visível para interessados.
-                  </p>
-                </div>
-
-                {/* Opções de Proteção e Marca d'água */}
-                <div className="sm:col-span-7 bg-white/90 border border-artPurple/20 rounded-2xl p-3.5 shadow-2xs space-y-2.5 relative">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-lg bg-artPurple/15 text-artPurple flex items-center justify-center text-[10px] shadow-2xs">
-                        <i className="fa-solid fa-shield-halved"></i>
+              {/* 1. Título & Legenda Integrados */}
+              <div className={`grid grid-cols-1 sm:grid-cols-12 gap-3 relative ${showEmojiTitulo || showEmojiDesc ? "z-[100]" : "z-20"}`}>
+                {/* Título da Obra */}
+                <div className={`sm:col-span-5 bg-white/90 border border-artPurple/20 hover:border-artPurple/40 focus-within:border-artPurple rounded-2xl p-3 shadow-2xs transition-all relative ${showEmojiTitulo ? "z-[100]" : "z-20"}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded-md bg-artPurple/15 text-artPurple flex items-center justify-center text-[9px]">
+                        <i className="fa-solid fa-paintbrush"></i>
                       </span>
-                      <span>Proteção e Direitos Autorais</span>
+                      <span>Título</span>
                     </label>
 
-                    {!isProOuBoost && (
-                      <span className="bg-artPurple/10 text-artPurple border border-artPurple/20 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
-                        <i className="fa-solid fa-lock text-[8px]"></i>
+                    <div className={`relative ${showEmojiTitulo ? "z-[100]" : ""}`}>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiTitulo((prev) => !prev)}
+                        className={`text-[10px] flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-lg hover:bg-black/5 cursor-pointer ${
+                          showEmojiTitulo ? "text-artPurple bg-artPurple/10 font-bold" : "text-gray-400 hover:text-artPurple"
+                        }`}
+                        title="Inserir Emojis"
+                      >
+                        <i className="fa-regular fa-face-smile"></i>
+                        <span>Emojis</span>
+                      </button>
+                      <EmojiPicker
+                        isOpen={showEmojiTitulo}
+                        onClose={() => setShowEmojiTitulo(false)}
+                        onSelect={(emoji) => {
+                          setTitulo((prev) => prev + (emoji.startsWith(":") ? ` ${emoji} ` : emoji));
+                        }}
+                        position="bottom"
+                        className="!right-auto !left-0 max-w-[320px]"
+                      />
+                    </div>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={titulo}
+                    onChange={(e) => setTitulo(e.target.value)}
+                    placeholder="Nome da criação (opcional)..."
+                    maxLength={100}
+                    className="w-full bg-artPurple/[0.02] border border-artPurple/15 rounded-xl px-3 py-2 text-xs font-medium text-artDark placeholder:text-gray-400 focus:bg-white focus:border-artPurple outline-none transition-all"
+                  />
+                </div>
+
+                {/* Descrição / Legenda */}
+                <div className={`sm:col-span-7 bg-white/90 border border-artOrange/20 hover:border-artOrange/40 focus-within:border-artOrange rounded-2xl p-3 shadow-2xs transition-all relative ${showEmojiDesc ? "z-[100]" : "z-10"}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
+                      <span className="w-4 h-4 rounded-md bg-artOrange/15 text-artOrange flex items-center justify-center text-[9px]">
+                        <i className="fa-solid fa-feather"></i>
+                      </span>
+                      <span>História ou Legenda</span>
+                    </label>
+
+                    <div className={`relative ${showEmojiDesc ? "z-[100]" : ""}`}>
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiDesc((prev) => !prev)}
+                        className={`text-[10px] flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded-lg hover:bg-black/5 cursor-pointer ${
+                          showEmojiDesc ? "text-artOrange bg-artOrange/10 font-bold" : "text-gray-400 hover:text-artOrange"
+                        }`}
+                        title="Inserir Emojis na Legenda"
+                      >
+                        <i className="fa-regular fa-face-smile"></i>
+                        <span>Emojis</span>
+                      </button>
+                      <EmojiPicker
+                        isOpen={showEmojiDesc}
+                        onClose={() => setShowEmojiDesc(false)}
+                        onSelect={(emoji) => {
+                          setDescricao((prev) => prev + (emoji.startsWith(":") ? ` ${emoji} ` : emoji));
+                        }}
+                        position="bottom"
+                        className="right-0 max-w-[320px]"
+                      />
+                    </div>
+                  </div>
+
+                  <textarea
+                    rows={2}
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
+                    placeholder="Inspirações, técnicas ou conceito da obra..."
+                    className="w-full bg-artOrange/[0.02] border border-artOrange/15 rounded-xl px-3 py-1.5 text-xs font-medium text-artDark placeholder:text-gray-400 focus:bg-white focus:border-artOrange outline-none resize-none leading-relaxed transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Resolução da Imagem & Detalhes Técnicos em Destaque */}
+              <div className="bg-white/95 border-2 border-artBlue/30 rounded-2xl p-3.5 shadow-2xs space-y-2 relative overflow-hidden backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-artBlue/15 text-artBlue flex items-center justify-center text-[10px]">
+                      <i className="fa-solid fa-expand"></i>
+                    </span>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-artDark">
+                      Resolução da Imagem & Especificações
+                    </span>
+                  </div>
+                  {imagensPreviews[slideAtual]?.resolucao ? (
+                    <span className="bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 text-[9px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                      <i className="fa-solid fa-circle-check text-[9px]"></i> Detectada Automaticamente
+                    </span>
+                  ) : (
+                    <span className="bg-artBlue/10 text-artBlue border border-artBlue/20 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                      Selecione um arquivo para ver a resolução
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5">
+                  <div className="bg-artBlue/[0.05] border border-artBlue/20 rounded-xl p-2 flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Resolução</span>
+                    <span className="text-xs font-black text-artBlue mt-0.5 truncate">
+                      {imagensPreviews[slideAtual]?.resolucao ? `${imagensPreviews[slideAtual].resolucao} px` : "—"}
+                    </span>
+                  </div>
+
+                  <div className="bg-artPurple/[0.05] border border-artPurple/20 rounded-xl p-2 flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Megapixels</span>
+                    <span className="text-xs font-black text-artPurple mt-0.5 truncate">
+                      {imagensPreviews[slideAtual]?.mp ? `${imagensPreviews[slideAtual].mp} MP` : imagensPreviews[slideAtual]?.resolucao ? "Alta Resolução" : "—"}
+                    </span>
+                  </div>
+
+                  <div className="bg-artOrange/[0.05] border border-artOrange/20 rounded-xl p-2 flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Tamanho</span>
+                    <span className="text-xs font-black text-artOrange mt-0.5 truncate">
+                      {arquivosSelecionados[slideAtual]?.size
+                        ? `${(arquivosSelecionados[slideAtual].size / (1024 * 1024)).toFixed(2)} MB`
+                        : "—"}
+                    </span>
+                  </div>
+
+                  <div className="bg-emerald-500/[0.05] border border-emerald-500/20 rounded-xl p-2 flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Modo de Qualidade</span>
+                    <span className="text-xs font-black text-emerald-600 mt-0.5 truncate">
+                      {reduzirQualidade ? "Modo Prévia" : "100% Original"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Preço Base & Proteções Lado a Lado (Grid 2 Colunas) */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 relative z-0">
+                {/* Coluna 1: Preço Base & Habilitar Download */}
+                <div className="sm:col-span-4 bg-white/90 border border-emerald-500/25 rounded-2xl p-3 shadow-2xs space-y-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-artDark flex items-center justify-between mb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <i className="fa-solid fa-tag text-emerald-600"></i>
+                        <span>Preço Base (opcional)</span>
+                      </span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+                        R$
+                      </span>
+                      <input
+                        type="text"
+                        value={precoBase}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^\d.,]/g, "");
+                          setPrecoBase(val);
+                        }}
+                        placeholder="0,00"
+                        maxLength={15}
+                        className="w-full bg-emerald-500/[0.02] border border-emerald-500/20 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-artDark placeholder:text-gray-400 focus:bg-white focus:border-emerald-500 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card Permitir Download formatado no mesmo padrão da Proteção Avançada */}
+                  <label
+                    className={`flex flex-col justify-between items-center text-center p-2.5 rounded-xl border cursor-pointer transition-all ${
+                      permitirDownload
+                        ? "bg-emerald-500/[0.08] border-emerald-500/30 shadow-xs"
+                        : "bg-emerald-500/[0.03] hover:bg-emerald-500/[0.06] border-emerald-500/15"
+                    }`}
+                    title="Permitir que usuários e compradores baixem esta obra"
+                  >
+                    <div className="flex flex-col items-center w-full">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-xs mb-1">
+                        <i className={`fa-solid ${permitirDownload ? "fa-circle-check" : "fa-download"}`}></i>
+                      </div>
+                      <span className="text-[11px] font-bold text-artDark leading-tight">Permitir Download</span>
+                      <span className="text-[9px] text-gray-500 leading-tight mt-0.5">Libera o download da arte</span>
+                    </div>
+                    <div className="mt-2 pt-1.5 border-t border-emerald-500/15 w-full flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={permitirDownload}
+                        onChange={(e) => setPermitirDownload(e.target.checked)}
+                        className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 cursor-pointer"
+                      />
+                    </div>
+                  </label>
+                </div>
+
+                {/* Coluna 2: Proteção Avançada (Marca d'água, Anti-Print, Redução) */}
+                <div className="sm:col-span-8 bg-white/90 border border-artPurple/20 rounded-2xl p-3 shadow-2xs space-y-2 relative flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
+                      <i className="fa-solid fa-lock text-artPurple"></i>
+                      <span>Proteção Avançada</span>
+                    </label>
+                    {!isProOuBoost ? (
+                      <span className="bg-artPurple/10 text-artPurple border border-artPurple/20 text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full">
                         Pro & Boost
                       </span>
+                    ) : (
+                      <span className="text-[9px] text-artPurple font-bold">Ativado</span>
                     )}
                   </div>
 
-                  {!isProOuBoost && (
-                    <div className="p-2 rounded-xl bg-artPurple/[0.06] border border-artPurple/20 text-[10px] text-artPurple font-medium flex items-center gap-2">
-                      <i className="fa-solid fa-lock text-xs shrink-0"></i>
-                      <span>Disponível nos planos <strong>Pro</strong> e <strong>Boost</strong>. Faça upgrade para proteger suas obras contra download, print e cópia.</span>
-                    </div>
-                  )}
-
-                  <div className={`space-y-2.5 ${!isProOuBoost ? "opacity-50 select-none pointer-events-none blur-[0.5px]" : ""}`}>
-                    {/* Toggle Marca d'água */}
-                    <label className="flex items-center justify-between gap-3 p-2 rounded-xl bg-artPurple/[0.03] hover:bg-artPurple/[0.07] border border-artPurple/10 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-fingerprint text-artPurple text-xs"></i>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-artDark">Marca d'água Artfolio</span>
-                          <span className="text-[9px] text-gray-400">Padrão diagonal translúcido com seu nome</span>
+                  <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 ${!isProOuBoost ? "opacity-50 select-none pointer-events-none" : ""}`}>
+                    {/* Marca d'água */}
+                    <label
+                      className={`flex flex-col justify-between items-center text-center p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        isProOuBoost && marcaDagua
+                          ? "bg-artPurple/[0.08] border-artPurple/30 shadow-xs"
+                          : "bg-artPurple/[0.03] hover:bg-artPurple/[0.06] border-artPurple/10"
+                      }`}
+                      title="Marca d'água Artfolio com seu nome"
+                    >
+                      <div className="flex flex-col items-center w-full">
+                        <div className="w-7 h-7 rounded-lg bg-artPurple/10 text-artPurple flex items-center justify-center text-xs mb-1">
+                          <i className="fa-solid fa-fingerprint"></i>
                         </div>
+                        <span className="text-[11px] font-bold text-artDark leading-tight">Marca D'água</span>
+                        <span className="text-[9px] text-gray-500 leading-tight mt-0.5">Assinatura na obra</span>
                       </div>
-                      <input
-                        type="checkbox"
-                        disabled={!isProOuBoost}
-                        checked={isProOuBoost && marcaDagua}
-                        onChange={(e) => setMarcaDagua(e.target.checked)}
-                        className="w-4 h-4 text-artPurple rounded focus:ring-artPurple border-gray-300 cursor-pointer accent-artPurple disabled:cursor-not-allowed"
-                      />
+                      <div className="mt-2 pt-1.5 border-t border-artPurple/10 w-full flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          disabled={!isProOuBoost}
+                          checked={isProOuBoost && marcaDagua}
+                          onChange={(e) => setMarcaDagua(e.target.checked)}
+                          className="w-4 h-4 text-artPurple rounded accent-artPurple cursor-pointer"
+                        />
+                      </div>
                     </label>
 
-                    {/* Toggle Impedir Download */}
-                    <label className="flex items-center justify-between gap-3 p-2 rounded-xl bg-artOrange/[0.03] hover:bg-artOrange/[0.07] border border-artOrange/10 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-download text-artOrange text-xs"></i>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-artDark">Bloquear Download</span>
-                          <span className="text-[9px] text-gray-400">Desativa clique direito e salvamento direto</span>
+                    {/* Anti-Print */}
+                    <label
+                      className={`flex flex-col justify-between items-center text-center p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        isProOuBoost && bloquearPrint
+                          ? "bg-artBlue/[0.08] border-artBlue/30 shadow-xs"
+                          : "bg-artBlue/[0.03] hover:bg-artBlue/[0.06] border-artBlue/10"
+                      }`}
+                      title="Proteção contra printscreen e capturas de tela"
+                    >
+                      <div className="flex flex-col items-center w-full">
+                        <div className="w-7 h-7 rounded-lg bg-artBlue/10 text-artBlue flex items-center justify-center text-xs mb-1">
+                          <i className="fa-solid fa-camera"></i>
                         </div>
+                        <span className="text-[11px] font-bold text-artDark leading-tight">Anti-Print</span>
+                        <span className="text-[9px] text-gray-500 leading-tight mt-0.5">Bloqueia capturas</span>
                       </div>
-                      <input
-                        type="checkbox"
-                        disabled={!isProOuBoost}
-                        checked={isProOuBoost && bloquearDownload}
-                        onChange={(e) => setBloquearDownload(e.target.checked)}
-                        className="w-4 h-4 text-artOrange rounded focus:ring-artOrange border-gray-300 cursor-pointer accent-artOrange disabled:cursor-not-allowed"
-                      />
+                      <div className="mt-2 pt-1.5 border-t border-artBlue/10 w-full flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          disabled={!isProOuBoost}
+                          checked={isProOuBoost && bloquearPrint}
+                          onChange={(e) => setBloquearPrint(e.target.checked)}
+                          className="w-4 h-4 text-artBlue rounded accent-artBlue cursor-pointer"
+                        />
+                      </div>
                     </label>
 
-                    {/* Toggle Bloquear Printscreen */}
-                    <label className="flex items-center justify-between gap-3 p-2 rounded-xl bg-artBlue/[0.03] hover:bg-artBlue/[0.07] border border-artBlue/10 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-camera text-artBlue text-xs"></i>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-artDark">Proteção contra Printscreen</span>
-                          <span className="text-[9px] text-gray-400">Aplica escudo protetor e desfoque ao capturar</span>
+                    {/* Modo Prévia (Redução de Resolução para Proteção) */}
+                    <label
+                      className={`flex flex-col justify-between items-center text-center p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        isProOuBoost && reduzirQualidade
+                          ? "bg-amber-500/[0.08] border-amber-500/30 shadow-xs"
+                          : "bg-amber-500/[0.03] hover:bg-amber-500/[0.06] border-amber-500/10"
+                      }`}
+                      title="Reduz resolução para modo prévia protegido contra cópias de alta definição"
+                    >
+                      <div className="flex flex-col items-center w-full">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs mb-1">
+                          <i className="fa-solid fa-compress"></i>
                         </div>
+                        <span className="text-[11px] font-bold text-artDark leading-tight">Modo Prévia</span>
+                        <span className="text-[9px] text-gray-500 leading-tight mt-0.5">Reduz resolução</span>
                       </div>
-                      <input
-                        type="checkbox"
-                        disabled={!isProOuBoost}
-                        checked={isProOuBoost && bloquearPrint}
-                        onChange={(e) => setBloquearPrint(e.target.checked)}
-                        className="w-4 h-4 text-artBlue rounded focus:ring-artBlue border-gray-300 cursor-pointer accent-artBlue disabled:cursor-not-allowed"
-                      />
-                    </label>
-
-                    {/* Toggle Redução de Qualidade (Modo Prévia) */}
-                    <label className="flex items-center justify-between gap-3 p-2 rounded-xl bg-amber-500/[0.04] hover:bg-amber-500/[0.08] border border-amber-500/15 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2">
-                        <i className="fa-solid fa-compress text-amber-500 text-xs"></i>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-artDark">Redução de Qualidade (Modo Prévia)</span>
-                          <span className="text-[9px] text-gray-400">Exibe versão reduzida (incentiva contato para obter original em alta)</span>
-                        </div>
+                      <div className="mt-2 pt-1.5 border-t border-amber-500/10 w-full flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          disabled={!isProOuBoost}
+                          checked={isProOuBoost && reduzirQualidade}
+                          onChange={(e) => setReduzirQualidade(e.target.checked)}
+                          className="w-4 h-4 text-amber-500 rounded accent-amber-500 cursor-pointer"
+                        />
                       </div>
-                      <input
-                        type="checkbox"
-                        disabled={!isProOuBoost}
-                        checked={isProOuBoost && reduzirQualidade}
-                        onChange={(e) => setReduzirQualidade(e.target.checked)}
-                        className="w-4 h-4 text-amber-500 rounded focus:ring-amber-500 border-gray-300 cursor-pointer accent-amber-500 disabled:cursor-not-allowed"
-                      />
                     </label>
                   </div>
                 </div>
               </div>
 
               {/* Opção da Paleta Cromática da Obra */}
-              <div className="bg-white/90 border border-artOrange/25 rounded-2xl p-4 shadow-2xs transition-all space-y-3">
+              <div className="bg-white/90 border border-artOrange/20 rounded-2xl p-3 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-lg bg-artOrange/15 text-artOrange flex items-center justify-center text-[10px] shadow-2xs">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-md bg-artOrange/15 text-artOrange flex items-center justify-center text-[9px]">
                       <i className="fa-solid fa-palette"></i>
                     </span>
-                    <span>Paleta Cromática da Obra</span>
+                    <span>Paleta Cromática</span>
                   </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <span className="text-xs font-bold text-gray-700">Exibir paleta HEX</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <span className="text-[11px] font-bold text-gray-600">Exibir paleta HEX</span>
                     <input
                       type="checkbox"
                       checked={exibirPaleta}
                       onChange={(e) => setExibirPaleta(e.target.checked)}
-                      className="w-4 h-4 text-artOrange rounded focus:ring-artOrange border-gray-300 cursor-pointer accent-artOrange"
+                      className="w-3.5 h-3.5 text-artOrange rounded focus:ring-artOrange border-gray-300 cursor-pointer accent-artOrange"
                     />
                   </label>
                 </div>
 
                 {exibirPaleta && (
-                  <div className="space-y-3 pt-2 border-t border-black/5 animate-fadeIn">
+                  <div className="space-y-2 pt-1.5 border-t border-black/5 animate-fadeIn">
                     {/* Opção Auto vs Custom */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <label className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold cursor-pointer transition-all ${
                         modoPaleta === "auto"
                           ? "bg-artOrange/10 border-artOrange/40 text-artOrange"
                           : "bg-gray-50 border-black/5 text-gray-600 hover:bg-gray-100"
@@ -1030,11 +1282,11 @@ export default function ModalUploadObra({
                           onChange={() => setModoPaleta("auto")}
                           className="hidden"
                         />
-                        <i className="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
-                        <span>Automático (Extrair da Imagem)</span>
+                        <i className="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
+                        <span>Auto (Extrair da Imagem)</span>
                       </label>
 
-                      <label className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                      <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold cursor-pointer transition-all ${
                         modoPaleta === "custom"
                           ? "bg-artPurple/10 border-artPurple/40 text-artPurple"
                           : "bg-gray-50 border-black/5 text-gray-600 hover:bg-gray-100"
@@ -1047,20 +1299,17 @@ export default function ModalUploadObra({
                           onChange={() => setModoPaleta("custom")}
                           className="hidden"
                         />
-                        <i className="fa-solid fa-paint-brush text-[10px]"></i>
-                        <span>Personalizado (Definir 5 Cores)</span>
+                        <i className="fa-solid fa-paint-brush text-[9px]"></i>
+                        <span>Manual (5 Cores)</span>
                       </label>
                     </div>
 
                     {modoPaleta === "custom" && (
-                      <div className="p-3 bg-[#F9F8F6] rounded-xl border border-artPurple/20 space-y-2 animate-fadeIn">
-                        <p className="text-[11px] text-gray-600 font-medium">
-                          Defina ou clique no conta-gotas para escolher as 5 cores que melhor representam a sua obra:
-                        </p>
-                        <div className="grid grid-cols-5 gap-2">
+                      <div className="p-2 bg-[#F9F8F6] rounded-xl border border-artPurple/20 space-y-1.5 animate-fadeIn">
+                        <div className="grid grid-cols-5 gap-1.5">
                           {coresCustomizadas.map((cor, idx) => (
-                            <div key={idx} className="flex flex-col items-center gap-1.5">
-                              <div className="relative w-full h-10 rounded-xl overflow-hidden shadow-xs border border-black/10 flex items-center justify-center cursor-pointer group">
+                            <div key={idx} className="flex flex-col items-center gap-1">
+                              <div className="relative w-full h-8 rounded-lg overflow-hidden shadow-xs border border-black/10 flex items-center justify-center cursor-pointer group">
                                 <input
                                   type="color"
                                   value={cor}
@@ -1070,10 +1319,10 @@ export default function ModalUploadObra({
                                     setCoresCustomizadas(nova);
                                   }}
                                   className="absolute inset-0 w-[150%] h-[150%] -top-2 -left-2 cursor-pointer opacity-0"
-                                  title="Clique para escolher com o seletor de cores"
+                                  title="Clique para escolher a cor"
                                 />
                                 <div className="w-full h-full" style={{ backgroundColor: cor }} />
-                                <i className="fa-solid fa-eye-dropper text-white text-[10px] absolute drop-shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></i>
+                                <i className="fa-solid fa-eye-dropper text-white text-[9px] absolute drop-shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></i>
                               </div>
                               <input
                                 type="text"
@@ -1084,7 +1333,7 @@ export default function ModalUploadObra({
                                   nova[idx] = e.target.value;
                                   setCoresCustomizadas(nova);
                                 }}
-                                className="w-full text-center text-[10px] font-mono font-bold bg-white border border-gray-200 rounded-lg py-0.5 outline-none focus:border-artPurple uppercase"
+                                className="w-full text-center text-[9px] font-mono font-bold bg-white border border-gray-200 rounded py-0.5 outline-none focus:border-artPurple uppercase"
                               />
                             </div>
                           ))}
@@ -1096,13 +1345,13 @@ export default function ModalUploadObra({
               </div>
 
               {/* Categorias (Restrito a no máximo 3) */}
-              <div className="bg-white/90 border border-artBlue/25 rounded-2xl p-4 shadow-2xs transition-all relative z-10">
-                <div className="flex items-center justify-between mb-2.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-artDark flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-lg bg-artBlue/15 text-artBlue flex items-center justify-center text-[10px] shadow-2xs">
+              <div className="bg-white/90 border border-artBlue/20 rounded-2xl p-3 shadow-2xs space-y-2 relative z-10">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-artDark flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-md bg-artBlue/15 text-artBlue flex items-center justify-center text-[9px]">
                       <i className="fa-solid fa-swatchbook"></i>
                     </span>
-                    <span>Categorias ({categoriasSelecionadas.length}/3) <span className="text-gray-400 font-normal lowercase">(máx. 3)</span></span>
+                    <span>Categorias ({categoriasSelecionadas.length}/3)</span>
                   </label>
                   {categoriasSelecionadas.length > 0 && (
                     <button
@@ -1110,64 +1359,91 @@ export default function ModalUploadObra({
                       onClick={() => setCategoriasSelecionadas([])}
                       className="text-[10px] font-bold text-gray-400 hover:text-artOrange transition-colors cursor-pointer"
                     >
-                      Limpar todas
+                      Limpar
                     </button>
                   )}
                 </div>
 
                 {/* Alerta animado de limite de 3 categorias */}
                 {avisoCategorias && (
-                  <div className="mb-2.5 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-200 text-artOrange text-[11px] font-bold flex items-center gap-2 animate-fadeIn">
-                    <i className="fa-solid fa-circle-exclamation text-xs"></i>
-                    <span>Máximo de 3 categorias por publicação. Desmarque uma para adicionar outra.</span>
+                  <div className="px-2.5 py-1 rounded-xl bg-orange-50 border border-orange-200 text-artOrange text-[10px] font-bold flex items-center gap-1.5 animate-fadeIn">
+                    <i className="fa-solid fa-circle-exclamation text-[10px]"></i>
+                    <span>Máximo de 3 categorias. Desmarque uma para adicionar outra.</span>
                   </div>
                 )}
 
-                {categoriasSelecionadas.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic mb-3 flex items-center gap-1.5 py-1">
-                    <i className="fa-solid fa-circle-info text-artBlue text-xs"></i>
-                    Nenhuma categoria selecionada (opcional, até 3). Caso não escolha, a obra será exibida em "Todas as Obras".
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2 mb-3 min-h-[32px]">
+                {/* Tags Selecionadas */}
+                {categoriasSelecionadas.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
                     {categoriasSelecionadas.map((cat) => (
                       <span
                         key={cat}
-                        className="bg-gradient-to-r from-artPurple via-artOrange to-artBlue text-white text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-2 shadow-sm shadow-artPurple/25 hover:shadow-md transition-all animate-fade-in"
+                        className="bg-gradient-to-r from-artPurple via-artOrange to-artBlue text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs"
                       >
                         <span>{cat}</span>
                         <button
                           type="button"
                           onClick={() => handleToggleCategoria(cat)}
                           className="hover:text-amber-200 hover:scale-125 transition-transform"
-                          title="Remover Categoria"
+                          title="Remover"
                         >
-                          <i className="fa-solid fa-xmark text-xs"></i>
+                          <i className="fa-solid fa-xmark text-[9px]"></i>
                         </button>
                       </span>
                     ))}
                   </div>
                 )}
 
-                {/* Busca e Lista de Categorias com Setores Artísticos */}
-                <div className="bg-[#F9F8F6]/90 border border-artBlue/15 rounded-xl p-3 shadow-inner">
-                  {/* Pílulas dos Setores Artísticos com Carrossel e Chevrons */}
-                  <div className="relative group/setores mb-2.5">
+                {/* Desafio Semanal Ativo */}
+                {desafioAtual && (
+                  <div className="p-2 rounded-xl bg-gradient-to-r from-artPurple/10 via-artOrange/10 to-artBlue/10 border border-artPurple/20 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-artPurple to-artOrange text-white flex items-center justify-center text-[10px] shadow-2xs shrink-0">
+                        <i className="fa-solid fa-bolt"></i>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-artPurple block leading-none">
+                          ⚡ Desafio Semanal
+                        </span>
+                        <h4 className="text-[11px] font-bold text-artDark truncate leading-tight">
+                          {desafioAtual.nomeCategoria}
+                        </h4>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCategoria(desafioAtual.nomeCategoria)}
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                        categoriasSelecionadas.includes(desafioAtual.nomeCategoria)
+                          ? "bg-artPurple text-white shadow-2xs"
+                          : "bg-white border border-artPurple/40 text-artPurple hover:bg-artPurple hover:text-white"
+                      }`}
+                    >
+                      <i className={`fa-solid ${categoriasSelecionadas.includes(desafioAtual.nomeCategoria) ? "fa-check" : "fa-plus"} text-[8px]`}></i>
+                      <span>{categoriasSelecionadas.includes(desafioAtual.nomeCategoria) ? "Participando" : "Participar"}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Seletor Compacto com Setinhas e Todas as Subcategorias */}
+                <div className="bg-[#F9F8F6] border border-artBlue/15 rounded-xl p-2 space-y-2">
+                  {/* Pílulas de Setores com Setinhas de Navegação */}
+                  <div className="relative group/setores">
                     <button
                       type="button"
                       onClick={() => {
-                        const el = document.getElementById("upload-setores-scroll");
-                        if (el) el.scrollBy({ left: -160, behavior: "smooth" });
+                        const el = document.getElementById("modal-setores-scroll");
+                        if (el) el.scrollBy({ left: -140, behavior: "smooth" });
                       }}
-                      className="hidden sm:flex absolute -left-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white shadow-md border border-black/10 items-center justify-center text-[10px] text-artDark hover:bg-gray-100 z-20 transition-all opacity-80 hover:opacity-100 cursor-pointer"
-                      title="Rolar para esquerda"
+                      className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white shadow-md border border-black/10 flex items-center justify-center text-[9px] text-artDark hover:bg-gray-100 z-20 transition-all opacity-80 hover:opacity-100 cursor-pointer"
+                      title="Rolar setores para a esquerda"
                     >
-                      <i className="fa-solid fa-chevron-left text-[8px]"></i>
+                      <i className="fa-solid fa-chevron-left text-[7px]"></i>
                     </button>
 
                     <div
-                      id="upload-setores-scroll"
-                      className="flex gap-2 overflow-x-auto pb-1 scroll-smooth no-scrollbar px-1"
+                      id="modal-setores-scroll"
+                      className="flex gap-1 overflow-x-auto pb-0.5 scroll-smooth no-scrollbar px-3"
                     >
                       {SETORES_ARTISTICOS.map((setor) => {
                         const isSelected = setorFiltro === setor.id;
@@ -1179,13 +1455,13 @@ export default function ModalUploadObra({
                               setSetorFiltro(setor.id);
                               setBuscaCategoria("");
                             }}
-                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all shrink-0 flex items-center gap-1.5 border cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider whitespace-nowrap transition-all shrink-0 flex items-center gap-1 border cursor-pointer ${
                               isSelected
-                                ? `${setor.corBg} border-transparent shadow-xs scale-105`
-                                : "bg-white text-gray-600 border-black/5 hover:bg-gray-100 shadow-2xs"
+                                ? `${setor.corBg} border-transparent shadow-2xs scale-105`
+                                : "bg-white text-gray-600 border-black/5 hover:bg-gray-100"
                             }`}
                           >
-                            <i className={`${setor.icone} text-[9px]`}></i>
+                            <i className={`${setor.icone} text-[8px]`}></i>
                             <span>{setor.nome}</span>
                           </button>
                         );
@@ -1195,40 +1471,40 @@ export default function ModalUploadObra({
                     <button
                       type="button"
                       onClick={() => {
-                        const el = document.getElementById("upload-setores-scroll");
-                        if (el) el.scrollBy({ left: 160, behavior: "smooth" });
+                        const el = document.getElementById("modal-setores-scroll");
+                        if (el) el.scrollBy({ left: 140, behavior: "smooth" });
                       }}
-                      className="hidden sm:flex absolute -right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white shadow-md border border-black/10 items-center justify-center text-[10px] text-artDark hover:bg-gray-100 z-20 transition-all opacity-80 hover:opacity-100 cursor-pointer"
-                      title="Rolar para direita"
+                      className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white shadow-md border border-black/10 flex items-center justify-center text-[9px] text-artDark hover:bg-gray-100 z-20 transition-all opacity-80 hover:opacity-100 cursor-pointer"
+                      title="Rolar setores para a direita"
                     >
-                      <i className="fa-solid fa-chevron-right text-[8px]"></i>
+                      <i className="fa-solid fa-chevron-right text-[7px]"></i>
                     </button>
                   </div>
 
-                  {/* Campo de Busca */}
-                  <div className="relative mb-2">
-                    <i className="fa-solid fa-magnifying-glass text-xs text-artBlue absolute left-3 top-1/2 -translate-y-1/2"></i>
+                  {/* Campo de Busca Rápida */}
+                  <div className="relative">
+                    <i className="fa-solid fa-magnifying-glass text-[10px] text-artBlue absolute left-2.5 top-1/2 -translate-y-1/2"></i>
                     <input
                       type="text"
                       value={buscaCategoria}
                       onChange={(e) => setBuscaCategoria(e.target.value)}
                       placeholder="Filtrar categorias ou subcategorias..."
-                      className="w-full bg-white border border-artBlue/20 rounded-xl pl-9 pr-3 py-2 text-xs text-artDark placeholder:text-gray-400 focus:ring-2 focus:ring-artBlue/30 transition-all outline-none"
+                      className="w-full bg-white border border-artBlue/20 rounded-lg pl-7 pr-2 py-1 text-[11px] text-artDark placeholder:text-gray-400 focus:ring-1 focus:ring-artBlue/40 outline-none"
                     />
                   </div>
 
-                  {/* Pílulas de Categorias Disponíveis */}
-                  <div className="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 no-scrollbar p-1">
-                    {categoriasFiltradas.slice(0, 40).map((cat) => {
+                  {/* Grade com TODAS as Subcategorias Disponíveis e Rolagem */}
+                  <div className="max-h-28 overflow-y-auto flex flex-wrap gap-1 p-0.5 custom-scrollbar">
+                    {categoriasFiltradas.map((cat) => {
                       const isSelected = categoriasSelecionadas.includes(cat);
                       return (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => handleToggleCategoria(cat)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-all border ${
+                          className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-all border ${
                             isSelected
-                              ? "bg-gradient-to-r from-artPurple via-artOrange to-artBlue text-white border-transparent shadow-xs font-bold scale-105"
+                              ? "bg-gradient-to-r from-artPurple via-artOrange to-artBlue text-white border-transparent shadow-2xs font-bold scale-105"
                               : "bg-white text-gray-700 border-black/5 hover:border-artPurple/40 hover:bg-artPurple/10 hover:text-artPurple"
                           }`}
                         >

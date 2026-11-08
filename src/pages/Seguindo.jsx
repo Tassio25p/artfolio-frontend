@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usuarioService, getMediaUrl } from "../services/api";
@@ -22,7 +22,7 @@ export default function Seguindo() {
   const [termoBusca, setTermoBusca] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
 
-  const carregarSeguindo = async () => {
+  const carregarSeguindo = useCallback(async () => {
     if (!targetId) return;
     try {
       setLoading(true);
@@ -33,11 +33,11 @@ export default function Seguindo() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [targetId]);
 
   useEffect(() => {
     carregarSeguindo();
-  }, [targetId]);
+  }, [carregarSeguindo]);
 
   const mostrarAviso = (mensagem) => {
     setNoticeMessage(mensagem);
@@ -116,18 +116,32 @@ export default function Seguindo() {
             </div>
           )}
 
-          <section className="mb-8">
-            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 flex items-center justify-between shadow-sm max-w-sm">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 max-w-xl">
+            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 flex items-center justify-between shadow-sm">
               <div>
                 <p className="text-3xl font-black bg-gradient-to-r from-artPurple via-artOrange to-artBlue bg-clip-text text-transparent">
                   {seguindoLista.length}
                 </p>
                 <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                  Perfis em Seguindo
+                  Total em Seguindo
                 </span>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-artPurple/10 text-artPurple flex items-center justify-center text-xl">
                 <i className="fa-solid fa-users"></i>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[1.7rem] p-5 border border-black/5 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-3xl font-black text-artOrange">
+                  {totalArtistas}
+                </p>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                  Artistas Criadores
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-artOrange/10 text-artOrange flex items-center justify-center text-xl">
+                <i className="fa-solid fa-palette"></i>
               </div>
             </div>
           </section>
@@ -164,16 +178,35 @@ export default function Seguindo() {
                     </h2>
                   </div>
 
-                  <div className="relative w-full md:w-72">
-                    <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                    <div className="flex items-center gap-1 bg-[#F9F8F6] p-1 rounded-full border border-black/5 self-start sm:self-auto">
+                      {filtros.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setFiltroAtual(f.id)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                            filtroAtual === f.id
+                              ? "bg-artPurple text-white shadow-xs"
+                              : "text-gray-500 hover:text-artDark"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
 
-                    <input
-                      type="text"
-                      value={termoBusca}
-                      onChange={(event) => setTermoBusca(event.target.value)}
-                      placeholder="Buscar por nome..."
-                      className="w-full bg-[#F9F8F6] rounded-full pl-11 pr-5 py-3 outline-none focus:ring-2 ring-artPurple/20 text-sm"
-                    />
+                    <div className="relative w-full sm:w-64">
+                      <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+
+                      <input
+                        type="text"
+                        value={termoBusca}
+                        onChange={(event) => setTermoBusca(event.target.value)}
+                        placeholder="Buscar por nome..."
+                        className="w-full bg-[#F9F8F6] rounded-full pl-11 pr-5 py-2.5 outline-none focus:ring-2 ring-artPurple/20 text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 

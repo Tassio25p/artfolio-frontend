@@ -6,16 +6,10 @@ import ModalConversao from "./ModalConversao";
 import PriceBadge from "./PriceBadge";
 import WatermarkOverlay from "./WatermarkOverlay";
 import { useAuth } from "../contexts/AuthContext";
-import { obrasService, usuarioService, getMediaUrl } from "../services/api";
+import { obrasService, usuarioService, adminService, getMediaUrl } from "../services/api";
 import { getEstiloCategoria } from "../constants/categories";
 import { desempacotarDadosObra, getAvatarLedStyle } from "../utils/obraHelper";
-
-const colorClasses = {
-  artPurple: "bg-artPurple",
-  artBlue: "bg-artBlue",
-  artOrange: "bg-artOrange",
-  artDark: "bg-artDark",
-};
+import { renderTextWithEmojis } from "../utils/artfolioEmojis";
 
 export default function PostCard(props) {
   const post = props.post || {};
@@ -38,8 +32,6 @@ export default function PostCard(props) {
   const userId = props.userId ?? autor.id ?? post.idUsuario;
   const user = props.user ?? autor.nome ?? "Artista";
   const avatar = props.avatar ?? autor.fotoPerfil ?? autor.avatar ?? "";
-  const planoAutor = (autor.plano ?? post.plano ?? "Free").toLowerCase();
-  const temLed = autor.mostrar_moldura_led !== false;
 
   // Categorias
   const cats = Array.isArray(post.categorias) && post.categorias.length > 0
@@ -50,6 +42,7 @@ export default function PostCard(props) {
   const isGuest = props.isGuest ?? authIsGuest;
   const currentUserId = props.currentUserId ?? authUser?.id;
   const isMe = !isGuest && currentUserId === userId;
+  const isAdmin = !isGuest && ["admin", "moderador"].includes((authUser?.papel || authUser?.role || "").toLowerCase());
 
   // Estados locais reativos
   const [totalCurtidas, setTotalCurtidas] = useState(
@@ -273,6 +266,61 @@ export default function PostCard(props) {
     }
   };
 
+  // Interação Admin: Banir publicação e autor na mesma transação via FK da obra
+  const handleBanirAdminClick = async () => {
+    if (!isAdmin || !id) return;
+    try {
+      const res = await adminService.removerObraAdmin(id, {
+        banir_autor: true,
+        motivo: `Banimento administrativo da publicação #${id} e do seu autor.`,
+      });
+      const targetAutorId = res?.autor_id ?? userId;
+      window.dispatchEvent(
+        new CustomEvent("artfolio_moderation_sync", {
+          detail: { obraId: id, usuarioId: targetAutorId },
+        })
+      );
+      if (props.onObraRemovida) {
+        props.onObraRemovida(id, targetAutorId);
+      }
+      if (props.mostrarAviso) {
+        props.mostrarAviso(res?.detail || "Obra e autor banidos com sucesso!", "info");
+      }
+    } catch (err) {
+      if (props.mostrarAviso) {
+        props.mostrarAviso(err.message || "Erro ao banir publicação e autor.", "error");
+      }
+    }
+  };
+
+  // Interação: Download da Obra (quando permitido pelo autor)
+  const handleDownloadClick = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!image) return;
+
+    try {
+      const fileUrl = getMediaUrl(image);
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      const ext = fileUrl.split("?")[0].split(".").pop() || "png";
+      const nomeLimpo = (title || "obra_artfolio").toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+      link.download = `${nomeLimpo}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      if (props.mostrarAviso) props.mostrarAviso("Download iniciado com sucesso!", "info");
+    } catch {
+      window.open(getMediaUrl(image), "_blank");
+    }
+  };
+
   // Moldura LED do Avatar conforme plano com suporte a Boost HEX
   const ledInfo = getAvatarLedStyle(autor);
 
@@ -332,12 +380,12 @@ export default function PostCard(props) {
               return (
                 <div className="relative w-full h-full flex items-center justify-center bg-neutral-950 overflow-hidden">
                   <img
-                    src={getMediaUrl(image) || "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800"}
+                    src={getMediaUrl(image) || "/default-art.png"}
                     alt={title || "Obra"}
                     draggable={!bloquearDownload}
                     onLoad={() => setImageLoaded(true)}
                     onError={(e) => {
-                      e.currentTarget.src = "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                      e.currentTarget.src = "/default-art.png";
                       setImageLoaded(true);
                     }}
                     className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${
@@ -385,6 +433,7 @@ export default function PostCard(props) {
               isSalvo={isSaved}
               onSalvar={handleSaveClick}
               onDenunciar={handleDenunciarClick}
+              onBanirAdmin={isAdmin ? handleBanirAdminClick : undefined}
               onCopiarLinkSuccess={(msg) => props.mostrarAviso && props.mostrarAviso(msg, "info")}
             />
           </div>
@@ -425,7 +474,7 @@ export default function PostCard(props) {
                   className="font-editorial text-lg sm:text-xl italic font-bold leading-snug mb-1.5 text-artDark hover:text-artPurple transition-colors truncate block w-full"
                   title={title}
                 >
-                  {title}
+                  {renderTextWithEmojis(title)}
                 </h2>
               </Link>
             )}
@@ -436,7 +485,7 @@ export default function PostCard(props) {
                 className="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-3 font-light break-words overflow-hidden"
                 title={description}
               >
-                {description}
+                {renderTextWithEmojis(description)}
               </p>
             )}
           </div>
@@ -492,9 +541,9 @@ export default function PostCard(props) {
             )}
           </div>
 
-          {/* Barra de Interação (Curtir, Salvar, Comentários, Link) */}
+          {/* Barra de Interação (Curtir, Salvar, Comentários, Download, Link) */}
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5">
-            <div className="flex items-center gap-4 text-xs font-bold">
+            <div className="flex items-center gap-3.5 sm:gap-4 text-xs font-bold">
               <button
                 type="button"
                 onClick={handleLikeClick}
@@ -528,6 +577,19 @@ export default function PostCard(props) {
                 <i className="fa-regular fa-comment"></i>
                 <span>{totalComentarios}</span>
               </Link>
+
+              {/* Botão de Download na Postagem (quando ativo) */}
+              {!bloquearDownload && (
+                <button
+                  type="button"
+                  onClick={handleDownloadClick}
+                  className="flex items-center gap-1 text-gray-400 hover:text-emerald-600 transition-colors"
+                  title="Baixar imagem/vídeo da obra"
+                >
+                  <i className="fa-solid fa-download text-[11px]"></i>
+                  <span className="hidden sm:inline text-[10px] uppercase font-bold tracking-wider">Baixar</span>
+                </button>
+              )}
             </div>
 
             <Link

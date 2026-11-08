@@ -131,7 +131,6 @@ export const NotificationProvider = ({ children }) => {
       });
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     carregarDadosIniciais();
   }, [isAuthenticated, user?.id, carregarDadosIniciais]);
 
@@ -365,7 +364,6 @@ export const NotificationProvider = ({ children }) => {
   );
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -374,5 +372,4 @@ export const useNotification = () => {
   return context;
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useNotifications = useNotification;

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { usuarioService, authService, getMediaUrl } from "../services/api";
+import { usuarioService, getMediaUrl } from "../services/api";
+import EmojiPicker from "../components/EmojiPicker";
 
 const categoriasDisponiveis = [
   { id: 1, nome: "Pintura Digital", icone: "fa-solid fa-paintbrush" },
@@ -106,7 +107,7 @@ export default function OnboardingPerfil() {
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-artDark font-sans antialiased py-10 px-4">
-      <div className="fixed top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-[url('/noise.svg')] opacity-[0.04] pointer-events-none z-[99]"></div>
 
       <div className="max-w-3xl mx-auto relative z-10">
         {/* Header */}
@@ -185,9 +186,12 @@ export default function OnboardingPerfil() {
 
           {/* Seção 2: Biografia */}
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-              Biografia / Apresentação Artística
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                Biografia / Apresentação Artística
+              </label>
+              <EmojiPicker onSelectEmoji={(emoji) => setBiografia((prev) => (prev || "") + emoji)} />
+            </div>
             <textarea
               rows="3"
               value={biografia}

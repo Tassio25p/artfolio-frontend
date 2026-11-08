@@ -31,9 +31,26 @@ export default function Admin() {
 
   const [usuariosSinalizados, setUsuariosSinalizados] = useState([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+  const [buscaUsuarioSinalizado, setBuscaUsuarioSinalizado] = useState("");
 
   const [logsAuditoria, setLogsAuditoria] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+
+  // Desafios Semanais
+  const [desafios, setDesafios] = useState([]);
+  const [loadingDesafios, setLoadingDesafios] = useState(false);
+  const [processandoDesafio, setProcessandoDesafio] = useState(false);
+  const [modalNovoDesafio, setModalNovoDesafio] = useState(false);
+  const [novoDesafioNome, setNovoDesafioNome] = useState("");
+  const [novoDesafioPrazo, setNovoDesafioPrazo] = useState(7);
+  const [novoDesafioAtivarAgora, setNovoDesafioAtivarAgora] = useState(false);
+
+  const [desafioParaEditar, setDesafioParaEditar] = useState(null);
+  const [editDesafioNome, setEditDesafioNome] = useState("");
+  const [editDesafioPrazo, setEditDesafioPrazo] = useState(7);
+  const [editDesafioReiniciarPrazo, setEditDesafioReiniciarPrazo] = useState(false);
+
+  const [desafioParaRemover, setDesafioParaRemover] = useState(null);
 
   // Feedback e Notificação
   const [aviso, setAviso] = useState(null); // { tipo: "sucesso" | "erro", mensagem: string }
@@ -65,7 +82,7 @@ export default function Admin() {
   const mostrarAviso = useCallback((mensagem, tipo = "sucesso") => {
     setAviso({ mensagem, tipo });
     setTimeout(() => setAviso(null), 5000);
-  }, []);
+  }, [setAviso]);
 
   // Carregar métricas
   const carregarMetricas = useCallback(async () => {
@@ -114,10 +131,10 @@ export default function Admin() {
   }, []);
 
   // Carregar usuários sinalizados
-  const carregarUsuarios = useCallback(async () => {
+  const carregarUsuarios = useCallback(async (termoBusca = "") => {
     try {
       setLoadingUsuarios(true);
-      const res = await adminService.listarUsuariosSinalizados();
+      const res = await adminService.listarUsuariosSinalizados(termoBusca);
       setUsuariosSinalizados(Array.isArray(res) ? res : []);
     } catch (err) {
       console.warn("Erro ao listar usuários sinalizados:", err);
@@ -139,6 +156,19 @@ export default function Admin() {
     }
   }, []);
 
+  // Carregar desafios semanais
+  const carregarDesafios = useCallback(async () => {
+    try {
+      setLoadingDesafios(true);
+      const res = await adminService.listarDesafios();
+      setDesafios(Array.isArray(res) ? res : []);
+    } catch (err) {
+      console.warn("Erro ao listar desafios semanais:", err);
+    } finally {
+      setLoadingDesafios(false);
+    }
+  }, []);
+
   // Carregar dados conforme área ativa
   useEffect(() => {
     if (!isAuthorized) return;
@@ -149,6 +179,7 @@ export default function Admin() {
       carregarDenuncias();
       carregarUsuarios();
       carregarLogs();
+      carregarDesafios();
     } else if (areaAtual === "quarentena") {
       carregarObras();
     } else if (areaAtual === "denuncias") {
@@ -157,6 +188,8 @@ export default function Admin() {
       carregarUsuarios();
     } else if (areaAtual === "logs") {
       carregarLogs();
+    } else if (areaAtual === "desafios") {
+      carregarDesafios();
     }
   }, [
     isAuthorized,
@@ -167,19 +200,103 @@ export default function Admin() {
     carregarDenuncias,
     carregarUsuarios,
     carregarLogs,
+    carregarDesafios,
   ]);
+
+  const handleAtivarDesafio = async (catId) => {
+    try {
+      setProcessandoDesafio(true);
+      const res = await adminService.ativarDesafio(catId);
+      mostrarAviso(res.mensagem || "Desafio semanal alterado com sucesso!");
+      await Promise.all([carregarDesafios(), carregarLogs(), carregarMetricas()]);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao ativar tema de desafio.", "erro");
+    } finally {
+      setProcessandoDesafio(false);
+    }
+  };
+
+  const handleRotacionarDesafio = async () => {
+    try {
+      setProcessandoDesafio(true);
+      const res = await adminService.rotacionarDesafio();
+      mostrarAviso(res.mensagem || "Desafio rotacionado com sucesso!");
+      await Promise.all([carregarDesafios(), carregarLogs(), carregarMetricas()]);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao rotacionar desafio.", "erro");
+    } finally {
+      setProcessandoDesafio(false);
+    }
+  };
+
+  const handleCriarDesafio = async (e) => {
+    if (e) e.preventDefault();
+    if (!novoDesafioNome.trim()) {
+      mostrarAviso("Informe o nome do novo tema de desafio.", "erro");
+      return;
+    }
+    try {
+      setProcessandoDesafio(true);
+      const res = await adminService.criarDesafio({
+        nomeCategoria: novoDesafioNome.trim(),
+        prazo_dias: Number(novoDesafioPrazo) || 7,
+        ativar_agora: novoDesafioAtivarAgora,
+      });
+      mostrarAviso(res.mensagem || "Novo tema de desafio criado com sucesso!");
+      setModalNovoDesafio(false);
+      setNovoDesafioNome("");
+      setNovoDesafioPrazo(7);
+      setNovoDesafioAtivarAgora(false);
+      await Promise.all([carregarDesafios(), carregarLogs(), carregarMetricas()]);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao criar novo tema de desafio.", "erro");
+    } finally {
+      setProcessandoDesafio(false);
+    }
+  };
+
+  const handleSalvarEdicaoDesafio = async (e) => {
+    if (e) e.preventDefault();
+    if (!desafioParaEditar) return;
+    try {
+      setProcessandoDesafio(true);
+      const res = await adminService.atualizarDesafio(desafioParaEditar.id, {
+        nomeCategoria: editDesafioNome.trim(),
+        prazo_dias: Number(editDesafioPrazo) || 7,
+        reiniciar_prazo: editDesafioReiniciarPrazo,
+      });
+      mostrarAviso(res.mensagem || "Desafio atualizado com sucesso!");
+      setDesafioParaEditar(null);
+      await Promise.all([carregarDesafios(), carregarLogs(), carregarMetricas()]);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao atualizar desafio.", "erro");
+    } finally {
+      setProcessandoDesafio(false);
+    }
+  };
+
+  const handleConfirmarRemocaoDesafio = async () => {
+    if (!desafioParaRemover) return;
+    try {
+      setProcessandoDesafio(true);
+      const res = await adminService.removerDesafio(desafioParaRemover.id);
+      mostrarAviso(res.mensagem || "Tema de desafio removido com sucesso!");
+      setDesafioParaRemover(null);
+      await Promise.all([carregarDesafios(), carregarLogs(), carregarMetricas()]);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao remover tema de desafio.", "erro");
+    } finally {
+      setProcessandoDesafio(false);
+    }
+  };
 
   // Ações de Quarentena
   const handleAprovarObra = async (obraId) => {
     try {
       await adminService.julgarObra(obraId, { acao: "aprovar" });
       setObrasQuarentena((prev) => prev.filter((o) => o.id !== obraId));
-      setMetricas((prev) => ({
-        ...prev,
-        obras_pendentes: Math.max(0, prev.obras_pendentes - 1),
-        logs_recentes: prev.logs_recentes + 1,
-      }));
       mostrarAviso(`Obra #${obraId} aprovada e publicada no feed com sucesso!`);
+      await Promise.all([carregarMetricas(), carregarLogs(), carregarUsuarios(buscaUsuarioSinalizado)]);
     } catch (err) {
       mostrarAviso(err.message || "Erro ao aprovar obra.", "erro");
     }
@@ -194,18 +311,45 @@ export default function Admin() {
         motivo: motivoRejeicao.trim() || "Violação das diretrizes da comunidade",
       });
       setObrasQuarentena((prev) => prev.filter((o) => o.id !== obraParaRejeitar.id));
-      setMetricas((prev) => ({
-        ...prev,
-        obras_pendentes: Math.max(0, prev.obras_pendentes - 1),
-        logs_recentes: prev.logs_recentes + 1,
-      }));
+      window.dispatchEvent(
+        new CustomEvent("artfolio_moderation_sync", {
+          detail: { obraId: obraParaRejeitar.id },
+        })
+      );
       mostrarAviso(`Obra #${obraParaRejeitar.id} rejeitada. Notificação formal enviada ao artista.`);
       setObraParaRejeitar(null);
       setMotivoRejeicao("");
+      await Promise.all([carregarMetricas(), carregarLogs(), carregarUsuarios(buscaUsuarioSinalizado)]);
     } catch (err) {
       mostrarAviso(err.message || "Erro ao rejeitar obra.", "erro");
     } finally {
       setProcessandoRejeicao(false);
+    }
+  };
+
+  // Banimento conjunto de Obra + Autor (via FK idUsuario da obra)
+  const handleBanirObraEAutor = async (obra) => {
+    if (!obra?.id) return;
+    try {
+      const res = await adminService.banirObraEAutor(
+        obra.id,
+        `Banimento administrativo da publicação #${obra.id} e do autor (${obra.artista_nome || `ID #${obra.idUsuario}`}).`
+      );
+      const autorIdBanido = res?.autor_id ?? obra.idUsuario;
+      setObrasQuarentena((prev) =>
+        prev.filter((o) => Number(o.id) !== Number(obra.id) && Number(o.idUsuario) !== Number(autorIdBanido))
+      );
+      window.dispatchEvent(
+        new CustomEvent("artfolio_moderation_sync", {
+          detail: { obraId: obra.id, usuarioId: autorIdBanido },
+        })
+      );
+      mostrarAviso(
+        res?.detail || `Obra #${obra.id} e autor #${autorIdBanido} banidos com sucesso.`
+      );
+      await Promise.all([carregarMetricas(), carregarLogs(), carregarUsuarios(buscaUsuarioSinalizado)]);
+    } catch (err) {
+      mostrarAviso(err.message || "Erro ao banir obra e autor.", "erro");
     }
   };
 
@@ -241,21 +385,13 @@ export default function Admin() {
         )
       );
 
-      if (statusResolucao === "resolvida") {
-        setMetricas((prev) => ({
-          ...prev,
-          denuncias_abertas: Math.max(0, prev.denuncias_abertas - 1),
-          logs_recentes: prev.logs_recentes + 1,
-        }));
-      }
-
       mostrarAviso(`Denúncia #${denunciaParaResolver.id} marcada como '${statusResolucao}'.`);
       setDenunciaParaResolver(null);
       setNotaModerador("");
-      // Se estava com modal de auditoria aberto, atualiza também
       if (chatAuditModal && chatAuditModal.denuncia_id === denunciaParaResolver.id) {
         setChatAuditModal(null);
       }
+      await Promise.all([carregarMetricas(), carregarLogs(), carregarUsuarios(buscaUsuarioSinalizado)]);
     } catch (err) {
       mostrarAviso(err.message || "Erro ao atualizar status da denúncia.", "erro");
     } finally {
@@ -274,13 +410,22 @@ export default function Admin() {
         motivo: motivoSancao.trim() || undefined,
       });
 
+      if (tipoSancao === "banir") {
+        setObrasQuarentena((prev) =>
+          prev.filter((o) => Number(o.idUsuario) !== Number(usuarioParaSancao.id))
+        );
+        window.dispatchEvent(
+          new CustomEvent("artfolio_moderation_sync", {
+            detail: { usuarioId: usuarioParaSancao.id },
+          })
+        );
+      }
+
       mostrarAviso(
         `Sanção '${tipoSancao.toUpperCase()}' aplicada com sucesso ao usuário ${usuarioParaSancao.nome}.`
       );
 
-      // Atualizar lista de usuários
-      carregarUsuarios();
-      carregarMetricas();
+      await Promise.all([carregarUsuarios(buscaUsuarioSinalizado), carregarMetricas(), carregarLogs()]);
 
       setUsuarioParaSancao(null);
       setMotivoSancao("");
@@ -329,6 +474,7 @@ export default function Admin() {
 
   const areas = [
     { id: "geral", label: "Visão Geral", icon: "fa-solid fa-chart-pie" },
+    { id: "desafios", label: "Desafio Semanal", icon: "fa-solid fa-bolt" },
     { id: "quarentena", label: "Quarentena", icon: "fa-solid fa-shield-halved", badge: metricas.obras_pendentes },
     { id: "denuncias", label: "Denúncias", icon: "fa-solid fa-flag", badge: metricas.denuncias_abertas },
     { id: "usuarios", label: "Usuários", icon: "fa-solid fa-users-gear" },
@@ -618,8 +764,7 @@ export default function Admin() {
                             alt={obra.legenda || "Obra em quarentena"}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             onError={(e) => {
-                              e.target.src =
-                                "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=800";
+                              e.target.src = "/default-art.png";
                             }}
                           />
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
@@ -690,6 +835,16 @@ export default function Admin() {
                           >
                             <i className="fa-solid fa-xmark"></i>
                             Rejeitar
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleBanirObraEAutor(obra)}
+                            className="flex-1 md:flex-none bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1.5"
+                            title="Remove a publicação e bane a conta do autor na mesma transação"
+                          >
+                            <i className="fa-solid fa-gavel"></i>
+                            Banir Obra & Autor
                           </button>
                         </div>
                       </article>
@@ -794,10 +949,11 @@ export default function Admin() {
                             <button
                               type="button"
                               onClick={() => handleAbrirAuditoria(denuncia.id)}
-                              className="bg-artDark text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-artPurple transition-all flex items-center gap-2 shrink-0 shadow-sm"
+                              disabled={loadingAuditChat}
+                              className="bg-artDark text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-artPurple transition-all flex items-center gap-2 shrink-0 shadow-sm disabled:opacity-50 cursor-pointer"
                             >
-                              <i className="fa-solid fa-eye"></i>
-                              Inspecionar Chat
+                              <i className={loadingAuditChat ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-eye"}></i>
+                              {loadingAuditChat ? "Inspecionando..." : "Inspecionar Chat"}
                             </button>
                           </div>
 
@@ -887,7 +1043,7 @@ export default function Admin() {
             {/* ========================================================= */}
             {(areaAtual === "geral" || areaAtual === "usuarios") && (
               <div className="bg-white rounded-[2rem] border border-black/5 p-5 sm:p-7 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
                   <div>
                     <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
                       Disciplina e Conformidade
@@ -895,11 +1051,50 @@ export default function Admin() {
                     <h2 className="font-editorial text-3xl italic">
                       Usuários Sinalizados
                     </h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Lista exclusiva de contas com denúncias registradas, obras retidas/rejeitadas ou histórico disciplinar.
+                    </p>
                   </div>
 
-                  <span className="bg-artPurple/10 text-artPurple px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
-                    {usuariosSinalizados.length} usuários
+                  <span className="bg-artPurple/10 text-artPurple px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shrink-0">
+                    {usuariosSinalizados.length} {usuariosSinalizados.length === 1 ? "usuário" : "usuários"}
                   </span>
+                </div>
+
+                {/* Barra de busca para consultar qualquer usuário ou filtrar sinalizados */}
+                <div className="flex flex-col sm:flex-row gap-2 mb-6">
+                  <div className="relative flex-1">
+                    <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                    <input
+                      type="text"
+                      value={buscaUsuarioSinalizado}
+                      onChange={(e) => setBuscaUsuarioSinalizado(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") carregarUsuarios(buscaUsuarioSinalizado);
+                      }}
+                      placeholder="Buscar usuário por nome ou e-mail para inspecionar ou sancionar..."
+                      className="w-full bg-[#F9F8F6] border border-black/10 rounded-full pl-10 pr-4 py-2.5 text-xs text-gray-800 outline-none focus:border-artPurple transition-colors"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => carregarUsuarios(buscaUsuarioSinalizado)}
+                    className="bg-artDark text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-artPurple transition-all cursor-pointer shrink-0"
+                  >
+                    Buscar
+                  </button>
+                  {buscaUsuarioSinalizado && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBuscaUsuarioSinalizado("");
+                        carregarUsuarios("");
+                      }}
+                      className="bg-[#F9F8F6] text-gray-600 px-4 py-2.5 rounded-full text-xs font-bold hover:bg-gray-200 transition-all cursor-pointer shrink-0"
+                    >
+                      Ver Apenas Sinalizados
+                    </button>
+                  )}
                 </div>
 
                 {loadingUsuarios ? (
@@ -909,18 +1104,25 @@ export default function Admin() {
                   </div>
                 ) : usuariosSinalizados.length === 0 ? (
                   <div className="py-12 text-center bg-[#F9F8F6] rounded-[1.5rem] p-6 border border-dashed border-gray-200">
-                    <p className="text-xs text-gray-400">Nenhum usuário com infrações no momento.</p>
+                    <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center mx-auto mb-3 text-xl">
+                      <i className="fa-solid fa-user-check"></i>
+                    </div>
+                    <h3 className="font-bold text-gray-700">Nenhum usuário sinalizado</h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Não há usuários com denúncias, obras retidas ou sanções no momento.
+                    </p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {usuariosSinalizados.map((u) => {
                       const estaSuspenso = u.suspenso_ate && new Date(u.suspenso_ate) > new Date();
                       const estaBanido = u.ativo === false;
+                      const motivos = Array.isArray(u.motivos_sinalizacao) ? u.motivos_sinalizacao : [];
 
                       return (
                         <article
                           key={u.id}
-                          className="bg-[#F9F8F6] rounded-[1.5rem] p-4 border border-black/5 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between"
+                          className="bg-[#F9F8F6] rounded-[1.5rem] p-4 sm:p-5 border border-black/5 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between"
                         >
                           <div>
                             <div className="flex items-center gap-3 mb-3">
@@ -947,23 +1149,60 @@ export default function Admin() {
                                     ? "bg-red-100 text-red-600"
                                     : estaSuspenso
                                     ? "bg-artOrange/10 text-artOrange"
-                                    : "bg-green-100 text-green-700"
+                                    : "bg-amber-100 text-amber-700"
                                 }`}
                               >
                                 {estaBanido
                                   ? "Banido"
                                   : estaSuspenso
                                   ? "Suspenso"
-                                  : "Ativo"}
+                                  : "Sinalizado"}
                               </span>
                             </div>
 
-                            <div className="text-xs text-gray-500 space-y-1 mb-4">
-                              <p>
-                                <strong>Denúncias recebidas:</strong> {u.total_denuncias}
-                              </p>
+                            {/* Badges de contadores */}
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              <span className="bg-white border border-black/5 px-2.5 py-1 rounded-full text-[10px] font-bold text-gray-700">
+                                <i className="fa-solid fa-flag text-artOrange mr-1"></i>
+                                Denúncias: {u.total_denuncias || 0}
+                              </span>
+                              {u.obras_irregulares > 0 && (
+                                <span className="bg-white border border-black/5 px-2.5 py-1 rounded-full text-[10px] font-bold text-artPurple">
+                                  <i className="fa-solid fa-shield-halved mr-1"></i>
+                                  Obras retidas/rejeitadas: {u.obras_irregulares}
+                                </span>
+                              )}
+                              {u.total_sancoes > 0 && (
+                                <span className="bg-white border border-black/5 px-2.5 py-1 rounded-full text-[10px] font-bold text-red-600">
+                                  <i className="fa-solid fa-gavel mr-1"></i>
+                                  Sanções no histórico: {u.total_sancoes}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Quadro Explicativo: Por que está sinalizado? */}
+                            <div className="bg-white border border-artOrange/25 rounded-2xl p-3 mb-4">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-artOrange flex items-center gap-1.5 mb-1.5">
+                                <i className="fa-solid fa-circle-Exclamation"></i>
+                                Motivo(s) da Sinalização:
+                              </span>
+                              <ul className="space-y-1 text-[11px] text-gray-700">
+                                {motivos.length > 0 ? (
+                                  motivos.map((m, idx) => (
+                                    <li key={idx} className="flex items-start gap-1.5 leading-snug">
+                                      <span className="text-artOrange font-bold">•</span>
+                                      <span>{m}</span>
+                                    </li>
+                                  ))
+                                ) : (
+                                  <li className="text-gray-400 italic">
+                                    Denúncia ou infração registrada no sistema.
+                                  </li>
+                                )}
+                              </ul>
                               {estaSuspenso && (
-                                <p className="text-artOrange font-semibold text-[11px]">
+                                <p className="text-artOrange font-bold text-[11px] mt-2 pt-1.5 border-t border-black/5">
+                                  <i className="fa-solid fa-clock mr-1"></i>
                                   Suspenso até:{" "}
                                   {new Date(u.suspenso_ate).toLocaleDateString("pt-BR")}
                                 </p>
@@ -979,7 +1218,7 @@ export default function Admin() {
                                 setTipoSancao("advertir");
                                 setMotivoSancao("");
                               }}
-                              className="bg-white border border-black/5 text-gray-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all flex-1 text-center"
+                              className="bg-white border border-black/5 text-gray-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-artDark hover:text-white transition-all flex-1 text-center cursor-pointer"
                             >
                               Advertir
                             </button>
@@ -992,7 +1231,7 @@ export default function Admin() {
                                 setDiasSuspensao(7);
                                 setMotivoSancao("");
                               }}
-                              className="bg-white border border-black/5 text-artOrange px-3 py-1.5 rounded-full text-xs font-bold hover:bg-artOrange hover:text-white transition-all flex-1 text-center"
+                              className="bg-white border border-black/5 text-artOrange px-3 py-1.5 rounded-full text-xs font-bold hover:bg-artOrange hover:text-white transition-all flex-1 text-center cursor-pointer"
                             >
                               Suspender
                             </button>
@@ -1005,7 +1244,7 @@ export default function Admin() {
                                   setTipoSancao("banir");
                                   setMotivoSancao("");
                                 }}
-                                className="bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-red-600 hover:text-white transition-all text-center"
+                                className="bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-red-600 hover:text-white transition-all text-center cursor-pointer"
                               >
                                 Banir
                               </button>
@@ -1032,9 +1271,12 @@ export default function Admin() {
                     <h2 className="font-editorial text-3xl italic">
                       Logs de Auditoria
                     </h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Histórico imutável de todas as decisões de moderação, sanções e alterações de desafios.
+                    </p>
                   </div>
 
-                  <span className="bg-gray-100 text-gray-600 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
+                  <span className="bg-gray-100 text-gray-600 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shrink-0">
                     {logsAuditoria.length} registros
                   </span>
                 </div>
@@ -1060,16 +1302,16 @@ export default function Admin() {
                             <i className="fa-solid fa-fingerprint"></i>
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-gray-900 uppercase tracking-wider text-[10px] bg-white px-2 py-0.5 rounded border border-black/5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-gray-900 uppercase tracking-wider text-[10px] bg-white px-2.5 py-0.5 rounded-full border border-black/10">
                                 {log.acao}
                               </span>
-                              <span className="text-gray-500 font-semibold">
-                                {log.alvo_tipo} #{log.alvo_id}
+                              <span className="text-gray-500 font-semibold text-[11px]">
+                                Alvo: {log.alvo_tipo} #{log.alvo_id}
                               </span>
                             </div>
                             {log.detalhes && (
-                              <p className="text-gray-600 mt-1">{log.detalhes}</p>
+                              <p className="text-gray-700 mt-1 leading-relaxed">{log.detalhes}</p>
                             )}
                           </div>
                         </div>
@@ -1083,6 +1325,7 @@ export default function Admin() {
                               ? new Date(log.criado_em).toLocaleDateString("pt-BR", {
                                   day: "2-digit",
                                   month: "short",
+                                  year: "numeric",
                                   hour: "2-digit",
                                   minute: "2-digit",
                                 })
@@ -1091,6 +1334,182 @@ export default function Admin() {
                         </div>
                       </article>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* ABA: GESTÃO DO DESAFIO DA SEMANA (ART PROMPTS)           */}
+            {/* ========================================================= */}
+            {(areaAtual === "geral" || areaAtual === "desafios") && (
+              <div className="bg-white rounded-[2rem] border border-black/5 p-5 sm:p-7 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+                      Engajamento Comunitário
+                    </span>
+                    <h2 className="font-editorial text-3xl italic">
+                      Desafios Semanais (Art Prompts)
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-1 font-light max-w-xl leading-relaxed">
+                      Crie novos temas, defina o prazo em dias, edite, retire da fila ou force a rotação imediata do Desafio da Semana exibido no Feed.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNovoDesafioNome("");
+                        setNovoDesafioPrazo(7);
+                        setNovoDesafioAtivarAgora(false);
+                        setModalNovoDesafio(true);
+                      }}
+                      className="bg-artDark text-white px-4 py-2.5 rounded-full text-xs font-bold hover:bg-artOrange transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <i className="fa-solid fa-plus text-xs"></i>
+                      <span>Novo Tema</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRotacionarDesafio}
+                      disabled={processandoDesafio || loadingDesafios}
+                      className="bg-gradient-to-r from-artPurple via-indigo-600 to-artBlue text-white px-4 py-2.5 rounded-full text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1.5 shadow-md shadow-artPurple/20 cursor-pointer disabled:opacity-50"
+                    >
+                      <i className={`fa-solid fa-arrows-rotate text-xs ${processandoDesafio ? "animate-spin" : ""}`}></i>
+                      <span>Rotacionar Próximo Tema</span>
+                    </button>
+                  </div>
+                </div>
+
+                {loadingDesafios ? (
+                  <div className="py-12 text-center text-gray-400">
+                    <i className="fa-solid fa-spinner animate-spin text-2xl mb-2"></i>
+                    <p className="text-xs font-bold">Carregando temas de desafios...</p>
+                  </div>
+                ) : desafios.length === 0 ? (
+                  <div className="py-12 text-center bg-[#F9F8F6] rounded-[1.5rem] p-6 border border-dashed border-gray-200">
+                    <p className="text-xs text-gray-400">Nenhum tema cadastrado como desafio semanal.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {desafios.map((d) => {
+                      const prazoDias = d.prazo_dias || 7;
+                      return (
+                        <article
+                          key={d.id}
+                          className={`rounded-[1.3rem] p-4 border transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs ${
+                            d.desafio_ativo
+                              ? "bg-artPurple/5 border-artPurple shadow-xs"
+                              : "bg-[#F9F8F6] border-black/5 hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className="flex items-start sm:items-center gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-sm shadow-xs ${
+                                d.desafio_ativo
+                                  ? "bg-artPurple text-white"
+                                  : "bg-white text-gray-400 border border-black/5"
+                              }`}
+                            >
+                              <i className="fa-solid fa-bolt"></i>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-bold text-sm text-artDark">
+                                  #{d.nomeCategoria}
+                                </h3>
+                                {d.desafio_ativo ? (
+                                  <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                    Ativo no Feed & Busca
+                                  </span>
+                                ) : (
+                                  <span className="bg-gray-200/60 text-gray-500 px-2 py-0.5 rounded-full text-[9px] font-semibold">
+                                    Fila Circular
+                                  </span>
+                                )}
+                                <span className="bg-white border border-black/10 text-gray-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                                  <i className="fa-regular fa-clock mr-1 text-artPurple"></i>
+                                  Prazo: {prazoDias} {prazoDias === 1 ? "dia" : "dias"}
+                                </span>
+                                {d.desafio_ativo && d.dias_restantes !== null && d.dias_restantes !== undefined && (
+                                  <span className="bg-artOrange/10 text-artOrange px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                                    Restam {d.dias_restantes} {d.dias_restantes === 1 ? "dia" : "dias"}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 mt-1">
+                                {d.data_inicio_desafio && (
+                                  <span>
+                                    <strong>Início:</strong>{" "}
+                                    {new Date(d.data_inicio_desafio).toLocaleDateString("pt-BR", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                )}
+                                {d.data_fim_desafio && d.desafio_ativo && (
+                                  <span>
+                                    <strong>Término previsto:</strong>{" "}
+                                    {new Date(d.data_fim_desafio).toLocaleDateString("pt-BR", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            {!d.desafio_ativo && (
+                              <button
+                                type="button"
+                                onClick={() => handleAtivarDesafio(d.id)}
+                                disabled={processandoDesafio}
+                                className="bg-artDark hover:bg-artPurple text-white px-3.5 py-2 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                              >
+                                <i className="fa-solid fa-play mr-1.5 text-[10px]"></i>
+                                Ativar Agora
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDesafioParaEditar(d);
+                                setEditDesafioNome(d.nomeCategoria);
+                                setEditDesafioPrazo(d.prazo_dias || 7);
+                                setEditDesafioReiniciarPrazo(false);
+                              }}
+                              disabled={processandoDesafio}
+                              className="bg-white hover:bg-gray-100 text-gray-700 border border-black/10 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                              title="Editar nome ou prazo deste desafio"
+                            >
+                              <i className="fa-solid fa-pen mr-1.5 text-[10px]"></i>
+                              Editar / Prazo
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setDesafioParaRemover(d)}
+                              disabled={processandoDesafio}
+                              className="bg-red-50 hover:bg-red-600 hover:text-white text-red-600 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                              title="Retirar tema da fila de desafios"
+                            >
+                              <i className="fa-solid fa-trash-can mr-1.5 text-[10px]"></i>
+                              Retirar
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1525,6 +1944,248 @@ export default function Admin() {
                 type="button"
                 onClick={() => setDenunciaParaResolver(null)}
                 className="bg-[#F9F8F6] text-gray-600 px-5 py-3 rounded-full text-xs font-bold hover:bg-gray-200 transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL: CRIAR NOVO TEMA DE DESAFIO SEMANAL                     */}
+      {/* ============================================================= */}
+      {modalNovoDesafio && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <form
+            onSubmit={handleCriarDesafio}
+            className="bg-white rounded-[2rem] max-w-md w-full p-6 shadow-2xl border border-black/10"
+          >
+            <div className="w-12 h-12 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center mb-4 text-xl">
+              <i className="fa-solid fa-bolt"></i>
+            </div>
+            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+              Engajamento Comunitário
+            </span>
+            <h3 className="font-editorial text-2xl italic mb-2">
+              Criar Novo Tema de Desafio
+            </h3>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              Adicione um novo tema à fila de desafios ou ative-o imediatamente para todos os artistas no feed.
+            </p>
+
+            <div className="mb-4">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">
+                Nome do Tema
+              </label>
+              <input
+                type="text"
+                required
+                value={novoDesafioNome}
+                onChange={(e) => setNovoDesafioNome(e.target.value)}
+                placeholder="Ex: Mitologia Brasileira & Folclore"
+                className="w-full bg-[#F9F8F6] border border-black/10 rounded-2xl p-3 text-xs text-gray-900 outline-none focus:border-artPurple transition-colors"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">
+                Prazo de Duração (em dias)
+              </label>
+              <div className="flex gap-2 mb-2">
+                {[3, 7, 14, 30].map((dias) => (
+                  <button
+                    key={dias}
+                    type="button"
+                    onClick={() => setNovoDesafioPrazo(dias)}
+                    className={`flex-1 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                      Number(novoDesafioPrazo) === dias
+                        ? "bg-artPurple text-white border-artPurple"
+                        : "bg-[#F9F8F6] text-gray-700 border-black/10 hover:bg-gray-100"
+                    }`}
+                  >
+                    {dias} dias
+                  </button>
+                ))}
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={novoDesafioPrazo}
+                onChange={(e) => setNovoDesafioPrazo(e.target.value)}
+                className="w-full bg-[#F9F8F6] border border-black/10 rounded-2xl p-2.5 text-xs text-gray-900 outline-none focus:border-artPurple transition-colors"
+              />
+            </div>
+
+            <label className="flex items-center gap-2.5 mb-5 p-3 rounded-2xl bg-[#F9F8F6] border border-black/5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={novoDesafioAtivarAgora}
+                onChange={(e) => setNovoDesafioAtivarAgora(e.target.checked)}
+                className="accent-artPurple w-4 h-4 rounded"
+              />
+              <span className="text-xs font-semibold text-gray-700">
+                Ativar este tema imediatamente como o Desafio da Semana atual
+              </span>
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={processandoDesafio}
+                className="flex-1 bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {processandoDesafio ? "Criando..." : "Criar Tema"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalNovoDesafio(false)}
+                className="bg-[#F9F8F6] text-gray-600 px-5 py-3 rounded-full text-xs font-bold hover:bg-gray-200 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL: EDITAR TEMA E PRAZO DO DESAFIO SEMANAL                 */}
+      {/* ============================================================= */}
+      {desafioParaEditar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <form
+            onSubmit={handleSalvarEdicaoDesafio}
+            className="bg-white rounded-[2rem] max-w-md w-full p-6 shadow-2xl border border-black/10"
+          >
+            <div className="w-12 h-12 rounded-full bg-artPurple/10 text-artPurple flex items-center justify-center mb-4 text-xl">
+              <i className="fa-solid fa-pen-to-square"></i>
+            </div>
+            <span className="text-artPurple font-bold tracking-widest uppercase text-[10px] block mb-1">
+              Configuração de Desafio
+            </span>
+            <h3 className="font-editorial text-2xl italic mb-2">
+              Editar Tema & Prazo
+            </h3>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              Altere o título ou o prazo de duração em dias para o tema <strong>#{desafioParaEditar.nomeCategoria}</strong>.
+            </p>
+
+            <div className="mb-4">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">
+                Nome do Tema
+              </label>
+              <input
+                type="text"
+                required
+                value={editDesafioNome}
+                onChange={(e) => setEditDesafioNome(e.target.value)}
+                className="w-full bg-[#F9F8F6] border border-black/10 rounded-2xl p-3 text-xs text-gray-900 outline-none focus:border-artPurple transition-colors"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">
+                Prazo de Duração (em dias)
+              </label>
+              <div className="flex gap-2 mb-2">
+                {[3, 7, 14, 30].map((dias) => (
+                  <button
+                    key={dias}
+                    type="button"
+                    onClick={() => setEditDesafioPrazo(dias)}
+                    className={`flex-1 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                      Number(editDesafioPrazo) === dias
+                        ? "bg-artPurple text-white border-artPurple"
+                        : "bg-[#F9F8F6] text-gray-700 border-black/10 hover:bg-gray-100"
+                    }`}
+                  >
+                    {dias} dias
+                  </button>
+                ))}
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={editDesafioPrazo}
+                onChange={(e) => setEditDesafioPrazo(e.target.value)}
+                className="w-full bg-[#F9F8F6] border border-black/10 rounded-2xl p-2.5 text-xs text-gray-900 outline-none focus:border-artPurple transition-colors"
+              />
+            </div>
+
+            {desafioParaEditar.desafio_ativo && (
+              <label className="flex items-center gap-2.5 mb-5 p-3 rounded-2xl bg-artPurple/5 border border-artPurple/15 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editDesafioReiniciarPrazo}
+                  onChange={(e) => setEditDesafioReiniciarPrazo(e.target.checked)}
+                  className="accent-artPurple w-4 h-4 rounded"
+                />
+                <span className="text-xs font-semibold text-gray-700">
+                  Reiniciar contagem do prazo a partir de hoje
+                </span>
+              </label>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={processandoDesafio}
+                className="flex-1 bg-artDark text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-artPurple transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {processandoDesafio ? "Salvando..." : "Salvar Alterações"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesafioParaEditar(null)}
+                className="bg-[#F9F8F6] text-gray-600 px-5 py-3 rounded-full text-xs font-bold hover:bg-gray-200 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL: CONFIRMAR RETIRADA DE TEMA DE DESAFIO                  */}
+      {/* ============================================================= */}
+      {desafioParaRemover && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-[2rem] max-w-md w-full p-6 shadow-2xl border border-black/10">
+            <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4 text-xl">
+              <i className="fa-solid fa-trash-can"></i>
+            </div>
+            <span className="text-red-600 font-bold tracking-widest uppercase text-[10px] block mb-1">
+              Remoção de Desafio
+            </span>
+            <h3 className="font-editorial text-2xl italic mb-2">
+              Retirar #{desafioParaRemover.nomeCategoria}?
+            </h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              Este tema será retirado da fila de Desafios Semanais.{" "}
+              {desafioParaRemover.desafio_ativo && (
+                <strong className="text-artOrange">
+                  Como ele está ativo no momento, o próximo tema da fila será ativado automaticamente no Feed.
+                </strong>
+              )}
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={processandoDesafio}
+                onClick={handleConfirmarRemocaoDesafio}
+                className="flex-1 bg-red-600 text-white px-5 py-3 rounded-full text-xs font-bold hover:bg-red-700 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {processandoDesafio ? "Retirando..." : "Confirmar Retirada"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesafioParaRemover(null)}
+                className="bg-[#F9F8F6] text-gray-600 px-5 py-3 rounded-full text-xs font-bold hover:bg-gray-200 transition-all cursor-pointer"
               >
                 Cancelar
               </button>
